@@ -1,4 +1,13 @@
-import type { Approval, Event, Project, ProjectCostSummary, Task, TaskCostSummary, TimelinePage } from "./types";
+import type {
+  Approval,
+  Event,
+  ModelCatalogEntry,
+  Project,
+  ProjectCostSummary,
+  Task,
+  TaskCostSummary,
+  TimelinePage,
+} from "./types";
 import type { Agent } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -69,4 +78,12 @@ export const api = {
   // Payroll
   getCompanyCosts: (companyId: string) => request<ProjectCostSummary>(`/api/projects/${companyId}/costs`),
   getMissionCosts: (taskId: string) => request<TaskCostSummary>(`/api/tasks/${taskId}/costs`),
+
+  // Employee Models
+  listModels: (companyId: string) => request<ModelCatalogEntry[]>(`/api/projects/${companyId}/models`),
+  setModel: (companyId: string, role: string, model: string) =>
+    request<ModelCatalogEntry>(`/api/projects/${companyId}/models/${role}`, {
+      method: "PUT",
+      body: JSON.stringify({ model }),
+    }),
 };

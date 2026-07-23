@@ -69,3 +69,10 @@ export interface TaskCostSummary {
   task_id: string;
   total_usd: number;
 }
+
+export interface ModelCatalogEntry {
+  role: "planner" | "builder" | "reviewer";
+  current_model: string;
+  recommended_model: string;
+  options: string[];
+}

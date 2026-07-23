@@ -18,7 +18,7 @@ from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.event_bus import EventBus
 from ...core.interfaces.provider_gateway import CompletionResult, ProviderGateway
 from ...core.secrets import SecretsProvider
-from ..model_registry import resolve
+from ..model_registry import get_override, resolve
 from .anthropic_provider import AnthropicProvider
 from .mock_provider import MockProvider
 
@@ -47,17 +47,31 @@ class RoutedProviderGateway(ProviderGateway):
         *,
         event_bus: EventBus | None = None,
         project_id: str | None = None,
+        session_factory=None,
         max_retries: int | None = None,
     ) -> None:
         self.provider_name = provider_name
         self._underlying = underlying
         self._event_bus = event_bus
         self._project_id = project_id
+        self._session_factory = session_factory
         if max_retries is None:
             from ...core.config import settings
 
             max_retries = settings.provider_max_retries
         self._max_retries = max_retries
+
+    async def resolve_model(self, model_ref: str) -> str:
+        """Resolve a logical ref to a concrete model, honoring any CEO
+        override for the role. Falls back to the registry default when no
+        session/project context is available (e.g. tests constructing a
+        bare gateway) or no override has been set."""
+        if self._session_factory and self._project_id and model_ref.endswith("-default"):
+            role = model_ref.removesuffix("-default")
+            override = await get_override(self._session_factory, self._project_id, role)
+            if override:
+                return override
+        return resolve(self.provider_name, model_ref)
 
     async def _publish_retry(self, attempt: int, reason: str) -> None:
         if not (self._event_bus and self._project_id):
@@ -85,7 +99,7 @@ class RoutedProviderGateway(ProviderGateway):
         messages: list[dict[str, str]],
         **opts: Any,
     ) -> CompletionResult:
-        concrete_model = resolve(self.provider_name, model_ref)
+        concrete_model = await self.resolve_model(model_ref)
         attempt = 0
         while True:
             try:
@@ -104,7 +118,7 @@ class RoutedProviderGateway(ProviderGateway):
         usage: dict[str, int] | None = None,
         **opts: Any,
     ) -> AsyncIterator[str]:
-        concrete_model = resolve(self.provider_name, model_ref)
+        concrete_model = await self.resolve_model(model_ref)
         attempt = 0
         while True:
             yielded_any = False
@@ -132,8 +146,15 @@ def build_gateway(
     *,
     event_bus: EventBus | None = None,
     project_id: str | None = None,
+    session_factory=None,
 ) -> ProviderGateway:
     underlying: ProviderGateway = (
         MockProvider() if provider_name == "mock" else AnthropicProvider(secrets)
     )
-    return RoutedProviderGateway(provider_name, underlying, event_bus=event_bus, project_id=project_id)
+    return RoutedProviderGateway(
+        provider_name,
+        underlying,
+        event_bus=event_bus,
+        project_id=project_id,
+        session_factory=session_factory,
+    )

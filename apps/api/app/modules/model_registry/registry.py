@@ -24,6 +24,16 @@ MODEL_REGISTRY: dict[str, dict[str, str]] = {
 
 RECOMMENDED_PROVIDER = "mock"
 
+ROLES = ("planner", "builder", "reviewer")
+
+# Every concrete model a provider exposes, independent of which role
+# defaults to which — the CEO may reassign any of these to any role for
+# that provider (see options_for_role for the one exception).
+AVAILABLE_MODELS: dict[str, list[str]] = {
+    "mock": ["mock-planner-v1", "mock-builder-v1", "mock-reviewer-v1"],
+    "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6"],
+}
+
 # Illustrative USD per-million-token prices, (input, output). Approximate by
 # design (see docs/DECISIONS.md) — this is Payroll math for a CEO dashboard,
 # not a billing system. Mock models get "play money" prices so Payroll is
@@ -43,6 +53,21 @@ def resolve(provider: str, model_ref: str) -> str:
         return MODEL_REGISTRY[provider][model_ref]
     except KeyError as exc:
         raise ValueError(f"no model registered for provider={provider!r} ref={model_ref!r}") from exc
+
+
+def options_for_role(provider: str, role: str) -> list[str]:
+    """Which concrete models the CEO may pick for this role.
+
+    Mock's role output is templated by a substring match on the model id
+    (see mock_provider._role_from_ref) — reassigning "mock-planner-v1" onto
+    the Reviewer role would silently produce planner-shaped text instead of
+    an auditable Verdict line, breaking the pipeline's outcome parsing. Mock
+    therefore offers no real choice, only its own fixed model per role.
+    Anthropic's models are general-purpose, so any of them is valid for any
+    role — swapping just trades cost/speed for quality."""
+    if provider == "mock":
+        return [resolve(provider, f"{role}-default")]
+    return list(AVAILABLE_MODELS.get(provider, []))
 
 
 def cost_for(model: str, input_tokens: int, output_tokens: int) -> float:

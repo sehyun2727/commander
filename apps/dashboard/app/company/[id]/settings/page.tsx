@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useArchiveCompany, useCompany, useUpdateCompanySettings } from "@/lib/hooks";
+import { useArchiveCompany, useCompany, useModels, useSetModel, useUpdateCompanySettings } from "@/lib/hooks";
+
+const ROLE_LABEL: Record<string, string> = { planner: "PM", builder: "Engineer", reviewer: "Reviewer" };
 
 export default function SettingsPage({ params }: { params: { id: string } }) {
   const companyId = params.id;
@@ -10,6 +12,8 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const { data: company } = useCompany(companyId);
   const updateSettings = useUpdateCompanySettings(companyId);
   const archive = useArchiveCompany(companyId);
+  const { data: models } = useModels(companyId);
+  const setModel = useSetModel(companyId);
 
   const [name, setName] = useState("");
   const [provider, setProvider] = useState<"mock" | "anthropic">("mock");
@@ -104,6 +108,39 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
           {saved && <span className="text-xs text-status-green">Saved.</span>}
         </div>
       </form>
+
+      <div className="mt-8 rounded-xl border border-base-border bg-base-card p-6 shadow-panel">
+        <p className="text-sm font-semibold text-text">Employee Models</p>
+        <p className="mt-1 text-xs text-text-muted">
+          Choose which model backs each Employee's work. Changes apply immediately — no restart required.
+        </p>
+        <div className="mt-4 space-y-4">
+          {models?.map((entry) => {
+            const orderedOptions = [
+              entry.recommended_model,
+              ...entry.options.filter((option) => option !== entry.recommended_model),
+            ];
+            return (
+              <div key={entry.role} className="flex items-center justify-between gap-4">
+                <label className="text-sm font-medium text-text">{ROLE_LABEL[entry.role] ?? entry.role}</label>
+                <select
+                  value={entry.current_model}
+                  disabled={setModel.isPending}
+                  onChange={(e) => setModel.mutate({ role: entry.role, model: e.target.value })}
+                  className="w-64 rounded-lg border border-base-border bg-base-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none disabled:opacity-50"
+                >
+                  {orderedOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                      {option === entry.recommended_model ? " (Recommended)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="mt-8 rounded-xl border border-status-red/30 bg-status-red-soft/30 p-6">
         <p className="text-sm font-semibold text-text">Danger Zone</p>

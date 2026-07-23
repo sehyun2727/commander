@@ -119,6 +119,7 @@ class WorkspaceBranchCreatedPayload(Payload):
 # --- Models / providers (Company Settings) --------------------------------------
 
 class ModelChangedPayload(Payload):
+    role: str  # "planner" | "builder" | "reviewer"
     previous_model: str
     new_model: str
 

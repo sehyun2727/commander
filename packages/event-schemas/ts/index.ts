@@ -156,6 +156,7 @@ export interface WorkspaceBranchCreatedPayload {
 }
 
 export interface ModelChangedPayload {
+  role: string;
   previous_model: string;
   new_model: string;
 }

@@ -321,3 +321,52 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     underlying number is accruing correctly. Fixing the display (rather
     than inflating mock prices just to make the UI look good) keeps the
     price table honest and still makes the change visible to the CEO.
+
+### Phase 3 — Model Management
+
+37. **Mock's `options_for_role` offers no real choice — only its own
+    recommended model per role.** `MockProvider._role_from_ref` infers
+    what shape of text to fabricate by substring-matching the *concrete*
+    model id ("planner" / "builder" / else reviewer). If the CEO could
+    reassign, say, `mock-planner-v1` onto the Reviewer role, the Reviewer
+    would silently start emitting planner-shaped prose with no
+    `**Verdict:**` line, breaking `workflow_engine`'s outcome parsing
+    without ever raising an error — a correctness bug, not a UX
+    limitation. Anthropic's models are general-purpose, so any of them is
+    valid for any role there; only mock is restricted. This keeps rule 6
+    ("must fully work with `COMMANDER_PROVIDER=mock`") intact while still
+    giving the CEO a real lever wherever it's actually safe to pull.
+38. **Model overrides persist in the existing `settings_kv` table**, keyed
+    `model_override:{project_id}:{role}`, the same mechanism Company
+    Settings already uses for secrets (`secret:{name}`). One CEO-editable
+    string per (project, role) doesn't justify a new table or a schema
+    migration — this repo has none (Decision 35) — and the key-prefix
+    convention was already established.
+39. **The API's `role` vocabulary stays `planner`/`builder`/`reviewer`**
+    (the model_registry's logical-ref vocabulary), matching the brief's
+    own instruction that the endpoint operates on "role
+    (planner/builder/reviewer)". The brief's own example Timeline text
+    ("CEO reassigned Engineer to claude-sonnet-4-6") uses the
+    agent-facing name instead, so `model_registry/service.py` translates
+    via a small `_ROLE_LABEL` dict (`planner`→PM, `builder`→Engineer,
+    `reviewer`→Reviewer) only when building the human-readable `reason`
+    string — the payload's `role` field itself stays in registry
+    vocabulary for API/event consumers.
+40. **`ModelChangedPayload` (an unused Sprint 3 skeleton event type) is
+    extended with a `role` field and, for the first time, actually
+    published** — by `model_registry.service.set_role_model`, only when
+    the override actually changes the effective model (a no-op re-save of
+    the already-active model emits nothing, mirroring how other
+    state-change events in this codebase skip no-op transitions).
+41. **`ProviderGateway` gains a concrete (non-abstract) `resolve_model()`
+    method on the base interface, defaulting to identity** (`return
+    model_ref`), overridden only by `RoutedProviderGateway` to do real
+    logical-ref-to-override-aware-concrete-model resolution. Making it
+    abstract would have forced trivial overrides onto `MockProvider`/
+    `AnthropicProvider`, which only ever receive an already-resolved
+    concrete model id from the router in front of them — the identity
+    default is the semantically correct behavior for them, not a stub.
+    This is what lets `workflow_engine`/`tasks.service` ask the gateway
+    "what model did you actually just use" for cost logging, so a CEO
+    override is reflected in Payroll instead of silently cost-logging the
+    registry default.

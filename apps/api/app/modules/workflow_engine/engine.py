@@ -31,7 +31,7 @@ from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
 from ..costs import record_usage
-from ..model_registry import RECOMMENDED_PROVIDER, resolve
+from ..model_registry import RECOMMENDED_PROVIDER
 from ..provider_gateway import build_gateway
 
 logger = logging.getLogger("commander.workflow_engine")
@@ -118,7 +118,11 @@ class CommanderWorkflowEngine(WorkflowEngine):
             project = await session.get(ProjectORM, project_id)
             provider_name = project.provider if project else RECOMMENDED_PROVIDER
         return build_gateway(
-            provider_name, self._secrets, event_bus=self._event_bus, project_id=project_id
+            provider_name,
+            self._secrets,
+            event_bus=self._event_bus,
+            project_id=project_id,
+            session_factory=self._session_factory,
         )
 
     @staticmethod
@@ -179,7 +183,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
             agent_id=agent.id,
             role=agent.role,
             provider=gateway.provider_name,
-            model=resolve(gateway.provider_name, model_ref),
+            model=await gateway.resolve_model(model_ref),
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
         )

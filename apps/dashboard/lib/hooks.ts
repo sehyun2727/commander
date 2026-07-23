@@ -14,6 +14,7 @@ export const keys = {
   timeline: (companyId: string) => ["timeline", companyId] as const,
   companyCosts: (companyId: string) => ["companyCosts", companyId] as const,
   missionCosts: (taskId: string) => ["missionCosts", taskId] as const,
+  models: (companyId: string) => ["models", companyId] as const,
 };
 
 export function useCompanies() {
@@ -58,6 +59,21 @@ export function useCompanyCosts(companyId: string) {
 
 export function useMissionCosts(taskId: string) {
   return useQuery({ queryKey: keys.missionCosts(taskId), queryFn: () => api.getMissionCosts(taskId) });
+}
+
+export function useModels(companyId: string) {
+  return useQuery({ queryKey: keys.models(companyId), queryFn: () => api.listModels(companyId) });
+}
+
+export function useSetModel(companyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ role, model }: { role: string; model: string }) => api.setModel(companyId, role, model),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.models(companyId) });
+      qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
+    },
+  });
 }
 
 export function useCreateCompany() {
@@ -151,6 +167,7 @@ export function invalidateForEvent(
   qc.invalidateQueries({ queryKey: keys.approvals(companyId) });
   qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
   qc.invalidateQueries({ queryKey: keys.companyCosts(companyId) });
+  qc.invalidateQueries({ queryKey: keys.models(companyId) });
   if (taskId) {
     qc.invalidateQueries({ queryKey: keys.mission(taskId) });
     qc.invalidateQueries({ queryKey: keys.messages(taskId) });
