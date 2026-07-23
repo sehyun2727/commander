@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     database_url: str = "sqlite+aiosqlite:///./commander.db"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    provider_timeout_seconds: float = 60.0
+    provider_max_retries: int = 2
 
 
 settings = Settings()

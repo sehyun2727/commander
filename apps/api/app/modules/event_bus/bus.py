@@ -70,6 +70,10 @@ class InProcessEventBus(EventBus):
     def subscribe(self, event_type: EventType, handler: EventHandler) -> None:
         self._subscribers[event_type].append(handler)
 
+    async def publish_transient(self, event: Event) -> None:
+        for queue in list(self._streams.get(event.project_id, [])):
+            queue.put_nowait(event)
+
     def register_stream(self, project_id: str) -> asyncio.Queue:
         queue: asyncio.Queue = asyncio.Queue()
         self._streams[project_id].append(queue)

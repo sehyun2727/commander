@@ -10,7 +10,7 @@ from app.modules.projects import service as projects_service
 from app.modules.tasks import service as tasks_service
 
 
-async def _wait_for_state(harness, task_id: str, *states: TaskState, timeout: float = 15.0) -> TaskState:
+async def _wait_for_state(harness, task_id: str, *states: TaskState, timeout: float = 30.0) -> TaskState:
     """The workflow pipeline runs as a detached asyncio task with small
     pacing sleeps (see workflow_engine.CommanderWorkflowEngine), so tests
     poll for the resulting state rather than awaiting a return value."""

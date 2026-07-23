@@ -27,3 +27,12 @@ class EventBus(ABC):
     def subscribe(self, event_type: EventType, handler: EventHandler) -> None:
         """Register a handler to run whenever an event of event_type is
         published."""
+
+    @abstractmethod
+    async def publish_transient(self, event: Event) -> None:
+        """Push straight to live SSE listeners — no persistence, no
+        subscriber fan-out. For high-frequency UI-only signal (streaming
+        token deltas) where persisting every fragment would flood the
+        events table and no domain module needs to react to a fragment;
+        only the final persisted event (e.g. conversation.message)
+        matters for the Timeline/audit trail."""

@@ -38,6 +38,7 @@ class EventType(str, Enum):
     # Models / providers (Company Settings)
     MODEL_CHANGED = "model.changed"
     PROVIDER_CHANGED = "provider.changed"
+    PROVIDER_RETRIED = "provider.retried"
 
     # Workflow (planning / review / deployment)
     REVIEW_STARTED = "workflow.review_started"
@@ -58,3 +59,4 @@ class EventType(str, Enum):
 
     # Conversation (Meetings)
     CONVERSATION_MESSAGE = "conversation.message"
+    CONVERSATION_MESSAGE_DELTA = "conversation.message.delta"

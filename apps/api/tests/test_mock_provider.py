@@ -33,3 +33,27 @@ async def test_reviewer_output_always_ends_in_a_parseable_verdict_line():
         assert result.text.startswith("## Audit:")
         last_line = result.text.strip().splitlines()[-1]
         assert last_line in ("**Verdict:** Approved", "**Verdict:** Changes requested")
+
+
+@pytest.mark.asyncio
+async def test_complete_fabricates_plausible_usage():
+    result = await MockProvider().complete(
+        "builder-default", system="you are an Engineer", messages=[], task_title="Build login page", task_description="email/password"
+    )
+    assert result.input_tokens > 0
+    assert result.output_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_stream_yields_chunks_that_join_into_full_text_and_reports_usage():
+    opts = {"task_title": "Build login page", "task_description": "email/password", "stream_delay": 0}
+    usage: dict[str, int] = {}
+    chunks = [
+        chunk
+        async for chunk in MockProvider().stream(
+            "builder-default", system="you are an Engineer", messages=[], usage=usage, **opts
+        )
+    ]
+    assert "".join(chunks).startswith("## Deliverable:")
+    assert usage["input_tokens"] > 0
+    assert usage["output_tokens"] > 0

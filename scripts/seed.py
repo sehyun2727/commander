@@ -41,7 +41,7 @@ from app.modules.tasks import service as tasks_service  # noqa: E402
 from app.modules.workflow_engine import CommanderWorkflowEngine  # noqa: E402
 
 
-async def wait_for_state(session_factory, task_id: str, *states: TaskState, timeout: float = 20.0) -> None:
+async def wait_for_state(session_factory, task_id: str, *states: TaskState, timeout: float = 35.0) -> None:
     target = {s.value for s in states}
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:

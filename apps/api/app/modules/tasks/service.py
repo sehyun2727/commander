@@ -138,22 +138,42 @@ async def post_message(
         )
     )
 
-    gateway = build_gateway(project.provider, secrets)
+    gateway = build_gateway(project.provider, secrets, event_bus=event_bus, project_id=project_id)
     model_ref = _MODEL_REF_FOR_ROLE.get(agent.role, "planner-default")
-    completion = await gateway.complete(
+    actor = Actor(role="employee", id=agent.id, name=agent.name)
+    buffer: list[str] = []
+    async for chunk in gateway.stream(
         model_ref,
         system=agent.persona,
         messages=[{"role": "user", "content": text}],
         task_title=task.title,
         task_description=task.description,
         context=f"The CEO just asked: {text}",
+    ):
+        buffer.append(chunk)
+        await event_bus.publish_transient(
+            build_event(
+                type=EventType.CONVERSATION_MESSAGE_DELTA,
+                project_id=project_id,
+                actor=actor,
+                payload={"text": chunk, "agent_id": agent.id, "task_id": task_id, "done": False},
+            )
+        )
+    reply_text = "".join(buffer)
+    await event_bus.publish_transient(
+        build_event(
+            type=EventType.CONVERSATION_MESSAGE_DELTA,
+            project_id=project_id,
+            actor=actor,
+            payload={"text": "", "agent_id": agent.id, "task_id": task_id, "done": True},
+        )
     )
 
     return await event_bus.publish(
         build_event(
             type=EventType.CONVERSATION_MESSAGE,
             project_id=project_id,
-            actor=Actor(role="employee", id=agent.id, name=agent.name),
-            payload={"text": completion.text, "agent_id": agent.id, "task_id": task_id},
+            actor=actor,
+            payload={"text": reply_text, "agent_id": agent.id, "task_id": task_id},
         )
     )

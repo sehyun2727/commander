@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, AsyncIterator
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,8 @@ class CompletionResult:
     text: str
     model: str
     provider: str
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class ProviderGateway(ABC):
@@ -31,3 +33,23 @@ class ProviderGateway(ABC):
     ) -> CompletionResult:
         """Send a system prompt + message history to the model behind
         `model_ref` (resolved via model_registry) and return its reply."""
+
+    @abstractmethod
+    async def stream(
+        self,
+        model_ref: str,
+        system: str,
+        messages: list[dict[str, str]],
+        usage: dict[str, int] | None = None,
+        **opts: Any,
+    ) -> AsyncIterator[str]:
+        """Same call as `complete`, but yield the reply text incrementally.
+
+        The return type is fixed to `AsyncIterator[str]`, and a single
+        gateway instance may stream several missions concurrently, so
+        there's nowhere on `self` to stash per-call usage. Instead, if the
+        caller passes a plain `usage` dict, the provider mutates it in
+        place with `input_tokens`/`output_tokens` once known (Anthropic's
+        SSE protocol reports these mid-stream, before the text finishes)."""
+        raise NotImplementedError
+        yield ""  # pragma: no cover - makes this a generator function for subclasses

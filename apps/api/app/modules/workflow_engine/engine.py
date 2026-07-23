@@ -116,7 +116,9 @@ class CommanderWorkflowEngine(WorkflowEngine):
 
             project = await session.get(ProjectORM, project_id)
             provider_name = project.provider if project else RECOMMENDED_PROVIDER
-        return build_gateway(provider_name, self._secrets)
+        return build_gateway(
+            provider_name, self._secrets, event_bus=self._event_bus, project_id=project_id
+        )
 
     @staticmethod
     def _apply_task_transition(task: TaskORM, target: TaskState) -> TaskState:
@@ -166,6 +168,37 @@ class CommanderWorkflowEngine(WorkflowEngine):
             rows = list(result.scalars().all())
         return {row.role: row for row in rows}
 
+    async def _stream_say(
+        self, project_id: str, agent: AgentORM, task_id: str, gateway: ProviderGateway, model_ref: str, **opts
+    ) -> tuple[str, dict[str, int]]:
+        """Stream one reply into the Meeting: publish a transient delta per
+        chunk (so the UI can render token-by-token) and one persisted
+        conversation.message once the reply is complete."""
+        usage: dict[str, int] = {}
+        buffer: list[str] = []
+        actor = Actor(role="employee", id=agent.id, name=agent.name)
+        async for chunk in gateway.stream(model_ref, usage=usage, **opts):
+            buffer.append(chunk)
+            await self._event_bus.publish_transient(
+                build_event(
+                    type=EventType.CONVERSATION_MESSAGE_DELTA,
+                    project_id=project_id,
+                    actor=actor,
+                    payload={"text": chunk, "agent_id": agent.id, "task_id": task_id, "done": False},
+                )
+            )
+        text = "".join(buffer)
+        await self._event_bus.publish_transient(
+            build_event(
+                type=EventType.CONVERSATION_MESSAGE_DELTA,
+                project_id=project_id,
+                actor=actor,
+                payload={"text": "", "agent_id": agent.id, "task_id": task_id, "done": True},
+            )
+        )
+        await self._say(project_id, agent, task_id, text)
+        return text, usage
+
     async def _run_role(
         self,
         agent: AgentORM,
@@ -174,10 +207,10 @@ class CommanderWorkflowEngine(WorkflowEngine):
         model_ref: str,
         context: str,
         ceo_comment: str | None,
-    ) -> str:
+    ) -> tuple[str, dict[str, int]]:
         """Cycle one Employee through Assigned->Planning->Working->
         WaitingReview->Completed->Idle while it produces one message, and
-        return the text it produced."""
+        return the text it produced plus the usage it consumed."""
         project_id = task.project_id
         await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
         await _pause()
@@ -186,7 +219,11 @@ class CommanderWorkflowEngine(WorkflowEngine):
         await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing output")
 
         extra = f"\n\nCEO feedback to address: {ceo_comment}" if ceo_comment else ""
-        result = await gateway.complete(
+        text, usage = await self._stream_say(
+            project_id,
+            agent,
+            task.id,
+            gateway,
             model_ref,
             system=agent.persona,
             messages=[{"role": "user", "content": f"Mission: {task.title}\n{task.description}{extra}"}],
@@ -194,14 +231,13 @@ class CommanderWorkflowEngine(WorkflowEngine):
             task_description=task.description,
             context=context + extra,
         )
-        await self._say(project_id, agent, task.id, result.text)
         await _pause()
 
         await self._agent_runtime.transition(agent.id, AgentState.WAITING_REVIEW, "Output ready for handoff")
         await _pause()
         await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Handed off successfully")
         await self._agent_runtime.transition(agent.id, AgentState.IDLE, "Back to the bench")
-        return result.text
+        return text, usage
 
     async def _run_pipeline(
         self, task_id: str, resume_from: str, ceo_comment: str | None = None
@@ -228,9 +264,9 @@ class CommanderWorkflowEngine(WorkflowEngine):
                         reason=f"PM started planning '{title}'",
                     )
                 )
-                plan = await self._run_role(agents["pm"], task, gateway, "planner-default", "", None)
+                plan, pm_usage = await self._run_role(agents["pm"], task, gateway, "planner-default", "", None)
             else:
-                plan = ""
+                plan, pm_usage = "", {}
 
             await self._event_bus.publish(
                 build_event(
@@ -241,7 +277,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     reason="Engineer began building the deliverable",
                 )
             )
-            deliverable = await self._run_role(
+            deliverable, engineer_usage = await self._run_role(
                 agents["engineer"], task, gateway, "builder-default", plan, ceo_comment
             )
 
@@ -257,10 +293,14 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     reason="Reviewer began the audit",
                 )
             )
-            audit = await self._run_role(
+            audit, reviewer_usage = await self._run_role(
                 agents["reviewer"], task, gateway, "reviewer-default", deliverable, None
             )
             outcome = "changes_requested" if "changes requested" in audit.lower() else "approved"
+            logger.debug(
+                "mission %s usage pm=%s engineer=%s reviewer=%s",
+                task_id, pm_usage, engineer_usage, reviewer_usage,
+            )
             await self._event_bus.publish(
                 build_event(
                     type=EventType.REVIEW_COMPLETED,

@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useMessages, usePostMessage } from "@/lib/hooks";
+import { useStreamingReply } from "@/components/RealtimeProvider";
+import { useEmployees, useMessages, usePostMessage } from "@/lib/hooks";
 import { relativeTime } from "@/lib/utils";
 
-export function ChatThread({ taskId }: { taskId: string }) {
+export function ChatThread({ companyId, taskId }: { companyId: string; taskId: string }) {
   const { data: messages, isLoading } = useMessages(taskId);
+  const { data: employees } = useEmployees(companyId);
+  const streaming = useStreamingReply(taskId);
   const post = usePostMessage(taskId);
   const [text, setText] = useState("");
+  const streamingAgentName = employees?.find((e) => e.id === streaming?.agentId)?.name ?? "Employee";
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -39,6 +43,17 @@ export function ChatThread({ taskId }: { taskId: string }) {
             </div>
           );
         })}
+        {streaming && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] rounded-xl bg-base-hover px-3.5 py-2.5 text-text">
+              <p className="mb-0.5 text-[11px] font-semibold opacity-70">{streamingAgentName}</p>
+              <p className="whitespace-pre-wrap text-sm">
+                {streaming.text}
+                <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-text-faint align-text-bottom" />
+              </p>
+            </div>
+          </div>
+        )}
       </div>
       <form onSubmit={handleSend} className="flex gap-2 border-t border-base-border p-3">
         <input

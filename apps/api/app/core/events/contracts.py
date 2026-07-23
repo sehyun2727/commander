@@ -128,6 +128,11 @@ class ProviderChangedPayload(Payload):
     new_provider: str
 
 
+class ProviderRetriedPayload(Payload):
+    provider: str
+    attempt: int
+
+
 # --- Workflow (review / deployment) ---------------------------------------------
 
 class ReviewStartedPayload(Payload):
@@ -191,6 +196,13 @@ class ConversationMessagePayload(Payload):
     task_id: str | None = None
 
 
+class ConversationMessageDeltaPayload(Payload):
+    text: str
+    agent_id: str | None = None
+    task_id: str | None = None
+    done: bool = False
+
+
 PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.PROJECT_CREATED: ProjectCreatedPayload,
     EventType.PROJECT_ARCHIVED: ProjectArchivedPayload,
@@ -212,6 +224,7 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.WORKSPACE_BRANCH_CREATED: WorkspaceBranchCreatedPayload,
     EventType.MODEL_CHANGED: ModelChangedPayload,
     EventType.PROVIDER_CHANGED: ProviderChangedPayload,
+    EventType.PROVIDER_RETRIED: ProviderRetriedPayload,
     EventType.REVIEW_STARTED: ReviewStartedPayload,
     EventType.REVIEW_COMPLETED: ReviewCompletedPayload,
     EventType.BUG_FOUND: BugFoundPayload,
@@ -224,9 +237,10 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.APPROVAL_CHANGES_REQUESTED: ApprovalChangesRequestedPayload,
     EventType.SYSTEM_HEARTBEAT: SystemHeartbeatPayload,
     EventType.CONVERSATION_MESSAGE: ConversationMessagePayload,
+    EventType.CONVERSATION_MESSAGE_DELTA: ConversationMessageDeltaPayload,
 }
 
-_CONVERSATION_TYPES = {EventType.CONVERSATION_MESSAGE}
+_CONVERSATION_TYPES = {EventType.CONVERSATION_MESSAGE, EventType.CONVERSATION_MESSAGE_DELTA}
 
 
 def build_event(

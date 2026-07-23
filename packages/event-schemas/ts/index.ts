@@ -23,6 +23,7 @@ export enum EventType {
   WORKSPACE_BRANCH_CREATED = "workspace.branch_created",
   MODEL_CHANGED = "model.changed",
   PROVIDER_CHANGED = "provider.changed",
+  PROVIDER_RETRIED = "provider.retried",
   REVIEW_STARTED = "workflow.review_started",
   REVIEW_COMPLETED = "workflow.review_completed",
   BUG_FOUND = "workflow.bug_found",
@@ -35,6 +36,7 @@ export enum EventType {
   APPROVAL_CHANGES_REQUESTED = "approval.changes_requested",
   SYSTEM_HEARTBEAT = "system.heartbeat",
   CONVERSATION_MESSAGE = "conversation.message",
+  CONVERSATION_MESSAGE_DELTA = "conversation.message.delta",
 }
 
 export enum AgentState {
@@ -163,6 +165,11 @@ export interface ProviderChangedPayload {
   new_provider: string;
 }
 
+export interface ProviderRetriedPayload {
+  provider: string;
+  attempt: number;
+}
+
 export interface ReviewStartedPayload {
   task_id: string;
   reviewer_agent_id: string;
@@ -217,6 +224,13 @@ export interface ConversationMessagePayload {
   task_id?: string | null;
 }
 
+export interface ConversationMessageDeltaPayload {
+  text: string;
+  agent_id?: string | null;
+  task_id?: string | null;
+  done: boolean;
+}
+
 export interface Event {
   id: string;
   project_id: string;
@@ -249,6 +263,7 @@ export interface EventPayloadMap {
   "workspace.branch_created": WorkspaceBranchCreatedPayload;
   "model.changed": ModelChangedPayload;
   "provider.changed": ProviderChangedPayload;
+  "provider.retried": ProviderRetriedPayload;
   "workflow.review_started": ReviewStartedPayload;
   "workflow.review_completed": ReviewCompletedPayload;
   "workflow.bug_found": BugFoundPayload;
@@ -261,4 +276,5 @@ export interface EventPayloadMap {
   "approval.changes_requested": ApprovalChangesRequestedPayload;
   "system.heartbeat": SystemHeartbeatPayload;
   "conversation.message": ConversationMessagePayload;
+  "conversation.message.delta": ConversationMessageDeltaPayload;
 }

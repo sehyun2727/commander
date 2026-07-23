@@ -161,3 +161,95 @@ per the brief's constraints).
     zero console errors.
 
 (Further entries appended as later phases land.)
+
+## Sprint 4 — "Real Intelligence"
+
+Judgment calls made while hardening the provider path and adding cost,
+model-management, and reporting levers for the CEO. Mock mode must keep
+working with zero API keys throughout — see the brief's out-of-scope list.
+
+### Phase 1 — Provider Hardening
+
+21. **`stream()`'s usage is reported through a caller-supplied mutable
+    `dict`, not a stateful attribute on the provider instance.** The
+    brief fixes the return type to `AsyncIterator[str]`, and a single
+    `RoutedProviderGateway` instance can stream several missions
+    concurrently (PM/Engineer/Reviewer each get their own gateway call
+    within one pipeline run, and multiple missions can be in flight at
+    once), so there's no safe place on `self` to stash per-call usage.
+    Callers pass `usage: dict[str, int] = {}` into `stream(...)`; the
+    provider mutates it in place once it knows input/output tokens. This
+    also matches Anthropic's real SSE protocol, which reports
+    `input_tokens` in `message_start` and `output_tokens` in
+    `message_delta` — i.e. mid-stream, not after — so a "return usage at
+    the end" design would have thrown that information away.
+22. **Retry-with-backoff lives in `RoutedProviderGateway`, not in each
+    concrete provider.** Every call already routes through it to resolve
+    the logical model ref, so wrapping `complete`/`stream` there gives
+    both `MockProvider` and `AnthropicProvider` the same resilience for
+    free instead of duplicating retry logic per provider. Retryable:
+    `httpx.HTTPStatusError` with status in `{429, 500, 502, 503, 504}` or
+    any `httpx.RequestError` (timeout/connection failure). Everything
+    else (4xx other than 429, the `RuntimeError` for a missing API key)
+    fails immediately — retrying a bad request or a config error would
+    just burn the retry budget on something that can't succeed.
+23. **A streaming call is only retried if it fails before yielding its
+    first chunk.** Once text has already reached the caller (and, for
+    Meetings/missions, already been pushed to the UI as transient
+    deltas), retrying from scratch would duplicate output the CEO has
+    already seen. This means a mid-stream disconnect still surfaces as a
+    hard failure (existing `TaskFailed` path) rather than a silent retry
+    — an accepted narrowing of the "max 2 retries" requirement, logged
+    here since the brief didn't distinguish pre- vs mid-stream failures.
+24. **Backoff is `0.5 * 2^(attempt-1) + jitter` (sub-second to ~1s), not an
+    industrial-scale backoff curve.** Commander is a local, single-CEO
+    tool, not a high-QPS service fronting shared infra — keeping retries
+    fast preserves the live-demo feel (the CEO watching a mission
+    complete in seconds) while still being genuinely exponential for the
+    rare transient failure.
+25. **Retries are observable: every retry publishes `provider.retried`**
+    (`{provider, attempt}`, `reason` = exception type/message) through
+    the *normal* (persisted) `EventBus.publish`, so a retried call shows
+    up in the Timeline — required by Rule 3 (every agent action carries
+    a reason) and Design Principle 3 (nothing happens silently).
+26. **Added `EventBus.publish_transient()` to the abstract interface, not
+    just the concrete `InProcessEventBus`.** Streaming emits one event
+    per word/token; persisting every fragment to the `events` table
+    would flood it with no corresponding value (only the final,
+    persisted `conversation.message` matters for the Timeline, Meeting
+    history, and audit trail). Unlike `recent`/`page`/`conversation_for`
+    (Sprint 3 concrete-only extensions used solely by the realtime SSE
+    route), "publish without persisting" is a capability any future
+    EventBus implementation — including a broker-backed one — should
+    reasonably support the same way, so it belongs on the port, not just
+    today's implementation. `publish_transient` skips both DB persistence
+    and module subscriber fan-out (no domain module needs to react to a
+    single token), pushing straight to live SSE queues only.
+27. **New `EventType.CONVERSATION_MESSAGE_DELTA`** (`kind: "conversation"`,
+    never persisted — pushed only via `publish_transient`) carries
+    `{text, agent_id, task_id, done}`; a final chunk with `done: true` and
+    empty `text` tells the frontend the reply is complete. Both
+    `workflow_engine._run_role` (mission pipeline) and
+    `tasks.service.post_message` (Meeting replies) now stream: they emit
+    one transient delta per chunk, then publish the *same* persisted
+    `conversation.message` they always did once the full text is
+    assembled — the persisted Timeline/Meeting history is byte-for-byte
+    unchanged in shape, only the live UX changed.
+28. **Frontend: `RealtimeProvider` intercepts delta events itself** —
+    they're never added to the persisted-event rolling buffer and never
+    trigger `invalidateForEvent` (a per-token query refetch would be
+    wasteful and the DB has nothing new to fetch anyway). It exposes a
+    separate `useStreamingReply(taskId)` context that `ChatThread` renders
+    as a transient bubble with a blinking-cursor caret. On the `done`
+    delta the bubble is cleared after a 400ms delay rather than
+    immediately, giving the persisted `conversation.message`'s query
+    invalidation time to round-trip so the real bubble replaces the
+    streaming one without a flash of "message disappeared" in between.
+29. **Bumped two pacing-sleep-dependent timeouts** —
+    `tests/test_approval_flow.py`'s `_wait_for_state` (15s → 30s) and
+    `scripts/seed.py`'s `wait_for_state` (20s → 35s). The per-role
+    pipeline already had four random 0.5-1.5s pacing sleeps across three
+    roles (worst case ~18s) before this sprint; adding the mock
+    provider's per-word streaming delay (~0.015s/word) pushed a couple of
+    tests past the old 15s bound intermittently. Verified the full
+    26-test suite green after the bump (see Phase 5 for the final count).

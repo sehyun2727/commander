@@ -10,8 +10,9 @@ so swapping providers never changes orchestration logic.
 
 from __future__ import annotations
 
+import asyncio
 import random
-from typing import Any
+from typing import Any, AsyncIterator
 
 from ...core.interfaces.provider_gateway import CompletionResult, ProviderGateway
 
@@ -87,6 +88,27 @@ def _audit_text(title: str, context: str) -> str:
     )
 
 
+def _text_for(model_ref: str, opts: dict[str, Any]) -> str:
+    role = _role_from_ref(model_ref)
+    title = opts.get("task_title", "this mission")
+    description = opts.get("task_description", "")
+    context = opts.get("context", "")
+
+    if role == "planner":
+        return _plan_text(title, description)
+    if role == "builder":
+        return _deliverable_text(title, description, context)
+    return _audit_text(title, context)
+
+
+def _fabricate_usage(system: str, messages: list[dict[str, str]], text: str) -> dict[str, int]:
+    prompt_words = len(system.split()) + sum(len(m.get("content", "").split()) for m in messages)
+    return {
+        "input_tokens": max(1, int(prompt_words * 1.3)),
+        "output_tokens": max(1, int(len(text.split()) * 1.3)),
+    }
+
+
 class MockProvider(ProviderGateway):
     async def complete(
         self,
@@ -95,16 +117,32 @@ class MockProvider(ProviderGateway):
         messages: list[dict[str, str]],
         **opts: Any,
     ) -> CompletionResult:
-        role = _role_from_ref(model_ref)
-        title = opts.get("task_title", "this mission")
-        description = opts.get("task_description", "")
-        context = opts.get("context", "")
+        text = _text_for(model_ref, opts)
+        usage = _fabricate_usage(system, messages, text)
+        return CompletionResult(
+            text=text,
+            model=model_ref,
+            provider="mock",
+            input_tokens=usage["input_tokens"],
+            output_tokens=usage["output_tokens"],
+        )
 
-        if role == "planner":
-            text = _plan_text(title, description)
-        elif role == "builder":
-            text = _deliverable_text(title, description, context)
-        else:
-            text = _audit_text(title, context)
+    async def stream(
+        self,
+        model_ref: str,
+        system: str,
+        messages: list[dict[str, str]],
+        usage: dict[str, int] | None = None,
+        **opts: Any,
+    ) -> AsyncIterator[str]:
+        text = _text_for(model_ref, opts)
+        fabricated = _fabricate_usage(system, messages, text)
+        if usage is not None:
+            usage.update(fabricated)
 
-        return CompletionResult(text=text, model=model_ref, provider="mock")
+        words = text.split(" ")
+        delay = opts.get("stream_delay", 0.015)
+        for i, word in enumerate(words):
+            yield word if i == 0 else " " + word
+            if delay:
+                await asyncio.sleep(delay)

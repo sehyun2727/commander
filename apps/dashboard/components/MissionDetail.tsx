@@ -72,7 +72,7 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-text">Meeting</h2>
-        <ChatThread taskId={taskId} />
+        <ChatThread companyId={companyId} taskId={taskId} />
       </section>
     </main>
   );
