@@ -1,0 +1,8 @@
+{
+  "name": "commander",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Commander — an operating system where a solo developer runs an AI software company. See docs/ARCHITECTURE.md.",
+  "license": "UNLICENSED",
+  "scripts": {}
+}

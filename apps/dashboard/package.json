@@ -1,0 +1,7 @@
+{
+  "name": "@commander/dashboard",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Commander CEO Dashboard (Next.js). Implementation pending Sprint 1.",
+  "scripts": {}
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@commander/sdk",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Typed client SDK for the Commander API Server, used by the dashboard and future clients.",
+  "scripts": {}
+}

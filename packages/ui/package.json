@@ -1,0 +1,7 @@
+{
+  "name": "@commander/ui",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Shared React component library for the CEO Dashboard.",
+  "scripts": {}
+}

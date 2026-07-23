@@ -1,0 +1,40 @@
+"""Task lifecycle: states and allowed transitions.
+
+See docs/backend/workflow/TASK_LIFECYCLE.md for the diagram and rationale.
+"""
+
+from enum import Enum
+
+
+class TaskState(str, Enum):
+    CREATED = "created"
+    ASSIGNED = "assigned"
+    IN_PROGRESS = "in_progress"
+    IN_REVIEW = "in_review"
+    PENDING_APPROVAL = "pending_approval"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    RETRYING = "retrying"
+    CANCELLED = "cancelled"
+
+
+TASK_TRANSITIONS: dict[TaskState, set[TaskState]] = {
+    TaskState.CREATED: {TaskState.ASSIGNED, TaskState.CANCELLED},
+    TaskState.ASSIGNED: {TaskState.IN_PROGRESS, TaskState.CANCELLED},
+    TaskState.IN_PROGRESS: {TaskState.IN_REVIEW, TaskState.FAILED, TaskState.CANCELLED},
+    TaskState.IN_REVIEW: {
+        TaskState.PENDING_APPROVAL,
+        TaskState.COMPLETED,
+        TaskState.IN_PROGRESS,  # changes requested -> rework
+        TaskState.FAILED,  # rejected beyond rework limit
+    },
+    TaskState.PENDING_APPROVAL: {
+        TaskState.COMPLETED,
+        TaskState.IN_PROGRESS,  # rejected -> rework
+        TaskState.CANCELLED,  # rejected -> abandon
+    },
+    TaskState.FAILED: {TaskState.RETRYING, TaskState.CANCELLED},
+    TaskState.RETRYING: {TaskState.ASSIGNED},
+    TaskState.COMPLETED: set(),
+    TaskState.CANCELLED: set(),
+}

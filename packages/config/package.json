@@ -1,0 +1,7 @@
+{
+  "name": "@commander/config",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Shared lint/tsconfig/prettier presets for JS/TS packages in this monorepo.",
+  "scripts": {}
+}

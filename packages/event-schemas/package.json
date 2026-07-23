@@ -1,0 +1,7 @@
+{
+  "name": "@commander/event-schemas",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Shared event type definitions (TaskCreated, TaskAssigned, BugFound, ...) used by dashboard and api.",
+  "scripts": {}
+}
