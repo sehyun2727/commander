@@ -2,6 +2,28 @@
   "name": "@commander/dashboard",
   "private": true,
   "version": "0.0.0",
-  "description": "Commander CEO Dashboard (Next.js). Implementation pending Sprint 1.",
-  "scripts": {}
+  "description": "Commander Headquarters — the CEO-facing dashboard (Next.js). Talks to the API Server over REST + SSE. No AI logic lives here.",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@tanstack/react-query": "^5.51.1",
+    "@commander/event-schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "@types/node": "^20.14.14",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "tailwindcss": "^3.4.7",
+    "postcss": "^8.4.40",
+    "autoprefixer": "^10.4.19"
+  }
 }

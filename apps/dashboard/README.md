@@ -1,14 +1,23 @@
 # Dashboard
 
-CEO-facing web application (Next.js). Talks to the API Server over REST / WebSocket. No AI logic lives here.
+Commander Headquarters — the CEO-facing web app (Next.js App Router, TypeScript, Tailwind). Talks to the API Server over REST and SSE. No AI logic lives here.
 
-Per `docs/ARCHITECTURE.md`, this app owns the following areas (not yet implemented):
+## Pages
 
-- Projects
-- Overview
-- Timeline
-- Workspace
-- Agents
-- Settings
+- `/` — company list / found a new company
+- `/company/[id]` — Headquarters (stats, CEO Decisions, live Timeline)
+- `/company/[id]/missions` — Missions kanban
+- `/company/[id]/missions/[taskId]` — mission detail + Meeting chat
+- `/company/[id]/meetings/[taskId]` — Meeting chat (same detail view)
+- `/company/[id]/employees` — Employees grid
+- `/company/[id]/settings` — Company Settings
 
-Status: skeleton only — no pages, components, or dependencies have been added yet.
+## Dev
+
+```bash
+pnpm install
+cp .env.local.example .env.local
+pnpm dev
+```
+
+Requires the API server running at the URL in `.env.local` (`NEXT_PUBLIC_API_URL`, default `http://127.0.0.1:8000`).
