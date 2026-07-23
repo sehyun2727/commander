@@ -92,4 +92,36 @@ per the brief's constraints).
     immediately on connect, and the queue clears its registration in a
     `finally` block on client disconnect.
 
+## Phase 5 — Dashboard frontend
+
+13. **`http://127.0.0.1:3000` added to `cors_origins` alongside
+    `http://localhost:3000`.** Browsers treat these as distinct origins
+    even though they resolve to the same machine; the dev server was
+    being hit via `127.0.0.1` in local testing, which the API rejected.
+    Both are now allowlisted by default.
+14. **Meetings are task-scoped, not agent-scoped.** The spec sketches
+    `/company/[id]/meetings/[agentId or taskId]`, but the backend's
+    message model (`GET/POST /api/tasks/{task_id}/messages`) is keyed on
+    the task, and `post_message` already resolves "whichever agent
+    currently holds the task" server-side. The Meetings route is
+    implemented as `/company/[id]/meetings/[taskId]`, sharing the same
+    `MissionDetail` component used by the Missions detail route, rather
+    than inventing a parallel agent-scoped chat model.
+15. **Realtime state uses TanStack Query invalidation, not a live cache
+    merge.** `RealtimeProvider` keeps a small rolling buffer (last 100
+    events) purely for the Timeline feed's live narration, but on each
+    incoming SSE event it invalidates the relevant query keys (missions,
+    employees, approvals, timeline, and — if the event carries a
+    `task_id` — that mission's detail/messages) rather than hand-patching
+    query cache entries. Simpler and less error-prone than reimplementing
+    cache updates per event type, at the cost of an extra refetch per
+    event; acceptable at this scale.
+16. **Verified in a real headless browser, not just `next build`.**
+    Installed Playwright into a scratch temp directory (not a project
+    dependency) to navigate all six pages against the live API and assert
+    zero console/page errors — `tsc --noEmit` and `next build` passing
+    doesn't catch runtime issues like CORS rejections or hydration
+    errors. Confirmed clean on landing, Headquarters, Missions, mission
+    detail, Employees, and Company Settings.
+
 (Further entries appended as later phases land.)
