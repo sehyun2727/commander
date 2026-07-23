@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { ApprovalCard } from "@/components/ApprovalCard";
+import { DailyReportCard } from "@/components/DailyReportCard";
 import { useRealtimeEvents } from "@/components/RealtimeProvider";
 import { TimelineFeed } from "@/components/TimelineFeed";
 import { useApprovals, useCompanyCosts, useEmployees, useMissions, useTimeline } from "@/lib/hooks";
@@ -43,6 +44,10 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
         <StatCard label="Employees" value={employees?.length ?? 0} />
         <StatCard label="Pending CEO Decisions" value={pending.length} />
         <StatCard label="Payroll (this month)" value={formatUsd(costs?.month_total_usd ?? 0)} />
+      </div>
+
+      <div className="mb-8">
+        <DailyReportCard companyId={companyId} />
       </div>
 
       {pending.length > 0 && (

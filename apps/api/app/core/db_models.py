@@ -116,6 +116,21 @@ class CostEntryORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
+class ReportORM(Base):
+    """CEO Daily Report — an on-demand snapshot of the prior 24h, not a
+    scheduled/recurring artifact (no background scheduler in this
+    sprint's scope, see docs/DECISIONS.md)."""
+
+    __tablename__ = "reports"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    summary_markdown: Mapped[str] = mapped_column(Text)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
 class SettingORM(Base):
     """Generic KV store for runtime-editable Company Settings (provider
     choice, secret overrides). Keyed per app instance, not per project —

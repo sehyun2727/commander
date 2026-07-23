@@ -12,6 +12,9 @@ MODEL_REGISTRY: dict[str, dict[str, str]] = {
         "planner-default": "mock-planner-v1",
         "builder-default": "mock-builder-v1",
         "reviewer-default": "mock-reviewer-v1",
+        # Daily Report summarization — not a pipeline role, so it's not in
+        # ROLES/options_for_role and the CEO can't reassign it.
+        "reporter-default": "mock-reporter-v1",
     },
     "anthropic": {
         # Haiku for the fast planning/review passes, Sonnet for the
@@ -19,6 +22,7 @@ MODEL_REGISTRY: dict[str, dict[str, str]] = {
         "planner-default": "claude-haiku-4-5-20251001",
         "builder-default": "claude-sonnet-4-6",
         "reviewer-default": "claude-haiku-4-5-20251001",
+        "reporter-default": "claude-haiku-4-5-20251001",
     },
 }
 

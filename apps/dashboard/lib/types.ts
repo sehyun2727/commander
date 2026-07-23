@@ -76,3 +76,12 @@ export interface ModelCatalogEntry {
   recommended_model: string;
   options: string[];
 }
+
+export interface Report {
+  id: string;
+  project_id: string;
+  period_start: string;
+  period_end: string;
+  summary_markdown: string;
+  generated_at: string;
+}

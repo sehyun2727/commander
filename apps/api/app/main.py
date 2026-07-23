@@ -22,6 +22,7 @@ from .modules.event_bus import InProcessEventBus
 from .modules.model_registry import router as models_router
 from .modules.projects import router as projects_router
 from .modules.realtime import router as realtime_router
+from .modules.reports import router as reports_router
 from .modules.tasks import router as tasks_router
 from .modules.timeline import router as timeline_router
 from .modules.workflow_engine import CommanderWorkflowEngine
@@ -64,6 +65,7 @@ app.include_router(agents_router)
 app.include_router(realtime_router)
 app.include_router(costs_router)
 app.include_router(models_router)
+app.include_router(reports_router)
 
 
 @app.get("/api/health")

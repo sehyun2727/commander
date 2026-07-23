@@ -370,3 +370,49 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     "what model did you actually just use" for cost logging, so a CEO
     override is reflected in Payroll instead of silently cost-logging the
     registry default.
+
+### Phase 4 — CEO Daily Report
+
+42. **The report window is a fixed trailing 24h (`now - 24h` to `now`),
+    not the prior calendar day.** The brief asks for "the prior 24h"
+    explicitly, and a fixed window is simpler to reason about and test
+    than a calendar-day boundary that would depend on the CEO's timezone
+    (which this MVP has no concept of — everything is stored/compared in
+    UTC). Generating a report at any time of day always summarizes
+    exactly what the CEO missed since roughly this time yesterday.
+43. **`reporter-default` is added to `model_registry.MODEL_REGISTRY` but
+    deliberately left out of `ROLES`/`options_for_role`.** Decision 39's
+    CEO-facing model-reassignment lever only makes sense for roles the
+    CEO actually manages (PM/Engineer/Reviewer) — the report-writer isn't
+    an Employee with a Timeline presence, and letting the CEO swap it
+    would risk the same mock-mode role/template mismatch Decision 37
+    already ruled out for the three real roles, for a feature (report
+    tone) that isn't part of this sprint's brief.
+44. **Mock mode gets a dedicated `"reporter"` template branch in
+    `mock_provider.py`**, following the same `_role_from_ref`
+    substring-dispatch pattern used for planner/builder/reviewer
+    (Decision 37), rather than reusing one of the existing three. The
+    report's shape (missions/decisions/highlights/payroll → prose) is
+    structurally different from a mission-pipeline reply, so it gets its
+    own deterministic template fed by the same structured `opts` kwargs
+    the gateway already threads through `complete()`.
+45. **Added `costs.summary_since(session_factory, project_id, since)` as a
+    third, distinct cost-summary shape**, alongside Decision 33's
+    calendar-month `summary_for_project` (Payroll) and all-time
+    `summary_for_task` (Mission Budget). The Daily Report needs "spend in
+    the last 24h," which is neither of the other two windows — forcing
+    it through the calendar-month function would double-count or
+    under-count depending on where midnight-of-the-month falls relative
+    to the report's 24h window, so a third, explicitly-windowed query was
+    cheaper and clearer than overloading an existing one with an optional
+    date-range parameter.
+46. **Report generation itself is not cost-logged against any Employee.**
+    `record_usage` (Decision 34) requires a `task_id`/`agent_id`/`role`
+    the call belongs to; the report-writer has none of those — it's a
+    one-off CEO-triggered summary, not an Employee action — so its token
+    cost is left out of Payroll rather than inventing a synthetic
+    "reporter" agent/task just to satisfy the existing plumbing.
+47. **No DB migration for the new `reports` table** — same accepted
+    tradeoff as every other table in this codebase (Decision 35):
+    `ReportORM` added straight to `db_models.py`, picked up by
+    `Base.metadata.create_all` on next boot.

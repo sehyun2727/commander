@@ -1,9 +1,12 @@
-"""Reports module.
+"""CEO Daily Report module.
 
-Compiles the CEO's daily report from historical events. Read-only consumer
-of event_bus, like timeline — publishes nothing.
-
-Allowed dependencies: event_bus (subscribe only).
-
-No implementation yet (Sprint 1 defines module boundaries only).
+Generates an on-demand executive summary of the prior 24h (missions moved,
+decisions made, failures, Payroll) from the Timeline's own event history,
+via the same ProviderGateway every other role uses — mock mode gets a
+templated summary, real providers get one written by the model.
 """
+
+from .routes import router
+from .service import generate_report
+
+__all__ = ["router", "generate_report"]

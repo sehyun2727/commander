@@ -4,6 +4,7 @@ import type {
   ModelCatalogEntry,
   Project,
   ProjectCostSummary,
+  Report,
   Task,
   TaskCostSummary,
   TimelinePage,
@@ -86,4 +87,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ model }),
     }),
+
+  // Daily Report
+  listReports: (companyId: string) => request<Report[]>(`/api/projects/${companyId}/reports`),
+  getReport: (reportId: string) => request<Report>(`/api/reports/${reportId}`),
+  generateReport: (companyId: string) =>
+    request<Report>(`/api/projects/${companyId}/reports/generate`, { method: "POST" }),
 };

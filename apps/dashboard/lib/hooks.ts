@@ -15,6 +15,8 @@ export const keys = {
   companyCosts: (companyId: string) => ["companyCosts", companyId] as const,
   missionCosts: (taskId: string) => ["missionCosts", taskId] as const,
   models: (companyId: string) => ["models", companyId] as const,
+  reports: (companyId: string) => ["reports", companyId] as const,
+  report: (reportId: string) => ["report", reportId] as const,
 };
 
 export function useCompanies() {
@@ -73,6 +75,22 @@ export function useSetModel(companyId: string) {
       qc.invalidateQueries({ queryKey: keys.models(companyId) });
       qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
     },
+  });
+}
+
+export function useReports(companyId: string) {
+  return useQuery({ queryKey: keys.reports(companyId), queryFn: () => api.listReports(companyId) });
+}
+
+export function useReport(reportId: string) {
+  return useQuery({ queryKey: keys.report(reportId), queryFn: () => api.getReport(reportId) });
+}
+
+export function useGenerateReport(companyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.generateReport(companyId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.reports(companyId) }),
   });
 }
 

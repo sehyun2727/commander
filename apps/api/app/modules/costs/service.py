@@ -68,3 +68,17 @@ async def summary_for_task(session_factory, task_id: str) -> float:
         )
         total = result.scalar()
     return round(total or 0.0, 6)
+
+
+async def summary_since(session_factory, project_id: str, since: datetime) -> float:
+    """Total spend for a Company from `since` to now — used by the Daily
+    Report, which needs a fixed 24h window rather than Payroll's
+    calendar-month scope."""
+    async with session_factory() as session:
+        result = await session.execute(
+            select(func.sum(CostEntryORM.cost_usd)).where(
+                CostEntryORM.project_id == project_id, CostEntryORM.created_at >= since
+            )
+        )
+        total = result.scalar()
+    return round(total or 0.0, 6)

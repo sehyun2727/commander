@@ -51,6 +51,8 @@ def _role_from_ref(model_ref: str) -> str:
         return "planner"
     if "builder" in model_ref:
         return "builder"
+    if "reporter" in model_ref:
+        return "reporter"
     return "reviewer"
 
 
@@ -88,8 +90,36 @@ def _audit_text(title: str, context: str) -> str:
     )
 
 
+def _report_text(opts: dict[str, Any]) -> str:
+    period_label = opts.get("period_label", "the last 24 hours")
+    completed = opts.get("missions_completed", 0)
+    failed = opts.get("missions_failed", 0)
+    decisions = opts.get("decisions_made", 0)
+    payroll_usd = opts.get("payroll_usd", 0.0)
+    highlights = opts.get("highlights") or []
+
+    if completed or failed or decisions:
+        activity = (
+            f"Over {period_label}, the team closed out {completed} mission"
+            f"{'s' if completed != 1 else ''}"
+            + (f", hit {failed} setback{'s' if failed != 1 else ''}" if failed else "")
+            + f", and the CEO made {decisions} decision{'s' if decisions != 1 else ''}."
+        )
+    else:
+        activity = f"It was a quiet stretch over {period_label} — no missions moved and no decisions were needed."
+
+    lines = [f"## Daily Report — {period_label}", "", activity]
+    if highlights:
+        lines += ["", "**Highlights:**", *[f"- {h}" for h in highlights[:5]]]
+    payroll_str = f"${payroll_usd:.4f}" if payroll_usd < 0.01 else f"${payroll_usd:.2f}"
+    lines += ["", f"**Payroll this period:** {payroll_str}"]
+    return "\n".join(lines)
+
+
 def _text_for(model_ref: str, opts: dict[str, Any]) -> str:
     role = _role_from_ref(model_ref)
+    if role == "reporter":
+        return _report_text(opts)
     title = opts.get("task_title", "this mission")
     description = opts.get("task_description", "")
     context = opts.get("context", "")
