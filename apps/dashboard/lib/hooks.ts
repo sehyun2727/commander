@@ -12,6 +12,8 @@ export const keys = {
   approvals: (companyId: string) => ["approvals", companyId] as const,
   messages: (taskId: string) => ["messages", taskId] as const,
   timeline: (companyId: string) => ["timeline", companyId] as const,
+  companyCosts: (companyId: string) => ["companyCosts", companyId] as const,
+  missionCosts: (taskId: string) => ["missionCosts", taskId] as const,
 };
 
 export function useCompanies() {
@@ -44,6 +46,18 @@ export function useMessages(taskId: string) {
 
 export function useTimeline(companyId: string) {
   return useQuery({ queryKey: keys.timeline(companyId), queryFn: () => api.getTimeline(companyId) });
+}
+
+export function useCompanyCosts(companyId: string) {
+  return useQuery({
+    queryKey: keys.companyCosts(companyId),
+    queryFn: () => api.getCompanyCosts(companyId),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useMissionCosts(taskId: string) {
+  return useQuery({ queryKey: keys.missionCosts(taskId), queryFn: () => api.getMissionCosts(taskId) });
 }
 
 export function useCreateCompany() {
@@ -136,8 +150,10 @@ export function invalidateForEvent(
   qc.invalidateQueries({ queryKey: keys.employees(companyId) });
   qc.invalidateQueries({ queryKey: keys.approvals(companyId) });
   qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
+  qc.invalidateQueries({ queryKey: keys.companyCosts(companyId) });
   if (taskId) {
     qc.invalidateQueries({ queryKey: keys.mission(taskId) });
     qc.invalidateQueries({ queryKey: keys.messages(taskId) });
+    qc.invalidateQueries({ queryKey: keys.missionCosts(taskId) });
   }
 }

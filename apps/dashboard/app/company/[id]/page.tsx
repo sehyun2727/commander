@@ -4,9 +4,10 @@ import { useMemo } from "react";
 import { ApprovalCard } from "@/components/ApprovalCard";
 import { useRealtimeEvents } from "@/components/RealtimeProvider";
 import { TimelineFeed } from "@/components/TimelineFeed";
-import { useApprovals, useEmployees, useMissions, useTimeline } from "@/lib/hooks";
+import { useApprovals, useCompanyCosts, useEmployees, useMissions, useTimeline } from "@/lib/hooks";
+import { formatUsd } from "@/lib/utils";
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl border border-base-border bg-base-card p-4 shadow-panel">
       <p className="text-xs uppercase tracking-wide text-text-faint">{label}</p>
@@ -21,6 +22,7 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
   const { data: employees } = useEmployees(companyId);
   const { data: approvals } = useApprovals(companyId);
   const { data: timelinePage } = useTimeline(companyId);
+  const { data: costs } = useCompanyCosts(companyId);
   const liveEvents = useRealtimeEvents();
 
   const activeMissions = missions?.filter((t) => !["completed", "cancelled"].includes(t.state)).length ?? 0;
@@ -36,10 +38,11 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
         <p className="mt-1 text-sm text-text-muted">Live view of everything happening across your company.</p>
       </header>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
         <StatCard label="Active Missions" value={activeMissions} />
         <StatCard label="Employees" value={employees?.length ?? 0} />
         <StatCard label="Pending CEO Decisions" value={pending.length} />
+        <StatCard label="Payroll (this month)" value={formatUsd(costs?.month_total_usd ?? 0)} />
       </div>
 
       {pending.length > 0 && (

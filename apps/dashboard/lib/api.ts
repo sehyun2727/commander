@@ -1,4 +1,4 @@
-import type { Approval, Event, Project, Task, TimelinePage } from "./types";
+import type { Approval, Event, Project, ProjectCostSummary, Task, TaskCostSummary, TimelinePage } from "./types";
 import type { Agent } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -65,4 +65,8 @@ export const api = {
     request<TimelinePage>(
       `/api/projects/${companyId}/events${cursor != null ? `?cursor=${cursor}` : ""}`
     ),
+
+  // Payroll
+  getCompanyCosts: (companyId: string) => request<ProjectCostSummary>(`/api/projects/${companyId}/costs`),
+  getMissionCosts: (taskId: string) => request<TaskCostSummary>(`/api/tasks/${taskId}/costs`),
 };

@@ -115,6 +115,16 @@ export function narrate(event: Event): string {
   return event.type;
 }
 
+export function formatUsd(amount: number): string {
+  // Mock-mode "play money" costs are fractions of a cent per call — a flat
+  // toFixed(2) would show $0.00 for a while after every mission and make
+  // Payroll look frozen even though it's accruing. Show more precision
+  // below a cent so the CEO can see it move.
+  if (amount === 0) return "$0.00";
+  if (amount < 0.01) return `$${amount.toFixed(4)}`;
+  return `$${amount.toFixed(2)}`;
+}
+
 export function relativeTime(iso: string): string {
   const then = new Date(iso.endsWith("Z") ? iso : `${iso}Z`).getTime();
   const diffMs = Date.now() - then;

@@ -1,12 +1,14 @@
 "use client";
 
 import { EmployeeCard } from "@/components/EmployeeCard";
-import { useEmployees, useMissions } from "@/lib/hooks";
+import { useCompanyCosts, useEmployees, useMissions } from "@/lib/hooks";
 
 export default function EmployeesPage({ params }: { params: { id: string } }) {
   const companyId = params.id;
   const { data: employees, isLoading } = useEmployees(companyId);
   const { data: missions } = useMissions(companyId);
+  const { data: costs } = useCompanyCosts(companyId);
+  const spendByAgent = new Map((costs?.by_agent ?? []).map((entry) => [entry.agent_id, entry.total_usd]));
 
   return (
     <main className="mx-auto max-w-5xl px-8 py-10">
@@ -25,6 +27,7 @@ export default function EmployeesPage({ params }: { params: { id: string } }) {
               employee={employee}
               companyId={companyId}
               currentMission={missions?.find((m) => m.id === employee.current_task_id)}
+              spendUsd={spendByAgent.get(employee.id)}
             />
           ))}
         </div>

@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -94,6 +94,26 @@ class ApprovalORM(Base):
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CostEntryORM(Base):
+    """One row per provider call (per Employee turn). Derived telemetry,
+    not a Timeline milestone — summarized on demand by the costs module
+    rather than replayed as events."""
+
+    __tablename__ = "cost_entries"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id"), index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"))
+    role: Mapped[str] = mapped_column(String)
+    provider: Mapped[str] = mapped_column(String)
+    model: Mapped[str] = mapped_column(String)
+    input_tokens: Mapped[int] = mapped_column(Integer)
+    output_tokens: Mapped[int] = mapped_column(Integer)
+    cost_usd: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
 class SettingORM(Base):

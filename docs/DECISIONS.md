@@ -253,3 +253,71 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     provider's per-word streaming delay (~0.015s/word) pushed a couple of
     tests past the old 15s bound intermittently. Verified the full
     26-test suite green after the bump (see Phase 5 for the final count).
+
+### Phase 2 — Cost & Payroll
+
+30. **New `costs` module, not folded into `provider_gateway`.** The brief
+    left the location as a judgment call. `provider_gateway` resolves
+    models and makes calls; it shouldn't also own pricing math, DB
+    persistence, and per-Company/per-Mission summarization — that's a
+    distinct read/report concern with its own schema and API surface, so
+    it gets its own module (`app/modules/costs/`) following the same
+    shape as every other module (`service.py` + `routes.py` +
+    `schemas.py`). It never publishes to the Event Bus and no other
+    module reads `CostEntryORM` directly.
+31. **Cost recording does not emit a Timeline event.** A `CostEntryORM`
+    row is derived telemetry (tokens × a static price), not a CEO-facing
+    milestone like a mission moving state or a Decision being made — an
+    event per provider call would be exactly the same "flood the
+    Timeline with no narrative value" problem Decision 26 avoided for
+    streaming deltas. Payroll is instead queried on demand
+    (`GET /api/projects/{id}/costs`, `GET /api/tasks/{id}/costs`) and
+    polled by the dashboard.
+32. **Mock models get nonzero "play money" prices in
+    `PRICE_PER_MILLION_TOKENS`** (`model_registry.py`) instead of pricing
+    at $0. The sprint's Definition of Done requires "Payroll updated on
+    Headquarters" to be observable with `make dev` in mock mode and zero
+    API keys — a real DoD check, not just a nice-to-have — so mock roles
+    are priced at illustrative-but-plausible rates (planner/reviewer
+    ≈ Haiku-tier, builder ≈ Sonnet-tier) purely so the UI has something
+    real to show. Anthropic prices in the same table are ballpark public
+    figures for the two concrete models in the registry. Unknown models
+    price at $0 rather than raising (`cost_for` falls back to `(0.0,
+    0.0)`) — a missing price-table entry should never fail a mission.
+33. **Payroll (Headquarters vital) is scoped to the current calendar
+    month; Mission Budget spent (mission detail) is all-time for that
+    mission.** These read like the same metric but answer different
+    questions: Payroll is a recurring "what am I spending on this
+    Department" number that should reset like a real payroll cycle,
+    while a Mission's cost is bounded by its own lifecycle (usually
+    minutes to hours) and reporting "this month's spend on this mission"
+    would just be a confusing no-op distinction in practice. Employee
+    card spend uses the same this-month window as Payroll, since it's a
+    breakdown of that same number, not a separate metric.
+34. **`record_usage` is called from two call sites with duplicated
+    plumbing** (`workflow_engine._run_role`'s callers, and
+    `tasks.service.post_message`) rather than centralizing inside
+    `RoutedProviderGateway.stream`/`complete`. The gateway's usage dict
+    only carries token counts — it doesn't know the `task_id`/`agent_id`/
+    `role` a given call belongs to, and threading those through the
+    `ProviderGateway` interface would leak workflow concerns into a port
+    that Phase 1 deliberately kept as "resolve model, make call, report
+    tokens." Both call sites already had every field `record_usage`
+    needs in scope, so the small duplication was cheaper than widening
+    the interface.
+35. **No DB migration tooling added for the new `cost_entries` table** —
+    consistent with the accepted MVP tradeoff of no migrations
+    (`Base.metadata.create_all` on a fresh/seeded local SQLite file).
+    Table added straight to `db_models.py` like every other table so
+    far.
+36. **Frontend formats Payroll/Mission Budget/Employee spend with a
+    precision-aware `formatUsd()` (4 decimals below a cent, 2 above)
+    instead of a flat `toFixed(2)`.** Caught live in Playwright
+    verification: one mock mission's total cost is ~$0.0012 (a handful
+    of hundred-token calls against per-million-token prices), which
+    rounds to "$0.00" everywhere with two decimals — Payroll would look
+    frozen at zero after every mission in mock mode, failing the "Payroll
+    updated on Headquarters" Definition-of-Done check even though the
+    underlying number is accruing correctly. Fixing the display (rather
+    than inflating mock prices just to make the UI look good) keeps the
+    price table honest and still makes the change visible to the CEO.

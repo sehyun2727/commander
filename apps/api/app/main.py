@@ -17,6 +17,7 @@ from .core.secrets import DBSecretsProvider
 from .modules.agent_runtime import DBAgentRuntime
 from .modules.agent_runtime import router as agents_router
 from .modules.approvals import router as approvals_router
+from .modules.costs import router as costs_router
 from .modules.event_bus import InProcessEventBus
 from .modules.projects import router as projects_router
 from .modules.realtime import router as realtime_router
@@ -60,6 +61,7 @@ app.include_router(approvals_router)
 app.include_router(timeline_router)
 app.include_router(agents_router)
 app.include_router(realtime_router)
+app.include_router(costs_router)
 
 
 @app.get("/api/health")

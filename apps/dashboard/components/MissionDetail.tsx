@@ -4,12 +4,13 @@ import Link from "next/link";
 import { ApprovalCard } from "@/components/ApprovalCard";
 import { ChatThread } from "@/components/ChatThread";
 import { StatusPill } from "@/components/StatusPill";
-import { useApprovals, useAssignMission, useMission } from "@/lib/hooks";
-import { taskStateLabel, taskStateTone } from "@/lib/utils";
+import { useApprovals, useAssignMission, useMission, useMissionCosts } from "@/lib/hooks";
+import { formatUsd, taskStateLabel, taskStateTone } from "@/lib/utils";
 
 export function MissionDetail({ companyId, taskId }: { companyId: string; taskId: string }) {
   const { data: mission, isLoading } = useMission(taskId);
   const { data: approvals } = useApprovals(companyId);
+  const { data: costs } = useMissionCosts(taskId);
   const assign = useAssignMission(companyId);
 
   const pendingApproval = approvals?.find((a) => a.task_id === taskId && a.status === "pending");
@@ -48,6 +49,9 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
         <StatusPill tone={taskStateTone(mission.state)} label={taskStateLabel(mission.state)} />
         <span className="text-xs uppercase tracking-wide text-text-faint">Priority: {mission.priority}</span>
         {mission.attempt > 1 && <span className="text-xs text-text-faint">Attempt {mission.attempt}</span>}
+        {costs && costs.total_usd > 0 && (
+          <span className="text-xs text-text-faint">Mission Budget spent: {formatUsd(costs.total_usd)}</span>
+        )}
       </div>
 
       {pendingApproval && (

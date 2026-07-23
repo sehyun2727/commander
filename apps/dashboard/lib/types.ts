@@ -53,3 +53,19 @@ export interface TimelinePage {
   items: import("@commander/event-schemas").Event[];
   next_cursor: number | null;
 }
+
+export interface AgentCostEntry {
+  agent_id: string;
+  total_usd: number;
+}
+
+export interface ProjectCostSummary {
+  project_id: string;
+  month_total_usd: number;
+  by_agent: AgentCostEntry[];
+}
+
+export interface TaskCostSummary {
+  task_id: string;
+  total_usd: number;
+}

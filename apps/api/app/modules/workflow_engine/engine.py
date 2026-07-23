@@ -30,7 +30,8 @@ from ...core.lifecycle.agent_states import AgentState
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
-from ..model_registry import RECOMMENDED_PROVIDER
+from ..costs import record_usage
+from ..model_registry import RECOMMENDED_PROVIDER, resolve
 from ..provider_gateway import build_gateway
 
 logger = logging.getLogger("commander.workflow_engine")
@@ -160,6 +161,29 @@ class CommanderWorkflowEngine(WorkflowEngine):
             )
         )
 
+    async def _record_usage(
+        self,
+        project_id: str,
+        task_id: str,
+        agent: AgentORM,
+        gateway: ProviderGateway,
+        model_ref: str,
+        usage: dict[str, int],
+    ) -> None:
+        if not usage:
+            return
+        await record_usage(
+            self._session_factory,
+            project_id=project_id,
+            task_id=task_id,
+            agent_id=agent.id,
+            role=agent.role,
+            provider=gateway.provider_name,
+            model=resolve(gateway.provider_name, model_ref),
+            input_tokens=usage.get("input_tokens", 0),
+            output_tokens=usage.get("output_tokens", 0),
+        )
+
     async def _agents_for(self, project_id: str) -> dict[str, AgentORM]:
         async with self._session_factory() as session:
             result = await session.execute(
@@ -265,6 +289,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     )
                 )
                 plan, pm_usage = await self._run_role(agents["pm"], task, gateway, "planner-default", "", None)
+                await self._record_usage(project_id, task_id, agents["pm"], gateway, "planner-default", pm_usage)
             else:
                 plan, pm_usage = "", {}
 
@@ -279,6 +304,9 @@ class CommanderWorkflowEngine(WorkflowEngine):
             )
             deliverable, engineer_usage = await self._run_role(
                 agents["engineer"], task, gateway, "builder-default", plan, ceo_comment
+            )
+            await self._record_usage(
+                project_id, task_id, agents["engineer"], gateway, "builder-default", engineer_usage
             )
 
             await self._set_task_state(
@@ -296,11 +324,10 @@ class CommanderWorkflowEngine(WorkflowEngine):
             audit, reviewer_usage = await self._run_role(
                 agents["reviewer"], task, gateway, "reviewer-default", deliverable, None
             )
-            outcome = "changes_requested" if "changes requested" in audit.lower() else "approved"
-            logger.debug(
-                "mission %s usage pm=%s engineer=%s reviewer=%s",
-                task_id, pm_usage, engineer_usage, reviewer_usage,
+            await self._record_usage(
+                project_id, task_id, agents["reviewer"], gateway, "reviewer-default", reviewer_usage
             )
+            outcome = "changes_requested" if "changes requested" in audit.lower() else "approved"
             await self._event_bus.publish(
                 build_event(
                     type=EventType.REVIEW_COMPLETED,

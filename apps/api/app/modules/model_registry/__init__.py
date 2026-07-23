@@ -6,6 +6,6 @@ changing which model backs a role never requires an application code
 change. Read by provider_gateway to resolve model -> provider routing.
 """
 
-from .registry import MODEL_REGISTRY, RECOMMENDED_PROVIDER, resolve
+from .registry import MODEL_REGISTRY, PRICE_PER_MILLION_TOKENS, RECOMMENDED_PROVIDER, cost_for, resolve
 
-__all__ = ["MODEL_REGISTRY", "RECOMMENDED_PROVIDER", "resolve"]
+__all__ = ["MODEL_REGISTRY", "PRICE_PER_MILLION_TOKENS", "RECOMMENDED_PROVIDER", "cost_for", "resolve"]

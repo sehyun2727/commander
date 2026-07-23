@@ -11,6 +11,8 @@ from ...core.interfaces.workflow_engine import WorkflowEngine
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
+from ..costs import record_usage
+from ..model_registry import resolve
 from ..provider_gateway import build_gateway
 
 CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
@@ -142,10 +144,12 @@ async def post_message(
     model_ref = _MODEL_REF_FOR_ROLE.get(agent.role, "planner-default")
     actor = Actor(role="employee", id=agent.id, name=agent.name)
     buffer: list[str] = []
+    usage: dict[str, int] = {}
     async for chunk in gateway.stream(
         model_ref,
         system=agent.persona,
         messages=[{"role": "user", "content": text}],
+        usage=usage,
         task_title=task.title,
         task_description=task.description,
         context=f"The CEO just asked: {text}",
@@ -168,6 +172,18 @@ async def post_message(
             payload={"text": "", "agent_id": agent.id, "task_id": task_id, "done": True},
         )
     )
+    if usage:
+        await record_usage(
+            session_factory,
+            project_id=project_id,
+            task_id=task_id,
+            agent_id=agent.id,
+            role=agent.role,
+            provider=gateway.provider_name,
+            model=resolve(gateway.provider_name, model_ref),
+            input_tokens=usage.get("input_tokens", 0),
+            output_tokens=usage.get("output_tokens", 0),
+        )
 
     return await event_bus.publish(
         build_event(

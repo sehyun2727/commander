@@ -24,9 +24,30 @@ MODEL_REGISTRY: dict[str, dict[str, str]] = {
 
 RECOMMENDED_PROVIDER = "mock"
 
+# Illustrative USD per-million-token prices, (input, output). Approximate by
+# design (see docs/DECISIONS.md) — this is Payroll math for a CEO dashboard,
+# not a billing system. Mock models get "play money" prices so Payroll is
+# nonzero in mock mode with zero API keys; Anthropic prices are ballpark
+# figures for the concrete models above.
+PRICE_PER_MILLION_TOKENS: dict[str, tuple[float, float]] = {
+    "mock-planner-v1": (0.25, 1.25),
+    "mock-builder-v1": (3.00, 15.00),
+    "mock-reviewer-v1": (0.25, 1.25),
+    "claude-haiku-4-5-20251001": (1.00, 5.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+}
+
 
 def resolve(provider: str, model_ref: str) -> str:
     try:
         return MODEL_REGISTRY[provider][model_ref]
     except KeyError as exc:
         raise ValueError(f"no model registered for provider={provider!r} ref={model_ref!r}") from exc
+
+
+def cost_for(model: str, input_tokens: int, output_tokens: int) -> float:
+    """USD cost for one call. Unknown models price at $0 rather than
+    raising — a missing price-table entry shouldn't fail a mission."""
+    input_price, output_price = PRICE_PER_MILLION_TOKENS.get(model, (0.0, 0.0))
+    cost = (input_tokens / 1_000_000) * input_price + (output_tokens / 1_000_000) * output_price
+    return round(cost, 6)
