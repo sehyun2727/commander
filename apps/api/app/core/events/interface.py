@@ -16,5 +16,5 @@ from .types import EventType
 @runtime_checkable
 class EventLike(Protocol):
     type: EventType
-    event_id: str
-    occurred_at: datetime
+    id: str
+    created_at: datetime

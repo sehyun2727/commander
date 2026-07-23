@@ -1,232 +1,253 @@
-"""Concrete event contracts, grouped by domain.
+"""Per-type payload contracts, plus a typed factory for building `Event`s.
 
-Every event here is a frozen dataclass extending Event. These are pure data
-contracts — no behavior, no persistence, no I/O.
+Each payload model documents (and validates) the shape of `Event.payload`
+for one `EventType`. `PAYLOAD_MODELS` maps type -> model so both the event
+factory below and `scripts/generate_ts_schemas.py` have one source of
+truth to walk.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict
 
-from .base import Event
-from .types import EventType
 from ..lifecycle.agent_states import AgentState
 from ..lifecycle.task_states import TaskState
+from .base import Actor, Event, EventKind
+from .types import EventType
 
 
-# --- Projects ---------------------------------------------------------------
-
-@dataclass(frozen=True, kw_only=True)
-class ProjectCreated(Event):
-    type: EventType = EventType.PROJECT_CREATED
-    name: str = ""
+class Payload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
-@dataclass(frozen=True, kw_only=True)
-class ProjectArchived(Event):
-    type: EventType = EventType.PROJECT_ARCHIVED
+# --- Projects (Company) ------------------------------------------------------
+
+class ProjectCreatedPayload(Payload):
+    name: str
 
 
-# --- Tasks (workflow) --------------------------------------------------------
-
-@dataclass(frozen=True, kw_only=True)
-class TaskCreated(Event):
-    type: EventType = EventType.TASK_CREATED
-    task_id: str = ""
-    title: str = ""
-    priority: str = "normal"  # PM-assigned: "low" | "normal" | "high" | "critical"
+class ProjectArchivedPayload(Payload):
+    pass
 
 
-@dataclass(frozen=True, kw_only=True)
-class TaskAssigned(Event):
-    type: EventType = EventType.TASK_ASSIGNED
-    task_id: str = ""
-    agent_id: str = ""
+# --- Tasks (Missions) ---------------------------------------------------------
+
+class TaskCreatedPayload(Payload):
+    task_id: str
+    title: str
+    priority: str = "normal"
+
+
+class TaskAssignedPayload(Payload):
+    task_id: str
+    agent_id: str
     attempt: int = 1
 
 
-@dataclass(frozen=True, kw_only=True)
-class TaskStarted(Event):
-    """Execution began (ASSIGNED -> IN_PROGRESS). Fired for every task type;
-    CodingStarted is an additional, more specific event for coding work."""
-
-    type: EventType = EventType.TASK_STARTED
-    task_id: str = ""
-    agent_id: str = ""
+class TaskStartedPayload(Payload):
+    task_id: str
+    agent_id: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class TaskCompleted(Event):
-    type: EventType = EventType.TASK_COMPLETED
-    task_id: str = ""
+class TaskCompletedPayload(Payload):
+    task_id: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class TaskFailed(Event):
-    type: EventType = EventType.TASK_FAILED
-    task_id: str = ""
-    reason: str = ""
+class TaskFailedPayload(Payload):
+    task_id: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class TaskRetried(Event):
-    type: EventType = EventType.TASK_RETRIED
-    task_id: str = ""
+class TaskRetriedPayload(Payload):
+    task_id: str
     attempt: int = 1
-    reason: str = ""
 
 
-@dataclass(frozen=True, kw_only=True)
-class TaskCancelled(Event):
-    type: EventType = EventType.TASK_CANCELLED
-    task_id: str = ""
-    reason: str | None = None
+class TaskCancelledPayload(Payload):
+    task_id: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class TaskStateChanged(Event):
-    """Low-level completeness net: fires on every task transition, so
-    monitoring/progress tooling never depends on the curated named events
-    above being exhaustive. Timeline still consumes the named events for
-    CEO narrative, not this one."""
-
-    type: EventType = EventType.TASK_STATE_CHANGED
-    task_id: str = ""
-    previous_state: TaskState = TaskState.CREATED
-    new_state: TaskState = TaskState.CREATED
+class TaskStateChangedPayload(Payload):
+    task_id: str
+    previous_state: TaskState
+    new_state: TaskState
 
 
-# --- Agents -------------------------------------------------------------------
+# --- Agents (Employees) -------------------------------------------------------
 
-@dataclass(frozen=True, kw_only=True)
-class AgentStarted(Event):
-    type: EventType = EventType.AGENT_STARTED
-    agent_id: str = ""
-    role: str = ""
-
-
-@dataclass(frozen=True, kw_only=True)
-class AgentStopped(Event):
-    type: EventType = EventType.AGENT_STOPPED
-    agent_id: str = ""
+class AgentCreatedPayload(Payload):
+    agent_id: str
+    role: str
+    name: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class AgentStateChanged(Event):
-    """Low-level completeness net, mirroring TaskStateChanged."""
-
-    type: EventType = EventType.AGENT_STATE_CHANGED
-    agent_id: str = ""
-    previous_state: AgentState = AgentState.IDLE
-    new_state: AgentState = AgentState.IDLE
+class AgentStartedPayload(Payload):
+    agent_id: str
+    role: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class CodingStarted(Event):
-    type: EventType = EventType.CODING_STARTED
-    agent_id: str = ""
-    task_id: str = ""
+class AgentStoppedPayload(Payload):
+    agent_id: str
 
 
-# --- Workspace ------------------------------------------------------------------
-
-@dataclass(frozen=True, kw_only=True)
-class WorkspaceFileChanged(Event):
-    type: EventType = EventType.WORKSPACE_FILE_CHANGED
-    path: str = ""
-    change_kind: str = ""  # "added" | "modified" | "deleted"
+class AgentStateChangedPayload(Payload):
+    agent_id: str
+    previous_state: AgentState
+    new_state: AgentState
 
 
-@dataclass(frozen=True, kw_only=True)
-class WorkspaceCommitted(Event):
-    type: EventType = EventType.WORKSPACE_COMMITTED
-    commit_sha: str = ""
-    summary: str = ""
+class CodingStartedPayload(Payload):
+    agent_id: str
+    task_id: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class WorkspaceBranchCreated(Event):
-    type: EventType = EventType.WORKSPACE_BRANCH_CREATED
-    branch_name: str = ""
+# --- Workspace -----------------------------------------------------------------
+
+class WorkspaceFileChangedPayload(Payload):
+    path: str
+    change_kind: str  # "added" | "modified" | "deleted"
 
 
-# --- Models / providers ------------------------------------------------------------
-
-@dataclass(frozen=True, kw_only=True)
-class ModelChanged(Event):
-    type: EventType = EventType.MODEL_CHANGED
-    previous_model: str = ""
-    new_model: str = ""
+class WorkspaceCommittedPayload(Payload):
+    commit_sha: str
+    summary: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class ProviderChanged(Event):
-    type: EventType = EventType.PROVIDER_CHANGED
-    previous_provider: str = ""
-    new_provider: str = ""
+class WorkspaceBranchCreatedPayload(Payload):
+    branch_name: str
 
 
-# --- Reviews ----------------------------------------------------------------------
+# --- Models / providers (Company Settings) --------------------------------------
 
-@dataclass(frozen=True, kw_only=True)
-class ReviewStarted(Event):
-    type: EventType = EventType.REVIEW_STARTED
-    task_id: str = ""
-    reviewer_agent_id: str = ""
+class ModelChangedPayload(Payload):
+    previous_model: str
+    new_model: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class ReviewCompleted(Event):
-    type: EventType = EventType.REVIEW_COMPLETED
-    task_id: str = ""
-    outcome: str = ""  # "approved" | "changes_requested"
+class ProviderChangedPayload(Payload):
+    previous_provider: str
+    new_provider: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class BugFound(Event):
-    type: EventType = EventType.BUG_FOUND
-    task_id: str = ""
-    description: str = ""
+# --- Workflow (review / deployment) ---------------------------------------------
+
+class ReviewStartedPayload(Payload):
+    task_id: str
+    reviewer_agent_id: str
 
 
-# --- Deployments -------------------------------------------------------------------
-
-@dataclass(frozen=True, kw_only=True)
-class DeploymentStarted(Event):
-    type: EventType = EventType.DEPLOYMENT_STARTED
-    deployment_id: str = ""
+class ReviewCompletedPayload(Payload):
+    task_id: str
+    outcome: str  # "approved" | "changes_requested"
 
 
-@dataclass(frozen=True, kw_only=True)
-class DeploymentCompleted(Event):
-    type: EventType = EventType.DEPLOYMENT_COMPLETED
-    deployment_id: str = ""
+class BugFoundPayload(Payload):
+    task_id: str
+    description: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class DeploymentFailed(Event):
-    type: EventType = EventType.DEPLOYMENT_FAILED
-    deployment_id: str = ""
-    reason: str = ""
+class DeploymentStartedPayload(Payload):
+    deployment_id: str
 
 
-# --- Approvals -------------------------------------------------------------------
-
-@dataclass(frozen=True, kw_only=True)
-class ApprovalRequested(Event):
-    type: EventType = EventType.APPROVAL_REQUESTED
-    approval_id: str = ""
-    subject: str = ""  # e.g. "provider_change", "production_deployment"
+class DeploymentCompletedPayload(Payload):
+    deployment_id: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class ApprovalGranted(Event):
-    type: EventType = EventType.APPROVAL_GRANTED
-    approval_id: str = ""
+class DeploymentFailedPayload(Payload):
+    deployment_id: str
 
 
-@dataclass(frozen=True, kw_only=True)
-class ApprovalRejected(Event):
-    type: EventType = EventType.APPROVAL_REJECTED
-    approval_id: str = ""
-    reason: str | None = None
+# --- Approvals (CEO Decisions) ---------------------------------------------------
+
+class ApprovalRequestedPayload(Payload):
+    approval_id: str
+    task_id: str
+    subject: str  # e.g. "task_review", "provider_change"
+
+
+class ApprovalGrantedPayload(Payload):
+    approval_id: str
+
+
+class ApprovalRejectedPayload(Payload):
+    approval_id: str
+
+
+class ApprovalChangesRequestedPayload(Payload):
+    approval_id: str
+
+
+# --- System ----------------------------------------------------------------------
+
+class SystemHeartbeatPayload(Payload):
+    pass
+
+
+# --- Conversation (Meetings) ------------------------------------------------------
+
+class ConversationMessagePayload(Payload):
+    text: str
+    agent_id: str | None = None
+    task_id: str | None = None
+
+
+PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
+    EventType.PROJECT_CREATED: ProjectCreatedPayload,
+    EventType.PROJECT_ARCHIVED: ProjectArchivedPayload,
+    EventType.TASK_CREATED: TaskCreatedPayload,
+    EventType.TASK_ASSIGNED: TaskAssignedPayload,
+    EventType.TASK_STARTED: TaskStartedPayload,
+    EventType.TASK_COMPLETED: TaskCompletedPayload,
+    EventType.TASK_FAILED: TaskFailedPayload,
+    EventType.TASK_RETRIED: TaskRetriedPayload,
+    EventType.TASK_CANCELLED: TaskCancelledPayload,
+    EventType.TASK_STATE_CHANGED: TaskStateChangedPayload,
+    EventType.AGENT_CREATED: AgentCreatedPayload,
+    EventType.AGENT_STARTED: AgentStartedPayload,
+    EventType.AGENT_STOPPED: AgentStoppedPayload,
+    EventType.AGENT_STATE_CHANGED: AgentStateChangedPayload,
+    EventType.CODING_STARTED: CodingStartedPayload,
+    EventType.WORKSPACE_FILE_CHANGED: WorkspaceFileChangedPayload,
+    EventType.WORKSPACE_COMMITTED: WorkspaceCommittedPayload,
+    EventType.WORKSPACE_BRANCH_CREATED: WorkspaceBranchCreatedPayload,
+    EventType.MODEL_CHANGED: ModelChangedPayload,
+    EventType.PROVIDER_CHANGED: ProviderChangedPayload,
+    EventType.REVIEW_STARTED: ReviewStartedPayload,
+    EventType.REVIEW_COMPLETED: ReviewCompletedPayload,
+    EventType.BUG_FOUND: BugFoundPayload,
+    EventType.DEPLOYMENT_STARTED: DeploymentStartedPayload,
+    EventType.DEPLOYMENT_COMPLETED: DeploymentCompletedPayload,
+    EventType.DEPLOYMENT_FAILED: DeploymentFailedPayload,
+    EventType.APPROVAL_REQUESTED: ApprovalRequestedPayload,
+    EventType.APPROVAL_GRANTED: ApprovalGrantedPayload,
+    EventType.APPROVAL_REJECTED: ApprovalRejectedPayload,
+    EventType.APPROVAL_CHANGES_REQUESTED: ApprovalChangesRequestedPayload,
+    EventType.SYSTEM_HEARTBEAT: SystemHeartbeatPayload,
+    EventType.CONVERSATION_MESSAGE: ConversationMessagePayload,
+}
+
+_CONVERSATION_TYPES = {EventType.CONVERSATION_MESSAGE}
+
+
+def build_event(
+    *,
+    type: EventType,
+    project_id: str,
+    actor: Actor,
+    payload: Payload | dict,
+    reason: str | None = None,
+    kind: EventKind | None = None,
+) -> Event:
+    """Validate `payload` against the model registered for `type`, then
+    build the unified `Event` envelope that gets persisted/published."""
+    model = PAYLOAD_MODELS[type]
+    validated = payload if isinstance(payload, model) else model.model_validate(payload)
+    resolved_kind: EventKind = kind or ("conversation" if type in _CONVERSATION_TYPES else "system")
+    return Event(
+        project_id=project_id,
+        kind=resolved_kind,
+        type=type,
+        actor=actor,
+        payload=validated.model_dump(mode="json"),
+        reason=reason,
+    )

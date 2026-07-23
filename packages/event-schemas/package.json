@@ -1,7 +1,11 @@
 {
   "name": "@commander/event-schemas",
   "private": true,
-  "version": "0.0.0",
-  "description": "Shared event type definitions (TaskCreated, TaskAssigned, BugFound, ...) used by dashboard and api.",
-  "scripts": {}
+  "version": "0.1.0",
+  "description": "TypeScript event types generated from apps/api/app/core/events via scripts/generate_ts_schemas.py.",
+  "main": "ts/index.ts",
+  "types": "ts/index.ts",
+  "scripts": {
+    "generate": "python ../../scripts/generate_ts_schemas.py"
+  }
 }
