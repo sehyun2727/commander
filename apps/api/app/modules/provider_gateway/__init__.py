@@ -1,12 +1,13 @@
 """Provider Gateway module.
 
-Will implement core.interfaces.provider_gateway.ProviderGateway. The only
-module allowed to call AI provider APIs (OpenAI, Anthropic, Google,
-OpenRouter, and future local models such as Ollama/LM Studio). Agents must
-never call a provider SDK directly — only through this gateway.
-
-Allowed dependencies: model_registry (to resolve model -> provider
-routing), event_bus.
-
-No implementation yet (Sprint 1 defines module boundaries only).
+Implements core.interfaces.provider_gateway.ProviderGateway. The only
+module allowed to call AI provider APIs. `build_gateway` resolves the
+active provider (mock by default, so Commander runs with no API key) and
+routes logical model refs to concrete models via model_registry.
 """
+
+from .anthropic_provider import AnthropicProvider
+from .gateway import RoutedProviderGateway, build_gateway
+from .mock_provider import MockProvider
+
+__all__ = ["AnthropicProvider", "MockProvider", "RoutedProviderGateway", "build_gateway"]
