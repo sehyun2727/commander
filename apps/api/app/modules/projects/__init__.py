@@ -1,8 +1,11 @@
 """Projects module.
 
-Owns project entities: create, list, archive. Publishes project.* events.
-Other modules never import this module directly — they reference a project
-only by project_id, so project ownership doesn't leak across boundaries.
-
-No implementation yet (Sprint 1 defines module boundaries only).
+Owns project entities: create, list, archive. Publishes project.* events
+and (on create) triggers agent_runtime.create_department to hire the
+default PM/Engineer/Reviewer Department. Other modules never import this
+module directly — they reference a project only by project_id.
 """
+
+from .routes import router
+
+__all__ = ["router"]

@@ -32,4 +32,64 @@ per the brief's constraints).
    from Sprint 2 unchanged — they already match the Sprint 3 spec's agent
    lifecycle exactly.
 
+## Phase 2 — Backend core
+
+6. **Added two modules with no owner in the Sprint 1/2 module list:
+   `tasks` (Mission CRUD, assignment, Meeting messages) and `realtime`
+   (SSE fan-out).** Neither existed as a concept until Sprint 3's task
+   pipeline and dashboard-streaming requirements; splitting them out kept
+   `workflow_engine` focused on orchestration instead of also owning HTTP
+   routes and request/response schemas.
+7. **Failure handling is scoped down to "catch the exception, mark the
+   Mission `failed`, publish `TaskFailed`."** `core/errors.py`'s full
+   `CommanderError` hierarchy (timeout/model-unavailable/workspace-conflict
+   retry-and-escalate policy) described in
+   `docs/backend/workflow/FAILURE_HANDLING.md` is a larger state machine
+   than a one-session vertical slice needs; the minimal version still lets
+   every failure surface as a Timeline event and a terminal Mission state,
+   which is what the Definition of Done actually requires. Wiring the full
+   policy is left as a follow-up.
+8. **Secrets are DB-backed with an env fallback, not env-only.** The spec
+   asks for a Company Settings field where the CEO can paste an Anthropic
+   API key through the UI, which means the value has to be writable at
+   runtime — a `.env`-only `SecretsProvider` can't support that. Added a
+   `settings_kv` table (`DBSecretsProvider`) that checks the DB first and
+   falls back to the `pydantic-settings` `.env` value for
+   `ANTHROPIC_API_KEY`, so both "set it in `.env` before boot" and "paste
+   it in Company Settings" work through the same port.
+9. **`workflow_engine`'s CEO-decision handling covers exactly three
+   outcomes** (approve → Mission `completed`; reject → Mission
+   `cancelled`; request_changes → attempt+1, Mission back to
+   `in_progress`, Engineer re-runs) — matching the spec's three-button
+   CEO Decision UI one-to-one, instead of a more general revision-history
+   model.
+
+## Phase 3 — Provider layer
+
+10. **Reviewer verdicts are parsed from a trailing `**Verdict:** Approved`
+    / `**Verdict:** Changes requested` line in the completion text**,
+    shared by both `MockProvider` and `AnthropicProvider`. This keeps
+    `workflow_engine` provider-agnostic — it never branches on which
+    provider produced the text, only on the parsed verdict — and means
+    swapping `COMMANDER_PROVIDER=mock` → `anthropic` requires no workflow
+    code changes, only a system-prompt instruction (already baked into
+    each agent's persona) telling the model to end with that line.
+11. **`model_registry` maps logical refs (`planner-default`,
+    `builder-default`, `reviewer-default`) to concrete `(provider, model)`
+    pairs**, rather than letting callers name a model directly. This is
+    what makes `COMMANDER_PROVIDER=mock` the default with zero API key
+    required — call sites never know or care which concrete model backs
+    a role.
+
+## Phase 4 — Realtime
+
+12. **SSE, not WebSocket**, confirmed per the brief's existing decision —
+    implemented as a single `GET /api/events/stream?project_id=` endpoint
+    that replays the last 50 persisted events (via `EventBus.recent`) then
+    switches to a live per-connection `asyncio.Queue` registered on the
+    bus, with a 15s heartbeat comment so idle proxies/browsers don't drop
+    the connection. Verified manually: replay returns historical events
+    immediately on connect, and the queue clears its registration in a
+    `finally` block on client disconnect.
+
 (Further entries appended as later phases land.)

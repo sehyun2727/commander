@@ -1,10 +1,10 @@
 """Timeline module.
 
-Company conversation feed for the CEO — not chat, not logs. Only consumes
-events from event_bus and renders them as timeline entries. This module
-must never publish events itself.
-
-Allowed dependencies: event_bus (subscribe only).
-
-No implementation yet (Sprint 1 defines module boundaries only).
+Company conversation feed for the CEO — not chat, not logs. Read-only: it
+exposes cursor-paginated event history via the Event Bus's `page()` method
+and never publishes.
 """
+
+from .routes import router
+
+__all__ = ["router"]

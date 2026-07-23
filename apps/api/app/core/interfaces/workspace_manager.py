@@ -18,28 +18,44 @@ Wiring that check up is a Sprint 3 suggestion, not done here.
 from abc import ABC, abstractmethod
 from typing import final
 
-from ..events.contracts import WorkspaceBranchCreated, WorkspaceCommitted
+from ..events import Actor, EventType, build_event
 from .event_bus import EventBus
+
+_SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
 
 
 class WorkspaceManager(ABC):
+    """Out of scope for Sprint 3 (no execution sandbox / real git yet — see
+    docs/DECISIONS.md); kept as a port so a future sprint can implement it
+    without changing callers."""
+
     def __init__(self, event_bus: EventBus) -> None:
         self._event_bus = event_bus
 
     @final
-    def create_branch(self, project_id: str, branch_name: str) -> None:
+    async def create_branch(self, project_id: str, branch_name: str) -> None:
         """Create a branch, then always publish WorkspaceBranchCreated."""
         self._do_create_branch(project_id, branch_name)
-        self._event_bus.publish(
-            WorkspaceBranchCreated(project_id=project_id, branch_name=branch_name)
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.WORKSPACE_BRANCH_CREATED,
+                project_id=project_id,
+                actor=_SYSTEM_ACTOR,
+                payload={"branch_name": branch_name},
+            )
         )
 
     @final
-    def commit(self, project_id: str, message: str) -> str:
+    async def commit(self, project_id: str, message: str) -> str:
         """Commit staged changes, then always publish WorkspaceCommitted."""
         commit_sha = self._do_commit(project_id, message)
-        self._event_bus.publish(
-            WorkspaceCommitted(project_id=project_id, commit_sha=commit_sha, summary=message)
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.WORKSPACE_COMMITTED,
+                project_id=project_id,
+                actor=_SYSTEM_ACTOR,
+                payload={"commit_sha": commit_sha, "summary": message},
+            )
         )
         return commit_sha
 

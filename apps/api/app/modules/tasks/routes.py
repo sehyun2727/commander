@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
+
+from ...core.events.base import Event
+from ...deps import get_agent_runtime, get_event_bus, get_secrets, get_session_factory, get_workflow_engine
+from . import service
+from .schemas import MessageCreateRequest, TaskAssignRequest, TaskCreateRequest, TaskResponse
+
+router = APIRouter(prefix="/api", tags=["tasks"])
+
+
+@router.post("/projects/{project_id}/tasks", response_model=TaskResponse)
+async def create_task(
+    project_id: str,
+    body: TaskCreateRequest,
+    event_bus=Depends(get_event_bus),
+    session_factory=Depends(get_session_factory),
+):
+    return await service.create_task(
+        session_factory, event_bus, project_id, body.title, body.description, body.priority
+    )
+
+
+@router.get("/projects/{project_id}/tasks", response_model=list[TaskResponse])
+async def list_tasks(project_id: str, session_factory=Depends(get_session_factory)):
+    return await service.list_tasks(session_factory, project_id)
+
+
+@router.get("/tasks/{task_id}", response_model=TaskResponse)
+async def get_task(task_id: str, session_factory=Depends(get_session_factory)):
+    task = await service.get_task(session_factory, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return task
+
+
+@router.post("/tasks/{task_id}/assign", response_model=TaskResponse)
+async def assign_task(
+    task_id: str,
+    body: TaskAssignRequest,
+    event_bus=Depends(get_event_bus),
+    agent_runtime=Depends(get_agent_runtime),
+    workflow_engine=Depends(get_workflow_engine),
+    session_factory=Depends(get_session_factory),
+):
+    task = await service.assign_task(
+        session_factory, event_bus, agent_runtime, workflow_engine, task_id, body.agent_id
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return task
+
+
+@router.get("/tasks/{task_id}/messages", response_model=list[Event])
+async def list_messages(
+    task_id: str,
+    event_bus=Depends(get_event_bus),
+    session_factory=Depends(get_session_factory),
+):
+    task = await service.get_task(session_factory, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return await service.list_messages(event_bus, task.project_id, task_id)
+
+
+@router.post("/tasks/{task_id}/messages", response_model=Event)
+async def post_message(
+    task_id: str,
+    body: MessageCreateRequest,
+    event_bus=Depends(get_event_bus),
+    secrets=Depends(get_secrets),
+    session_factory=Depends(get_session_factory),
+):
+    task = await service.get_task(session_factory, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return await service.post_message(session_factory, event_bus, secrets, task_id, body.text)
