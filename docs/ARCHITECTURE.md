@@ -1,606 +1,159 @@
-# `/docs/ARCHITECTURE.md`
+# Commander Architecture
 
-Version: v1.0 (Draft)
-Status: CTO Review → CEO Approval Required
+Version: v2.0 (As-Built)
+Status: Synced with Sprint 3 implementation — 2026-07
+Supersedes: v1.0 Draft (pre-implementation vision)
 
 ---
-
-# Commander Architecture
 
 ## Vision
 
 Commander is an operating system where a solo developer becomes the CEO of an AI software company.
 
-Users never manage prompts.
-Users manage a company.
+Users never manage prompts. Users manage a company.
 
-Every action performed by AI must be visible, explainable, reviewable and replaceable.
+Every action performed by AI must be **visible, explainable, reviewable, and replaceable**.
 
 ---
 
-# High Level Architecture
+## High-Level Architecture (as built)
 
 ```text
-                        Commander
+                       Commander
 
-                 ┌────────────────────┐
-                 │   CEO Dashboard     │
-                 │     (Next.js)       │
-                 └─────────┬───────────┘
-                           │
-                 REST API / WebSocket
-                           │
-                           ▼
-               ┌────────────────────────┐
-               │ Commander API Server   │
-               │       (FastAPI)        │
-               └─────────┬──────────────┘
+                ┌─────────────────────┐
+                │   CEO Dashboard      │
+                │  Next.js App Router  │
+                │  TanStack Query      │
+                └──────┬───────▲───────┘
+                       │       │
+                 REST API    SSE stream
+                       │       │
+                       ▼       │
+              ┌────────────────┴──────┐
+              │  Commander API Server │
+              │       (FastAPI)       │
+              └──────────┬────────────┘
                          │
-         ┌───────────────┼────────────────┐
-         ▼               ▼                ▼
-
- Workflow Engine     Event Bus      Model Registry
-         │               │                │
-         ▼               ▼                ▼
- Agent Runtime     Timeline Feed    Provider Gateway
-         │                                │
-         ▼                                ▼
- Workspace Manager              AI Providers
-
-                                 OpenAI
-                                 Anthropic
-                                 Google
-                                 OpenRouter
+      ┌──────────┬───────┴──────┬─────────────┐
+      ▼          ▼              ▼             ▼
+ Workflow    Agent          Event Bus    Provider
+  Engine     Runtime       (persist +    Gateway
+      │          │          fan-out +        │
+      │          │          SSE push)        ▼
+      │          │              │       Model Registry
+      │          │              ▼            │
+      │          │          SQLite      ┌────┴─────┐
+      │          │        (events,      ▼          ▼
+      │          │         projects,   Mock     Anthropic
+      │          │         tasks,     Provider   Provider
+      │          │         agents,   (default)  (httpx)
+      │          │         approvals,
+      │          │         settings_kv)
 ```
 
----
-
-# Core Modules
-
-## 1. Dashboard
-
-Responsible for CEO experience.
-
-Contains
-
-* Projects
-* Overview
-* Timeline
-* Workspace
-* Agents
-* Settings
+Realtime is **SSE** (not WebSocket): one endpoint per company, replays last 50 events on connect, heartbeat every 15s, client dedups by `event.id`.
 
 ---
 
-## 2. API Server
+## Core Principle: Everything Is an Event
 
-Responsible for
+Every significant company action publishes an `Event` through the EventBus, which:
 
-* Authentication
-* Projects
-* Agents
-* Tasks
-* Timeline
-* Approvals
-* Reports
-* Provider Configuration
+1. **Persists** it to the unified `events` table
+2. **Fans out** to module subscribers
+3. **Pushes** to live SSE queues per company
 
-No AI logic exists here.
+Event envelope: `id, project_id, kind, type, actor {role, id, name}, payload, reason, created_at`.
 
----
-
-## 3. Workflow Engine
-
-The brain of Commander.
-
-Responsibilities
-
-* Receive CEO instruction
-
-* PM interprets objective
-
-* Generate Tasks
-
-* Assign Tasks
-
-* Trigger Events
-
-* Request Approvals
-
-No UI code.
+- `kind: "system" | "conversation"` — one storage model, two renderings. Conversation messages ARE events. (Resolves the v1.0 pending "Timeline data model" question.)
+- `reason` makes every agent action explainable (Rule 2).
+- Payload shapes are validated per-type via `PAYLOAD_MODELS` in `build_event()`.
+- TypeScript types are **generated** from the Pydantic contracts (`scripts/generate_ts_schemas.py` → `packages/event-schemas/ts/`). Frontend never redeclares event shapes.
 
 ---
 
-## 4. Event Bus
-
-Commander is Event Driven.
-
-Everything generates events.
-
-Examples
-
-TaskCreated
-
-TaskAssigned
-
-CodingStarted
-
-ReviewStarted
-
-BugFound
-
-ApprovalRequested
-
-DeploymentStarted
-
-DeploymentCompleted
-
-Every event is persisted.
-
----
-
-## 5. Agent Runtime
-
-Every employee runs inside Runtime.
-
-Examples
-
-PM
-
-Backend Engineer
-
-Frontend Engineer
-
-QA Engineer
-
-Reviewer
-
-Future
-
-Designer
-
-DevOps
-
-Security
-
-Data Engineer
-
-Agents never communicate directly.
-
-Every communication passes through Event Bus.
-
----
-
-## 6. Workspace Manager
-
-Responsible for
-
-Git Repository
-
-Branches
-
-Diff
-
-Commit
-
-File Change
-
-Patch
-
-Workspace Summary
-
-CEO never sees raw code by default.
-
-Workspace generates human-readable summaries.
-
----
-
-## 7. Provider Gateway
-
-No Agent can call AI APIs directly.
-
-Architecture
-
-Agent
-
-↓
-
-Provider Gateway
-
-↓
-
-OpenAI
-
-Anthropic
-
-Google
-
-OpenRouter
-
-↓
-
-Future Providers
-
-Local models
-
-Ollama
-
-LM Studio
-
-New providers must be pluggable.
-
----
-
-## 8. Model Registry
-
-Stores every available model.
-
-Example
-
-OpenAI
-
-* GPT-5.5
-
-* Codex
-
-Anthropic
-
-* Claude Sonnet
-
-Google
-
-* Gemini
-
-OpenRouter
-
-* DeepSeek
-
-* Qwen
-
-* Mistral
-
-Dashboard always displays
-
-Recommended Models
-
-↓
-
-All Models
-
-Changing models never requires code modification.
-
----
-
-# Runtime Flow
-
-CEO
-
-↓
-
-Natural Language Request
-
-↓
-
-PM Agent
-
-↓
-
-Task Breakdown
-
-↓
-
-Task Assignment
-
-↓
-
-Implementation
-
-↓
-
-Review
-
-↓
-
-Approval (if required)
-
-↓
-
-Deployment
-
-↓
-
-Daily Report
-
----
-
-# Approval Flow
-
-Small decisions
-
-↓
-
-PM decides
-
-Large decisions
-
-↓
-
-Approval Request
-
-↓
-
-CEO
-
-↓
-
-Approve
-
-Reject
-
-Discuss
-
-Examples requiring approval
-
-* Architecture Changes
-
-* Database Schema
-
-* Provider Change
-
-* Model Change
-
-* Production Deployment
-
-* External Tool Installation
-
----
-
-# Timeline
-
-Timeline is company communication.
-
-Not chat.
-
-Not logs.
-
-Company conversation.
-
-Supports
-
-* Thread
-
-* Mentions
-
-* AI Discussion
-
-* CEO Messages
-
-Every important action appears here.
-
----
-
-# Workspace
-
-Default View
-
-Summary
-
-Changed Files
-
-Business Impact
-
-Estimated Risk
-
-Estimated Completion
-
-Advanced View
-
-Diff
-
-Commit
-
-Branch
-
-Code
-
-CEO should never be forced to read source code.
-
----
-
-# Dashboard
-
-Overview
-
-Progress
-
-Health
-
-Risks
-
-Approvals
-
-Daily Report
-
-Employees
-
-Recent Timeline
-
-Current Sprint
-
----
-
-# Project Structure
+## Modules (as built)
+
+| Module | Responsibility | Status |
+|---|---|---|
+| `event_bus` | Persist → fan out → SSE push. Dependency floor: depends only on core. | ✅ In-process |
+| `projects` | Company CRUD. Founding a company auto-creates a Department with 3 Employees (PM / Engineer / Reviewer personas). | ✅ |
+| `tasks` | Mission CRUD, assignment, Meeting messages. Assignment triggers the workflow. | ✅ |
+| `workflow_engine` | The brain. PM → Engineer → Reviewer pipeline as background asyncio tasks; publishes every beat; creates CEO Decisions. | ✅ Single fixed pipeline |
+| `agent_runtime` | Employee state + validated transitions (state machine in `core/lifecycle`). | ✅ DB-backed |
+| `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (httpx). Verdicts parsed from a trailing `**Verdict:**` line — provider-agnostic. | ✅ |
+| `model_registry` | Logical refs (`planner-default` etc.) → (provider, model). `COMMANDER_PROVIDER=mock\|anthropic`. Changing models never requires code changes. | ✅ Static map |
+| `approvals` | CEO Decisions: approve → completed · request_changes → Engineer re-run (attempt+1) · reject → cancelled. | ✅ |
+| `timeline` | Cursor-paginated event reads + kind filter. | ✅ |
+| `realtime` | SSE stream per company. | ✅ |
+| `core/secrets` | `SecretsProvider` port. `DBSecretsProvider`: `settings_kv` override → `.env` fallback, so keys can be pasted in Company Settings at runtime. Write-only through the API. | ✅ Plaintext (local MVP) |
+| `auth` | Single hardcoded local CEO. | 🔲 Placeholder |
+| `workspace_manager` | Git repo / branch / diff / human-readable summaries. Interface defined only. | 🔲 Interface only |
+| `reports` | Daily reports. | 🔲 Placeholder |
+
+### Lifecycles
+
+Agent: `Idle → Assigned → Planning → Working → WaitingReview → (Blocked) → Completed/Failed → Idle`
+Task: `backlog → in_progress → waiting_review → completed / cancelled / failed`
+
+All transitions validated in `core/lifecycle/state_machine.py`; every transition emits an event with a reason.
+
+### Dependency Rules
 
 ```
-Project
-
-Overview
-
-Timeline
-
-Workspace
-
-Agents
-
-Settings
+Events (core)  →  Domain Modules  →  Workflow  →  API
 ```
 
----
-
-# Local Runtime
-
-Commander Desktop
-
-↓
-
-localhost
-
-↓
-
-Dashboard
-
-↓
-
-Provider APIs
-
-Only Dashboard runs in browser.
-
-Execution always happens locally.
+No circular deps. Modules communicate only via EventBus. Agents never call each other or providers directly.
 
 ---
 
-# Design Principles
+## Frontend (Headquarters)
 
-1.
+Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark Render.com-style theme, Commander terminology throughout.
 
-CEO first.
-
-Never Developer first.
-
-2.
-
-AI are Employees.
-
-Never Tools.
-
-3.
-
-Everything is observable.
-
-Nothing happens silently.
-
-4.
-
-Every important decision is explainable.
-
-5.
-
-Every model is replaceable.
-
-6.
-
-Architecture before implementation.
-
-7.
-
-Event Driven.
-
-Never tightly coupled.
+- **Headquarters** `/company/[id]` — pending CEO Decisions (hero), company vitals, live Timeline
+- **Missions** — kanban (Backlog / In Progress / Waiting CEO Decision / Done) + create modal
+- **Mission detail / Meeting** — conversation-kind transcript, CEO can message
+- **Employees** — live state cards
+- **Company Settings** — provider select, write-only API key field
+- Realtime: one SSE connection per company (`RealtimeProvider`), events dedup by id, query invalidation per event
 
 ---
 
-# Future Architecture (Not MVP)
+## Accepted MVP Tradeoffs (deliberate — see docs/DECISIONS.md)
 
-Plugin Marketplace
+- In-process EventBus → single API worker only; subscribers run inline in `publish` (a slow subscriber delays publish)
+- Secrets stored plaintext in local SQLite
+- Conversation filtering for Meetings done in Python (small per-company volume)
+- Failure handling minimal: provider error → Mission `failed` + event (full retry/escalation policy in `docs/backend/workflow/FAILURE_HANDLING.md` deferred)
+- `create_all` on startup, no migrations
 
-Company Templates
-
-Agent Marketplace
-
-Organization Support
-
-Cloud Runner
-
-Cost Optimization
-
-Multi Company
-
-Voice CEO
-
-Mobile Dashboard
+Future extraction points if scaled: Agent Runtime Service, Workflow Service, Event Service (broker-backed bus), Cloud Runner.
 
 ---
 
-# Current Objective
+## Not Built Yet (requires an explicit sprint brief)
 
-Produce a stable architecture that can remain unchanged while implementation progresses.
+Execution sandbox · real code execution · Workspace Manager implementation · deployment/Launch · auth · cloud runner · additional providers (OpenAI/Google/OpenRouter/local) · reports · plugin marketplace · multi-company orgs.
 
-No feature implementation should begin until this document is approved.
-
----
-
-# Claude Code Tasks (NEXT)
-
-1.
-
-Review Architecture consistency.
-
-2.
-
-Identify scalability issues.
-
-3.
-
-Suggest improvements.
-
-4.
-
-Identify unnecessary complexity.
-
-5.
-
-Propose directory structure based on this architecture.
-
-6.
-
-Do NOT generate application code.
-
-Do NOT create repositories.
-
-Do NOT implement APIs.
-
-Architecture review only.
+**Sandbox gate:** no AI-generated code is ever executed until an isolation layer exists. Until then, Engineers produce plans/text/diff artifacts only.
 
 ---
 
-# Expected Deliverables from Claude Code
+## Design Principles
 
-* Architecture Review Report
-
-* Suggested Improvements
-
-* Risks
-
-* Missing Components
-
-* Revised Folder Structure
-
-* Questions for CTO (only if architecture blocks implementation)
+1. CEO first, never developer first
+2. AI are Employees, never tools
+3. Everything observable — nothing happens silently
+4. Every important decision explainable
+5. Every model replaceable
+6. Event-driven, never tightly coupled
+7. Mock mode must always work — the product demos with zero API keys
 
 ---
 
-# CTO Note
+## Doc Sync Rule
 
-After Architecture.md is approved by CEO and reviewed by Claude Code:
-
-→ Freeze Architecture v1.0
-
-↓
-
-Generate CLAUDE.md from Architecture
-
-↓
-
-All future Architecture changes MUST update CLAUDE.md before the next development sprint.
-
-Failure to synchronize these two documents is considered an architecture violation.
+Any architecture change must update **ARCHITECTURE.md and CLAUDE.md in the same commit**. Desync is an architecture violation.
