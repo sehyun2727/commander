@@ -124,4 +124,40 @@ per the brief's constraints).
     errors. Confirmed clean on landing, Headquarters, Missions, mission
     detail, Employees, and Company Settings.
 
+## Phase 6 — Seed, DX, verification
+
+17. **`scripts/seed.py` deletes the dev sqlite file and rebuilds it from
+    scratch every run**, rather than being idempotent/additive. `make
+    seed` is meant to hand back a known-good demo state on demand, and a
+    fresh company each time is simpler and more predictable than
+    reconciling against whatever was left from manual testing or a prior
+    demo. It also drives the *real* service layer (`create_project`,
+    `create_task`, `assign_task`, `approvals.decide`) rather than
+    inserting rows directly — the seeded history is produced by the same
+    code path a real CEO session uses, so it can't drift from actual
+    behavior.
+18. **The seed script chooses one mission per CEO Decision outcome**
+    (approved first try, approved after changes requested, rejected) plus
+    one already sitting at a pending CEO Decision and one untouched in
+    the Backlog. This exercises every branch of `resume_after_decision`
+    on every `make seed` run and leaves an immediate, no-setup CEO
+    Decision for a live demo to click through.
+19. **The root `Makefile` targets a POSIX shell** (bash/WSL/macOS/Linux),
+    with one `ifeq ($(OS),Windows_NT)` branch to pick `.venv/Scripts` vs
+    `.venv/bin` for the Python interpreter. `make` itself isn't installed
+    in this Windows/git-bash sandbox, so `make dev`/`make seed`/`make
+    test` were verified by running each target's underlying commands
+    directly (`uvicorn app.main:app`, `pnpm --filter @commander/dashboard
+    dev`, `pytest`, `tsc --noEmit`, `next build`) rather than through
+    `make` itself.
+20. **Verified the full Definition of Done live**, not just via seeded
+    data: with the seeded API + dashboard running, created a new mission
+    over the real HTTP API, watched it move
+    created → assigned → in_progress → in_review → pending_approval in a
+    few seconds (mock provider, no API key), approved the resulting CEO
+    Decision, confirmed the mission reached `completed`, and confirmed
+    both the Timeline (`GET /api/projects/{id}/events`) and a live
+    Headquarters page (via headless Chromium) showed the new events with
+    zero console errors.
+
 (Further entries appended as later phases land.)
