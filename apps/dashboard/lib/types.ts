@@ -57,6 +57,10 @@ export interface Approval {
   subject: string;
   status: "pending" | "approved" | "rejected" | "changes_requested";
   comment: string | null;
+  reviewer_agent_id: string | null;
+  reviewer_name: string | null;
+  sections: Record<string, string>;
+  raw_summary: string;
   created_at: string;
   decided_at: string | null;
 }

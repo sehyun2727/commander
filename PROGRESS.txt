@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 4.7 — Headquarters UX
- Overall: 14/49 items · 29%
- Now working on: 3.1
- Last update: 2026-07-24 12:05
+ Overall: 20/49 items · 41%
+ Now working on: 4.1
+ Last update: 2026-07-24 12:40
 ================================================
 
 PHASE 1 — Backend Foundations                                  (10/10)
@@ -24,13 +24,13 @@ PHASE 2 — Status Vocabulary                                    (4/4)
 [x] 2.3  Replace every status render site (grep-verified)
 [x] 2.4  Commit: feat(ux)
 
-PHASE 3 — Decisions Page                                       (0/6)
-[ ] 3.1  /decisions route + sidebar item
-[ ] 3.2  DecisionCard: 4 sections + reviewer attribution + 3 actions
-[ ] 3.3  Graceful rendering when sections missing
-[ ] 3.4  History tab: CEO decision + comment + outcome
-[ ] 3.5  Headquarters reuses the same DecisionCard
-[ ] 3.6  Commit: feat(dashboard): decisions
+PHASE 3 — Decisions Page                                       (6/6)
+[x] 3.1  /decisions route + sidebar item
+[x] 3.2  DecisionCard: 4 sections + reviewer attribution + 3 actions
+[x] 3.3  Graceful rendering when sections missing
+[x] 3.4  History tab: CEO decision + comment + outcome
+[x] 3.5  Headquarters + Mission Detail reuse the same DecisionCard
+[x] 3.6  Commit: feat(dashboard): decisions
 
 PHASE 4 — Timeline Page                                        (0/6)
 [ ] 4.1  /timeline route + sidebar item (SSE live)

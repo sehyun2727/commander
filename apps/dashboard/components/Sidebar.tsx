@@ -10,6 +10,7 @@ export function Sidebar({ companyId }: { companyId: string }) {
 
   const links = [
     { href: `/company/${companyId}`, label: "Headquarters", exact: true },
+    { href: `/company/${companyId}/decisions`, label: "Decisions" },
     { href: `/company/${companyId}/missions`, label: "Missions" },
     { href: `/company/${companyId}/employees`, label: "Employees" },
     { href: `/company/${companyId}/settings`, label: "Company Settings" },

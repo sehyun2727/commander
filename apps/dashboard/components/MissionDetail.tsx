@@ -1,19 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { ApprovalCard } from "@/components/ApprovalCard";
 import { ChatThread } from "@/components/ChatThread";
+import { DecisionCard } from "@/components/DecisionCard";
 import { StatusWord, taskStatusWord } from "@/components/StatusWord";
-import { useApprovals, useAssignMission, useMission, useMissionCosts } from "@/lib/hooks";
+import { useApprovals, useAssignMission, useEmployees, useMission, useMissionCosts } from "@/lib/hooks";
 import { formatUsd } from "@/lib/utils";
 
 export function MissionDetail({ companyId, taskId }: { companyId: string; taskId: string }) {
   const { data: mission, isLoading } = useMission(taskId);
   const { data: approvals } = useApprovals(companyId);
   const { data: costs } = useMissionCosts(taskId);
+  const { data: employees } = useEmployees(companyId);
   const assign = useAssignMission(companyId);
 
   const pendingApproval = approvals?.find((a) => a.task_id === taskId && a.status === "pending");
+  const reviewer = pendingApproval
+    ? employees?.find((e) => e.id === pendingApproval.reviewer_agent_id)
+    : undefined;
 
   if (isLoading || !mission) {
     return (
@@ -56,10 +60,11 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
 
       {pendingApproval && (
         <div className="mb-6">
-          <ApprovalCard
+          <DecisionCard
             approval={pendingApproval}
             companyId={companyId}
             missionTitle={mission.title}
+            reviewerColor={reviewer?.avatar_color}
             linkToMission={false}
           />
         </div>

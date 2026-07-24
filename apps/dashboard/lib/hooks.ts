@@ -12,6 +12,7 @@ export const keys = {
   missions: (companyId: string) => ["missions", companyId] as const,
   mission: (taskId: string) => ["mission", taskId] as const,
   approvals: (companyId: string) => ["approvals", companyId] as const,
+  approvalHistory: (companyId: string) => ["approvalHistory", companyId] as const,
   messages: (taskId: string) => ["messages", taskId] as const,
   timeline: (companyId: string) => ["timeline", companyId] as const,
   companyCosts: (companyId: string) => ["companyCosts", companyId] as const,
@@ -43,6 +44,10 @@ export function useMission(taskId: string) {
 
 export function useApprovals(companyId: string) {
   return useQuery({ queryKey: keys.approvals(companyId), queryFn: () => api.listApprovals(companyId) });
+}
+
+export function useApprovalHistory(companyId: string) {
+  return useQuery({ queryKey: keys.approvalHistory(companyId), queryFn: () => api.listApprovalHistory(companyId) });
 }
 
 export function useMessages(taskId: string) {
@@ -185,6 +190,7 @@ export function useDecideApproval(companyId: string, taskId: string) {
     }) => api.decideApproval(approvalId, decision, comment),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.approvals(companyId) });
+      qc.invalidateQueries({ queryKey: keys.approvalHistory(companyId) });
       qc.invalidateQueries({ queryKey: keys.missions(companyId) });
       qc.invalidateQueries({ queryKey: keys.mission(taskId) });
       qc.invalidateQueries({ queryKey: keys.employees(companyId) });
@@ -201,6 +207,7 @@ export function invalidateForEvent(
   qc.invalidateQueries({ queryKey: keys.missions(companyId) });
   qc.invalidateQueries({ queryKey: keys.employees(companyId) });
   qc.invalidateQueries({ queryKey: keys.approvals(companyId) });
+  qc.invalidateQueries({ queryKey: keys.approvalHistory(companyId) });
   qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
   qc.invalidateQueries({ queryKey: keys.companyCosts(companyId) });
   qc.invalidateQueries({ queryKey: keys.models(companyId) });

@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { ApprovalCard } from "@/components/ApprovalCard";
 import { DailyReportCard } from "@/components/DailyReportCard";
+import { DecisionCard } from "@/components/DecisionCard";
 import { useRealtimeEvents } from "@/components/RealtimeProvider";
 import { taskStatusWord } from "@/components/StatusWord";
 import { TimelineFeed } from "@/components/TimelineFeed";
@@ -33,6 +33,7 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
   const activeMissions = missions?.filter((t) => !TERMINAL_TOKENS.includes(taskStatusWord(t.state))).length ?? 0;
   const pending = approvals?.filter((a) => a.status === "pending") ?? [];
   const missionById = useMemo(() => new Map((missions ?? []).map((t) => [t.id, t])), [missions]);
+  const employeeById = useMemo(() => new Map((employees ?? []).map((e) => [e.id, e])), [employees]);
 
   const feedEvents = liveEvents.length > 0 ? liveEvents : timelinePage?.items.slice().reverse() ?? [];
 
@@ -59,11 +60,15 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
           <h2 className="mb-3 text-sm font-semibold text-text">CEO Decisions</h2>
           <div className="space-y-3">
             {pending.map((approval) => (
-              <ApprovalCard
+              <DecisionCard
                 key={approval.id}
                 approval={approval}
                 companyId={companyId}
                 missionTitle={missionById.get(approval.task_id)?.title ?? "Mission"}
+                reviewerColor={
+                  (approval.reviewer_agent_id && employeeById.get(approval.reviewer_agent_id)?.avatar_color) ||
+                  undefined
+                }
               />
             ))}
           </div>

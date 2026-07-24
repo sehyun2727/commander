@@ -79,6 +79,7 @@ export const api = {
 
   // CEO Decisions
   listApprovals: (companyId: string) => request<Approval[]>(`/api/approvals?project_id=${companyId}`),
+  listApprovalHistory: (companyId: string) => request<Approval[]>(`/api/approvals/history?project_id=${companyId}`),
   decideApproval: (approvalId: string, decision: "approve" | "reject" | "request_changes", comment?: string) =>
     request<Approval>(`/api/approvals/${approvalId}/decision`, {
       method: "POST",

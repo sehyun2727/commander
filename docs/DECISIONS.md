@@ -623,3 +623,38 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     active-Missions filter) — collapsing it onto the shared token map
     was the entire point of item 2.3 ("replace every status render
     site"), not just the four `StatusPill` call sites.
+67. **`DecisionCard` replaces `ApprovalCard` as a single component with
+    two render modes (`isPending`), not two components.** The pending
+    (live, actionable) and decided (read-only history) views share the
+    same fixed anatomy — Problem / Recommendation-with-reviewer /
+    Risk / Impact — and differ only in the footer (action buttons vs.
+    comment + outcome text). A `hasSections` check falls back to raw
+    `approval.raw_summary` when the lenient parser (Phase 1, item 1.6)
+    extracted nothing, so old/unparseable audits never render blank
+    space. This one component now serves three placements: the Decisions
+    page (both tabs), Headquarters' pending strip, and Mission Detail —
+    per the brief's "one anatomy, two placements" framing, now three.
+68. **Reviewer avatar color is resolved by each caller, not carried on
+    `Approval` itself.** `ApprovalResponse`/`Approval` only has
+    `reviewer_agent_id`/`reviewer_name` (Phase 1 additions) — no color,
+    since avatar color lives on the Employee record, not the approval.
+    Each of the three call sites already fetches the company's Employees
+    list for its own purposes, so each builds an `employeeById` lookup
+    map and passes `reviewerColor` down as an optional prop; `DecisionCard`
+    defaults to a neutral slate (`#64748b`) if the lookup misses (e.g.
+    reviewer_agent_id is null on very old approvals).
+69. **`GET /api/approvals/history` is consumed by a new `useApprovalHistory`
+    hook, kept fully separate from `useApprovals` (pending-only) rather
+    than one hook with a status filter param.** The Decisions page's two
+    tabs have different loading/empty-state copy and the History tab
+    additionally derives `outcome` text from the Mission's terminal state
+    (`resume_after_decision`'s approve→COMPLETED / reject→CANCELLED /
+    request_changes→IN_PROGRESS mapping) — keeping the queries and their
+    cache keys (`keys.approvals` vs `keys.approvalHistory`) independent
+    avoids one hook's return shape needing to serve two different
+    consumers.
+70. **Sidebar gets a "Decisions" link positioned directly after
+    "Headquarters"**, ahead of "Missions"/"Employees"/"Company Settings" —
+    matching the brief's target nav order and reflecting that CEO
+    Decisions are meant to be a first-class, frequently-visited surface,
+    not something only reachable by drilling into a Mission.
