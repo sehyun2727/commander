@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 5 — Workspace
- Overall: 16/44 items · 36%
- Now working on: 2.8
- Last update: 2026-07-24 17:45
+ Overall: 25/44 items · 57%
+ Now working on: 4.1
+ Last update: 2026-07-24 18:20
 ================================================
 
 PHASE 1 — WorkspaceManager                                     (9/9)
@@ -25,17 +25,17 @@ PHASE 2 — Contracts & Template                                 (7/8)
 [x] 2.5  Lenient summary parser
 [x] 2.6  Zero-blocks -> document fallback (parser returns {} gracefully; pipeline wiring in 3.1)
 [x] 2.7  MockProvider deterministic multi-file output + re-run edits
-[ ] 2.8  Commit: feat(contracts)
+[x] 2.8  Commit: feat(contracts)  →  65804aa
 
-PHASE 3 — Pipeline Integration                                 (0/9)
-[ ] 3.1  Code-mission flow: init -> branch -> write -> commit
-[ ] 3.2  code.changed with stats payload
-[ ] 3.3  Reviewer input: summary + truncated real diff
-[ ] 3.4  Approve -> merge -> branch.merged -> complete
-[ ] 3.5  Request changes -> same-branch recommit (attempt+1)
-[ ] 3.6  Reject -> branch left unmerged
-[ ] 3.7  Merge-failure -> blocked with plain reason
-[ ] 3.8  Streaming / Payroll / retries unaffected (verified)
+PHASE 3 — Pipeline Integration                                 (9/9)
+[x] 3.1  Code-mission flow: init -> branch -> write -> commit
+[x] 3.2  code.changed with stats payload
+[x] 3.3  Reviewer input: summary + truncated real diff
+[x] 3.4  Approve -> merge -> branch.merged -> complete
+[x] 3.5  Request changes -> same-branch recommit (attempt+1)
+[x] 3.6  Reject -> branch left unmerged
+[x] 3.7  Merge-failure -> blocked with plain reason
+[x] 3.8  Streaming / Payroll / retries unaffected (102 tests green)
 [ ] 3.9  Commit: feat(pipeline)
 
 PHASE 4 — Frontend                                             (0/10)

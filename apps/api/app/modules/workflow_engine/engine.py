@@ -22,6 +22,7 @@ from sqlalchemy import select
 
 from ...core.contracts import AgentProfile
 from ...core.db_models import AgentORM, ApprovalORM, TaskORM
+from ...core.errors import WorkspaceConflictError
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
 from ...core.interfaces.event_bus import EventBus
@@ -87,7 +88,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
         self, task_id: str, decision: str, comment: str | None
     ) -> None:
         if decision == "approve":
-            await self._finish_task(task_id, TaskState.COMPLETED, comment, EventType.TASK_COMPLETED)
+            await self._approve_task(task_id, comment)
         elif decision == "reject":
             await self._finish_task(task_id, TaskState.CANCELLED, comment, EventType.TASK_CANCELLED)
         else:  # request_changes
@@ -152,6 +153,10 @@ class CommanderWorkflowEngine(WorkflowEngine):
         transition(current, target, TASK_TRANSITIONS)
         task.state = target.value
         return current
+
+    @staticmethod
+    def _branch_name_for(task_id: str) -> str:
+        return f"mission/{task_id[:8]}"
 
     async def _set_task_state(
         self, task_id: str, target: TaskState, reason: str, actor: Actor
@@ -274,7 +279,9 @@ class CommanderWorkflowEngine(WorkflowEngine):
             task.id,
             gateway,
             model_ref,
-            system=prompt_builder.build(AgentProfile.model_validate(agent.profile), agent.role),
+            system=prompt_builder.build(
+                AgentProfile.model_validate(agent.profile), agent.role, task.deliverable_type
+            ),
             messages=[{"role": "user", "content": f"Mission: {task.title}\n{task.description}{extra}"}],
             task_title=task.title,
             task_description=task.description,
@@ -287,6 +294,74 @@ class CommanderWorkflowEngine(WorkflowEngine):
         await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Handed off successfully")
         await self._agent_runtime.transition(agent.id, AgentState.IDLE, "Back to the bench")
         return text, usage
+
+    async def _land_code_changes(
+        self, task: TaskORM, engineer_agent: AgentORM, deliverable: str
+    ) -> tuple[str, dict | None]:
+        """Parse the Engineer's FILE-block output and land it on the
+        mission's branch (validated write + commit). Returns
+        (change_summary, stats); stats is None if there were zero blocks
+        or nothing valid to write -- the caller then falls back to
+        treating this as a document mission rather than failing the
+        pipeline (see parsing.parse_file_blocks). `stats["diff_text"]` is
+        included for the Reviewer's context and must be stripped before
+        persisting to TaskORM.code_stats."""
+        files = parsing.parse_file_blocks(deliverable)
+        if not files:
+            return "", None
+
+        project_id = task.project_id
+        branch_name = task.branch_name or self._branch_name_for(task.id)
+
+        was_initialized = await self._workspace_manager.ensure_initialized(project_id)
+        if was_initialized:
+            await self._event_bus.publish(
+                build_event(
+                    type=EventType.WORKSPACE_INITIALIZED,
+                    project_id=project_id,
+                    actor=SYSTEM_ACTOR,
+                    payload={},
+                    reason="First code mission for this company; workspace repo created",
+                )
+            )
+        await self._workspace_manager.create_branch(project_id, branch_name)
+        write_result = await self._workspace_manager.write_files(project_id, branch_name, files)
+        if not write_result.written:
+            return "", None
+
+        commit_result = await self._workspace_manager.commit(
+            project_id, branch_name, f"{task.title} (attempt {task.attempt})"
+        )
+        diff_text, truncated = await self._workspace_manager.diff(project_id, branch_name)
+        if truncated:
+            diff_text += "\n\n[diff truncated -- showing the first portion only]"
+        change_summary = parsing.parse_change_summary(deliverable) or "No summary provided."
+        stats = {
+            "commit_sha": commit_result.commit_sha,
+            "files_added": commit_result.files_added,
+            "files_modified": commit_result.files_modified,
+            "files_deleted": commit_result.files_deleted,
+            "additions": commit_result.additions,
+            "deletions": commit_result.deletions,
+            "summary": change_summary,
+        }
+
+        async with self._session_factory() as session:
+            row = await session.get(TaskORM, task.id)
+            row.branch_name = branch_name
+            row.code_stats = stats
+            await session.commit()
+
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.CODE_CHANGED,
+                project_id=project_id,
+                actor=Actor(role="employee", id=engineer_agent.id, name=engineer_agent.name),
+                payload={"branch_name": branch_name, **stats},
+                reason=f"Engineer committed changes to '{branch_name}'",
+            )
+        )
+        return change_summary, {**stats, "diff_text": diff_text}
 
     async def _run_pipeline(
         self, task_id: str, resume_from: str, ceo_comment: str | None = None
@@ -336,6 +411,17 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 project_id, task_id, engineer_agent, gateway, _ENGINEER.model_ref, engineer_usage
             )
 
+            reviewer_context = deliverable
+            change_summary = ""
+            code_stats: dict | None = None
+            if task.deliverable_type == "code":
+                change_summary, code_stats = await self._land_code_changes(
+                    task, engineer_agent, deliverable
+                )
+                if code_stats is not None:
+                    reviewer_context = f"{change_summary}\n\n{code_stats['diff_text']}"
+                    code_stats = {k: v for k, v in code_stats.items() if k != "diff_text"}
+
             await self._set_task_state(
                 task_id, TaskState.IN_REVIEW, "Engineer finished; handing to Reviewer", SYSTEM_ACTOR
             )
@@ -350,7 +436,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 )
             )
             audit, reviewer_usage = await self._run_role(
-                reviewer_agent, task, gateway, _REVIEWER.model_ref, deliverable, None
+                reviewer_agent, task, gateway, _REVIEWER.model_ref, reviewer_context, None
             )
             await self._record_usage(
                 project_id, task_id, reviewer_agent, gateway, _REVIEWER.model_ref, reviewer_usage
@@ -369,7 +455,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
 
             async with self._session_factory() as session:
                 task = await session.get(TaskORM, task_id)
-                task.result_markdown = deliverable
+                task.result_markdown = change_summary if code_stats is not None else deliverable
                 self._apply_task_transition(task, TaskState.PENDING_APPROVAL)
                 approval = ApprovalORM(
                     project_id=project_id,
@@ -432,6 +518,23 @@ class CommanderWorkflowEngine(WorkflowEngine):
             )
         )
 
+    async def _mark_pending_approval(
+        self, task_id: str, status: str, comment: str | None
+    ) -> str | None:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(ApprovalORM)
+                .where(ApprovalORM.task_id == task_id, ApprovalORM.status == "pending")
+                .order_by(ApprovalORM.created_at.desc())
+            )
+            approval = result.scalars().first()
+            if not approval:
+                return None
+            approval.status = status
+            approval.comment = comment
+            await session.commit()
+            return approval.id
+
     async def _finish_task(
         self,
         task_id: str,
@@ -445,23 +548,11 @@ class CommanderWorkflowEngine(WorkflowEngine):
             await session.commit()
             project_id, title = task.project_id, task.title
 
+        approval_status = "approved" if target == TaskState.COMPLETED else "rejected"
         approval_event_type = (
-            EventType.APPROVAL_GRANTED if target == TaskState.COMPLETED else EventType.APPROVAL_REJECTED
+            EventType.APPROVAL_GRANTED if approval_status == "approved" else EventType.APPROVAL_REJECTED
         )
-        async with self._session_factory() as session:
-            result = await session.execute(
-                select(ApprovalORM)
-                .where(ApprovalORM.task_id == task_id, ApprovalORM.status == "pending")
-                .order_by(ApprovalORM.created_at.desc())
-            )
-            approval = result.scalars().first()
-            if approval:
-                approval.status = "approved" if target == TaskState.COMPLETED else "rejected"
-                approval.comment = comment
-                await session.commit()
-                approval_id = approval.id
-            else:
-                approval_id = None
+        approval_id = await self._mark_pending_approval(task_id, approval_status, comment)
 
         if approval_id:
             await self._event_bus.publish(
@@ -480,5 +571,66 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 actor=CEO_ACTOR,
                 payload={"task_id": task_id},
                 reason=comment or f"CEO Decision on '{title}'",
+            )
+        )
+
+    async def _approve_task(self, task_id: str, comment: str | None) -> None:
+        """CEO approved. Document missions complete outright; code missions
+        merge the mission branch to main first -- a merge conflict blocks
+        the mission (TaskState.BLOCKED) rather than completing it, with no
+        auto-resolution (see docs/DECISIONS.md 'Sprint 5')."""
+        async with self._session_factory() as session:
+            task = await session.get(TaskORM, task_id)
+            project_id = task.project_id
+            deliverable_type, branch_name = task.deliverable_type, task.branch_name
+
+        if deliverable_type == "code" and branch_name:
+            try:
+                commit_sha = await self._workspace_manager.merge(project_id, branch_name)
+            except WorkspaceConflictError as exc:
+                await self._block_task_on_merge_failure(task_id, comment, str(exc))
+                return
+            await self._event_bus.publish(
+                build_event(
+                    type=EventType.BRANCH_MERGED,
+                    project_id=project_id,
+                    actor=CEO_ACTOR,
+                    payload={"branch_name": branch_name, "commit_sha": commit_sha},
+                    reason=f"CEO approved; '{branch_name}' merged to main",
+                )
+            )
+        await self._finish_task(task_id, TaskState.COMPLETED, comment, EventType.TASK_COMPLETED)
+
+    async def _block_task_on_merge_failure(
+        self, task_id: str, comment: str | None, error: str
+    ) -> None:
+        async with self._session_factory() as session:
+            task = await session.get(TaskORM, task_id)
+            previous = self._apply_task_transition(task, TaskState.BLOCKED)
+            await session.commit()
+            project_id = task.project_id
+
+        approval_id = await self._mark_pending_approval(task_id, "approved", comment)
+        if approval_id:
+            await self._event_bus.publish(
+                build_event(
+                    type=EventType.APPROVAL_GRANTED,
+                    project_id=project_id,
+                    actor=CEO_ACTOR,
+                    payload={"approval_id": approval_id},
+                    reason=comment,
+                )
+            )
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.TASK_STATE_CHANGED,
+                project_id=project_id,
+                actor=SYSTEM_ACTOR,
+                payload={
+                    "task_id": task_id,
+                    "previous_state": previous.value,
+                    "new_state": TaskState.BLOCKED.value,
+                },
+                reason=f"CEO approved, but merge to main failed: {error}",
             )
         )

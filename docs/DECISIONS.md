@@ -887,3 +887,38 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     Timeline exists to surface, not mechanism to hide — consistent with
     how `task.completed` and `approval.granted` are already left out of
     that set.
+90. **The Reviewer's input for a landed code mission is `Change Summary +
+    truncated real diff`, replacing the raw deliverable text entirely —
+    not appended alongside it.** The Engineer's raw output for a code
+    mission is the Change Summary followed by the full file contents in
+    FILE blocks; handing that whole blob to the Reviewer as "context"
+    would mean the Reviewer's prompt duplicates the file contents twice
+    over once a diff is added, and the Reviewer contract already asks it
+    to audit against a diff, not a full-file dump. `TaskORM.result_markdown`
+    follows the same logic: on a successful commit it stores just the
+    Change Summary (what the mission detail page's ChangeSummaryCard
+    needs), not the raw FILE-block text — the actual file contents live in
+    the git workspace and are reachable via the Workspace page/diff
+    endpoints (Phase 4), never duplicated into a DB text column.
+91. **Mission branches are named `mission/{task_id[:8]}`, computed once
+    and reused across every attempt (request-changes retries recommit to
+    the same branch; `TaskORM.branch_name` is the source of truth once
+    set).** This matches `create_branch`'s already-idempotent contract
+    (Phase 1) and is what makes "Request changes -> same-branch recommit"
+    a no-op change to the retry path: `_run_pipeline` already re-fetches
+    the task fresh from the DB on every attempt, so `task.branch_name`
+    naturally carries forward.
+92. **A merge conflict on approve leaves the Approval marked `approved`
+    (the CEO's decision stands) while the Task moves to `BLOCKED`, not
+    `rejected`/`cancelled`.** These are orthogonal facts: the CEO approved
+    the deliverable on its merits; the technical failure to land it on
+    main is a separate, human-actionable problem (someone edited main out
+    of band) that the CEO didn't decide and shouldn't have attributed to
+    them as a rejection. The pending-approval-mutation logic was pulled
+    out of `_finish_task` into a shared `_mark_pending_approval(task_id,
+    status, comment)` helper so both the normal complete/cancel path
+    (`_finish_task`) and the new merge-failure path
+    (`_block_task_on_merge_failure`) can each pick the right `status`
+    independently rather than one deriving it from the other's target
+    `TaskState`. No auto-resolution is attempted on the conflict itself,
+    per the brief.
