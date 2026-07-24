@@ -2,11 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
+import type { ProfileUpdateRequest } from "./api";
 
 export const keys = {
   companies: ["companies"] as const,
   company: (id: string) => ["company", id] as const,
   employees: (companyId: string) => ["employees", companyId] as const,
+  employeeProfile: (agentId: string) => ["employeeProfile", agentId] as const,
   missions: (companyId: string) => ["missions", companyId] as const,
   mission: (taskId: string) => ["mission", taskId] as const,
   approvals: (companyId: string) => ["approvals", companyId] as const,
@@ -74,6 +76,21 @@ export function useSetModel(companyId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.models(companyId) });
       qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
+    },
+  });
+}
+
+export function useEmployeeProfile(agentId: string) {
+  return useQuery({ queryKey: keys.employeeProfile(agentId), queryFn: () => api.getEmployeeProfile(agentId) });
+}
+
+export function useUpdateEmployeeProfile(companyId: string, agentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ProfileUpdateRequest) => api.updateEmployeeProfile(agentId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.employeeProfile(agentId) });
+      qc.invalidateQueries({ queryKey: keys.employees(companyId) });
     },
   });
 }
@@ -178,7 +195,8 @@ export function useDecideApproval(companyId: string, taskId: string) {
 export function invalidateForEvent(
   qc: ReturnType<typeof useQueryClient>,
   companyId: string,
-  taskId?: string | null
+  taskId?: string | null,
+  agentId?: string | null
 ) {
   qc.invalidateQueries({ queryKey: keys.missions(companyId) });
   qc.invalidateQueries({ queryKey: keys.employees(companyId) });
@@ -190,5 +208,8 @@ export function invalidateForEvent(
     qc.invalidateQueries({ queryKey: keys.mission(taskId) });
     qc.invalidateQueries({ queryKey: keys.messages(taskId) });
     qc.invalidateQueries({ queryKey: keys.missionCosts(taskId) });
+  }
+  if (agentId) {
+    qc.invalidateQueries({ queryKey: keys.employeeProfile(agentId) });
   }
 }

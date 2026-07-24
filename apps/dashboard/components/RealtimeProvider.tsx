@@ -63,7 +63,8 @@ export function RealtimeProvider({ companyId, children }: { companyId: string; c
     // in the Timeline narration buffer and trigger a query refetch.
     setEvents((prev) => (prev.some((e) => e.id === event.id) ? prev : [event, ...prev].slice(0, 100)));
     const taskId = (event.payload as { task_id?: string }).task_id ?? null;
-    invalidateForEvent(qc, companyId, taskId);
+    const agentId = (event.payload as { agent_id?: string }).agent_id ?? null;
+    invalidateForEvent(qc, companyId, taskId, agentId);
   });
 
   return (

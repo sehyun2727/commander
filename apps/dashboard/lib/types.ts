@@ -2,8 +2,10 @@
 // internal names (Project/Task/Agent/Approval) stay internal here; the UI
 // layer is responsible for rendering them with Commander terminology
 // (Company/Mission/Employee/CEO Decision).
-export type { Event, EventPayloadMap, Actor } from "@commander/event-schemas";
-export { EventType, AgentState, TaskState } from "@commander/event-schemas";
+export type { Event, EventPayloadMap, Actor, AgentProfile } from "@commander/event-schemas";
+export { EventType, AgentState, TaskState, Personality, WorkingStyle, DecisionStyle } from "@commander/event-schemas";
+
+import type { AgentProfile } from "@commander/event-schemas";
 
 export interface Project {
   id: string;
@@ -18,7 +20,7 @@ export interface Agent {
   project_id: string;
   role: "pm" | "engineer" | "reviewer";
   name: string;
-  persona: string;
+  profile: AgentProfile;
   avatar_color: string;
   state: string;
   current_task_id: string | null;

@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 4.5 — Employee Profiles
- Overall: 29/53 items · 55%
- Now working on: 5.1
- Last update: 2026-07-24 10:10
+ Overall: 39/53 items · 74%
+ Now working on: 6.1
+ Last update: 2026-07-24 11:00
 ================================================
 
 PHASE 0 — Repo Docs Sync                                       (6/6)
@@ -51,17 +51,17 @@ PHASE 4 — Runtime Integration                                  (7/7)
 [x] 4.6  Retry/backoff path unaffected (verified — provider_gateway tests green) @10:09
 [x] 4.7  Commit: feat(runtime): profile-driven prompts @10:18
 
-PHASE 5 — Frontend                                             (0/10)
-[ ] 5.1  Employee profile page/drawer + data hooks
-[ ] 5.2  Display: role, model plain name, style summary
-[ ] 5.3  Three style selects
-[ ] 5.4  Custom instructions textarea + 500 counter
-[ ] 5.5  Save flow + toast
-[ ] 5.6  Profile change live in Timeline (SSE)
-[ ] 5.7  Employee cards: one-line style summary
-[ ] 5.8  Commander terminology check on new strings
-[ ] 5.9  tsc --noEmit + next build clean, zero console errors
-[ ] 5.10 Commit: feat(dashboard): employee profile editing
+PHASE 5 — Frontend                                             (10/10)
+[x] 5.1  Employee profile page/drawer + data hooks @10:40
+[x] 5.2  Display: role, model plain name, style summary @10:58
+[x] 5.3  Three style selects @10:42
+[x] 5.4  Custom instructions textarea + 500 counter @10:44
+[x] 5.5  Save flow + "Saved." confirmation (Settings page pattern; no toast lib in repo) @10:44
+[x] 5.6  Profile change live in Timeline (SSE) — verified live in browser (Playwright) @10:52
+[x] 5.7  Employee cards: one-line style summary @10:35
+[x] 5.8  Commander terminology check on new strings (Employee/Company/Model override — no jargon leak) @10:59
+[x] 5.9  tsc --noEmit + next build clean, zero console errors (verified in real browser) @10:55
+[x] 5.10 Commit: feat(dashboard): employee profile editing @11:02
 
 PHASE 6 — Verification & Doc Sync                               (0/8)
 [ ] 6.1  Tests: layering + adversarial Verdict survival

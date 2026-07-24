@@ -1,4 +1,4 @@
-import type { Event } from "./types";
+import type { AgentProfile, Event } from "./types";
 
 export type Tone = "green" | "amber" | "red" | "gray";
 
@@ -94,6 +94,41 @@ export function approvalStatusLabel(status: string): string {
 
 export function roleLabel(role: string): string {
   return ROLE_LABEL[role] ?? role;
+}
+
+const PERSONALITY_LABEL: Record<string, string> = {
+  professional: "Professional",
+  friendly: "Friendly",
+  direct: "Direct",
+  conservative: "Conservative",
+};
+
+const WORKING_STYLE_LABEL: Record<string, string> = {
+  fast: "Fast-paced",
+  balanced: "Balanced",
+  detail_oriented: "Detail-oriented",
+};
+
+const DECISION_STYLE_LABEL: Record<string, string> = {
+  risk_avoiding: "Risk-avoiding",
+  balanced: "Balanced",
+  experimental: "Experimental",
+};
+
+export function personalityLabel(value: string): string {
+  return PERSONALITY_LABEL[value] ?? value;
+}
+
+export function workingStyleLabel(value: string): string {
+  return WORKING_STYLE_LABEL[value] ?? value;
+}
+
+export function decisionStyleLabel(value: string): string {
+  return DECISION_STYLE_LABEL[value] ?? value;
+}
+
+export function styleSummary(profile: AgentProfile): string {
+  return `${personalityLabel(profile.personality)} · ${workingStyleLabel(profile.working_style)} · ${decisionStyleLabel(profile.decision_style)}`;
 }
 
 export function initials(name: string): string {

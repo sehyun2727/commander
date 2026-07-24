@@ -1,15 +1,27 @@
 import type {
+  AgentProfile,
   Approval,
+  DecisionStyle,
   Event,
   ModelCatalogEntry,
+  Personality,
   Project,
   ProjectCostSummary,
   Report,
   Task,
   TaskCostSummary,
   TimelinePage,
+  WorkingStyle,
 } from "./types";
 import type { Agent } from "./types";
+
+export interface ProfileUpdateRequest {
+  personality?: Personality;
+  working_style?: WorkingStyle;
+  decision_style?: DecisionStyle;
+  custom_instructions?: string;
+  model_ref?: string | null;
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
@@ -45,6 +57,9 @@ export const api = {
 
   // Employees
   listEmployees: (companyId: string) => request<Agent[]>(`/api/projects/${companyId}/agents`),
+  getEmployeeProfile: (agentId: string) => request<AgentProfile>(`/api/agents/${agentId}/profile`),
+  updateEmployeeProfile: (agentId: string, body: ProfileUpdateRequest) =>
+    request<AgentProfile>(`/api/agents/${agentId}/profile`, { method: "PUT", body: JSON.stringify(body) }),
 
   // Missions
   listMissions: (companyId: string) => request<Task[]>(`/api/projects/${companyId}/tasks`),

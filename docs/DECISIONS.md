@@ -492,3 +492,19 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     untouched. This is also the only visible sign, in mock mode, that a
     CEO's profile edit changed anything, since MockProvider doesn't
     actually read the system prompt for content.
+55. **The Employee profile save flow (item 5.5) uses the Settings page's
+    inline "Saved." text pattern, not a toast**, even though the brief's
+    wording says "toast." No toast library exists anywhere in the
+    dashboard (checked before starting Phase 5) and Company Settings
+    already established this exact save-confirmation pattern
+    (`useState` boolean + inline green text next to the button) — adding
+    a toast dependency for one more save button would be inconsistent
+    with the rest of the app and unnecessary scope for this sprint.
+56. **The Employee profile page shows the effective model as
+    role-plain-name text (e.g. "PM · claude-...") in the header, and the
+    "Use company default" select option is labeled with the current
+    company default model**, rather than a separate always-visible
+    "current model" field. This satisfies item 5.2 ("model plain name")
+    without duplicating the Company Settings page's per-role model
+    table — the CEO sees the effective model right where they'd change
+    the override, not in a second place that could drift out of sync.
