@@ -1,62 +1,58 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 5 — Workspace
- Overall: 44/44 items · 100%
- Now working on: done
- Last update: 2026-07-24 19:40
+ Sprint: 6 — Execution Sandbox
+ Overall: 4/40 items · 10%
+ Now working on: 1.1
+ Last update: 2026-07-24 20:10
 ================================================
 
-PHASE 1 — WorkspaceManager                                     (9/9)
-[x] 1.1  Async git subprocess wrapper
-[x] 1.2  Lazy repo init + README on main (+ workspace.initialized)
-[x] 1.3  create_branch / commit / merge / diff / file-tree / read
-[x] 1.4  Path validation (relative-only, no .., no symlink escape, no .git)
-[x] 1.5  Limits: 30 files / 256KB / text-only (skip+event on violation)
-[x] 1.6  COMMANDER_WORKSPACE_ROOT env + gitignore
-[x] 1.7  Unit tests: temp-dir git ops
-[x] 1.8  Unit tests: path-safety suite
-[x] 1.9  Commit: feat(workspace)  →  34fa716
+PHASE 0 — Hygiene                                              (4/4)
+[x] 0.1  Drive-letter rejection in validate_path (platform-independent)
+[x] 0.2  Path test green on POSIX and Windows semantics
+[x] 0.3  CLAUDE.md push rule added
+[x] 0.4  Commit+push: fix(workspace)/docs
 
-PHASE 2 — Contracts & Template                                 (7/8)
-[x] 2.1  deliverable_type on tasks + API + TS regen
-[x] 2.2  Engineer contract: FILE blocks + Change Summary (code only)
-[x] 2.3  Events: workspace.initialized / code.changed / branch.merged
-[x] 2.4  Strict block parser
-[x] 2.5  Lenient summary parser
-[x] 2.6  Zero-blocks -> document fallback (parser returns {} gracefully; pipeline wiring in 3.1)
-[x] 2.7  MockProvider deterministic multi-file output + re-run edits
-[x] 2.8  Commit: feat(contracts)  →  65804aa
+PHASE 1 — Sandbox Core                                         (0/10)
+[ ] 1.1  SandboxRunner interface (core/interfaces)
+[ ] 1.2  sandbox/Dockerfile (python3.12-slim + node LTS + pytest)
+[ ] 1.3  make sandbox-image
+[ ] 1.4  DockerSandbox: create -> tar-copy in -> run -> capture -> destroy
+[ ] 1.5  All constraints: no-net, mem, cpu, pids, non-root, rm, 120s kill
+[ ] 1.6  Output tail cap 10k chars
+[ ] 1.7  Capability probe + GET /api/system/capabilities
+[ ] 1.8  FakeSandbox for tests
+[ ] 1.9  Unit tests (Fake) + skipif real-Docker tests
+[ ] 1.10 Commit+push: feat(sandbox)
 
-PHASE 3 — Pipeline Integration                                 (9/9)
-[x] 3.1  Code-mission flow: init -> branch -> write -> commit
-[x] 3.2  code.changed with stats payload
-[x] 3.3  Reviewer input: summary + truncated real diff
-[x] 3.4  Approve -> merge -> branch.merged -> complete
-[x] 3.5  Request changes -> same-branch recommit (attempt+1)
-[x] 3.6  Reject -> branch left unmerged
-[x] 3.7  Merge-failure -> blocked with plain reason
-[x] 3.8  Streaming / Payroll / retries unaffected (102 tests green)
-[x] 3.9  Commit: feat(pipeline)  →  360c838
+PHASE 2 — Checks & Pipeline                                    (0/9)
+[ ] 2.1  Template checks data (pytest / node-test / python-syntax)
+[ ] 2.2  Detection on mission branch files
+[ ] 2.3  Pipeline step: after commit, before Reviewer
+[ ] 2.4  Events: execution.started / execution.completed (payloads)
+[ ] 2.5  Degradation: no docker / no image / timeout -> events, never crash
+[ ] 2.6  Reviewer input includes results
+[ ] 2.7  Execution toggle (settings_kv) honored
+[ ] 2.8  Streaming / Payroll / retries unaffected (verified)
+[ ] 2.9  Commit+push: feat(pipeline)
 
-PHASE 4 — Frontend                                             (9/10)
-[x] 4.1  /workspace page + sidebar item (tree + file viewer + merges)
-[x] 4.2  ChangeSummaryCard (summary, N files +A/-B, verdict chip)
-[x] 4.3  Expansion 1: per-file stat list (parsed client-side from diff)
-[x] 4.4  Expansion 2: unified diff viewer
-[x] 4.5  Diff never the landing view (mission detail leads with summary)
-[x] 4.6  DecisionCard stats line for code missions
-[x] 4.7  Timeline rows for code.changed / branch.merged (narrate() reason fallback, no change needed)
-[x] 4.8  Mission create: deliverable toggle (default code)
-[x] 4.9  tsc --noEmit + next build clean
-[x] 4.10 Commit: feat(dashboard)  →  93c0fea
+PHASE 3 — Frontend                                             (0/9)
+[ ] 3.1  ExecutionResults section (chips + duration)
+[ ] 3.2  Output tail at disclosure level 2
+[ ] 3.3  ChangeSummaryCard + DecisionCard checks verdict line
+[ ] 3.4  Timeline rows (CEO verdict row / Technical per-check)
+[ ] 3.5  Settings: capability status + toggle
+[ ] 3.6  Graceful hiding when Docker absent
+[ ] 3.7  Engineer contract line: stdlib/built-ins only (v1)
+[ ] 3.8  tsc --noEmit + next build clean
+[ ] 3.9  Commit+push: feat(dashboard)
 
-PHASE 5 — Verification & Doc Sync                              (8/8)
-[x] 5.1  Tests: parser valid/malformed/fallback (test_code_contract_parsing.py, 7 tests)
-[x] 5.2  Tests: branch lifecycle (3 decision outcomes) (covered by test_code_missions.py since Phase 3)
-[x] 5.3  Tests: diff truncation note (test_code_missions.py: truncated diff -> reviewer note, not persisted)
-[x] 5.4  Tests: document missions unaffected (covered by test_code_missions.py since Phase 3)
-[x] 5.5  All tests green (113 passed)
-[x] 5.6  Live mock E2E per Definition of Done (curl flow: create -> assign -> tree/file/diff pre-merge -> approve -> tree/file/merges post-merge, verified during Phase 4)
-[x] 5.7  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
-[x] 5.8  Commit: chore(sprint5)
+PHASE 4 — Verification & Doc Sync                              (0/8)
+[ ] 4.1  Tests: detection matrix
+[ ] 4.2  Tests: degradation paths
+[ ] 4.3  Tests: toggle-off skips execution
+[ ] 4.4  Tests: path-fix regression
+[ ] 4.5  All pre-existing tests green
+[ ] 4.6  E2E (real Docker if available, else Fake + DECISIONS note)
+[ ] 4.7  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
+[ ] 4.8  Final commit+push, remote HEAD confirmed
 ================================================

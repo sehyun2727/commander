@@ -90,3 +90,4 @@ Known accepted MVP tradeoffs: plaintext secrets in local SQLite, in-process even
 - Self-verify before finishing: `make test`, `pnpm build` (dashboard), and boot the slice when behavior changed.
 - Keep this file in sync: any architecture change must update CLAUDE.md and ARCHITECTURE.md in the same PR/commit. Desync is an architecture violation.
 - Maintain PROGRESS.txt per the live progress discipline (see docs/prompts/) — update per item, never batched.
+- Every sprint's final phase commit must be followed by `git push`; a sprint is not complete until the remote HEAD matches the final commit.

@@ -7,10 +7,13 @@ raise, so one bad file in an attempt doesn't lose the good ones.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path, PurePosixPath
 
 MAX_FILES_PER_ATTEMPT = 30
 MAX_FILE_BYTES = 256 * 1024
+
+_DRIVE_LETTER_RE = re.compile(r"^[A-Za-z]:")
 
 
 def validate_path(repo_root: Path, path: str) -> tuple[Path | None, str | None]:
@@ -19,7 +22,14 @@ def validate_path(repo_root: Path, path: str) -> tuple[Path | None, str | None]:
     path."""
     if not path or not path.strip():
         return None, "empty path"
-    normalized = PurePosixPath(path.replace("\\", "/"))
+    slash_form = path.replace("\\", "/")
+    if _DRIVE_LETTER_RE.match(slash_form):
+        # PurePosixPath doesn't consider "C:/..." absolute, so on POSIX
+        # this would otherwise be silently joined as a relative path
+        # segment and pass through -- sandbox containers are Linux, so
+        # this must be rejected identically on every host platform.
+        return None, "Windows drive-letter paths are not allowed"
+    normalized = PurePosixPath(slash_form)
     if normalized.is_absolute():
         return None, "absolute paths are not allowed"
     if ".." in normalized.parts:
