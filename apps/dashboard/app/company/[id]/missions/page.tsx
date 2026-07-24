@@ -2,18 +2,22 @@
 
 import { MissionCard } from "@/components/MissionCard";
 import { NewMissionForm } from "@/components/NewMissionForm";
+import { taskStatusWord } from "@/components/StatusWord";
 import { useMissions } from "@/lib/hooks";
+import { StatusWord as StatusWordToken } from "@/lib/types";
 import type { Task } from "@/lib/types";
 
-const COLUMNS: { key: string; label: string; match: (state: string) => boolean }[] = [
-  { key: "backlog", label: "Backlog", match: (s) => s === "created" },
+// Kanban lanes per UX_SPEC §3.3, derived from the same StatusWord token
+// every other status render site uses — no second internal-state list.
+const COLUMNS: { key: string; label: string; tokens: StatusWordToken[] }[] = [
+  { key: "backlog", label: "Backlog", tokens: [StatusWordToken.PLANNING] },
+  { key: "developing", label: "Developing", tokens: [StatusWordToken.DEVELOPING, StatusWordToken.REVIEWING] },
+  { key: "needs_decision", label: "Needs your decision", tokens: [StatusWordToken.NEEDS_DECISION] },
   {
-    key: "in_progress",
-    label: "In Progress",
-    match: (s) => ["assigned", "in_progress", "in_review", "retrying"].includes(s),
+    key: "done",
+    label: "Done",
+    tokens: [StatusWordToken.COMPLETED, StatusWordToken.FAILED, StatusWordToken.CANCELLED],
   },
-  { key: "needs_decision", label: "Needs CEO Decision", match: (s) => s === "pending_approval" },
-  { key: "done", label: "Done", match: (s) => ["completed", "cancelled", "failed"].includes(s) },
 ];
 
 export default function MissionsPage({ params }: { params: { id: string } }) {
@@ -21,7 +25,8 @@ export default function MissionsPage({ params }: { params: { id: string } }) {
   const { data: missions, isLoading } = useMissions(companyId);
 
   const grouped = (missions ?? []).reduce<Record<string, Task[]>>((acc, task) => {
-    const column = COLUMNS.find((c) => c.match(task.state));
+    const token = taskStatusWord(task.state);
+    const column = COLUMNS.find((c) => c.tokens.includes(token));
     const key = column?.key ?? "backlog";
     (acc[key] ??= []).push(task);
     return acc;

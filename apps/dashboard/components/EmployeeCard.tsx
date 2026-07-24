@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import { StatusPill } from "@/components/StatusPill";
+import { StatusWord, agentStatusWord } from "@/components/StatusWord";
 import type { Agent, Task } from "@/lib/types";
-import { agentStateLabel, agentStateTone, formatUsd, roleLabel, styleSummary } from "@/lib/utils";
+import { formatUsd, roleLabel, styleSummary } from "@/lib/utils";
 
 export function EmployeeCard({
   employee,
@@ -28,7 +28,7 @@ export function EmployeeCard({
         <p className="mt-2 truncate text-xs text-text-faint">{styleSummary(employee.profile)}</p>
       </Link>
       <div className="mt-3 flex items-center justify-between gap-2">
-        <StatusPill tone={agentStateTone(employee.state)} label={agentStateLabel(employee.state)} />
+        <StatusWord token={agentStatusWord(employee.state)} />
         {!!spendUsd && <span className="text-xs text-text-faint">{formatUsd(spendUsd)} this month</span>}
       </div>
       {currentMission && (

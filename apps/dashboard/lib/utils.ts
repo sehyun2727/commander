@@ -2,29 +2,10 @@ import type { AgentProfile, Event } from "./types";
 
 export type Tone = "green" | "amber" | "red" | "gray";
 
-const TASK_STATE_TONE: Record<string, Tone> = {
-  created: "gray",
-  assigned: "amber",
-  in_progress: "amber",
-  in_review: "amber",
-  pending_approval: "amber",
-  retrying: "amber",
-  completed: "green",
-  failed: "red",
-  cancelled: "red",
-};
-
-const AGENT_STATE_TONE: Record<string, Tone> = {
-  idle: "gray",
-  assigned: "amber",
-  planning: "amber",
-  working: "amber",
-  waiting_review: "amber",
-  blocked: "red",
-  completed: "green",
-  failed: "red",
-};
-
+// Task/Agent status copy and tone are owned by components/StatusWord.tsx
+// (UX_SPEC §1's single vocabulary source) — not here. Approval status is a
+// separate, smaller vocabulary (pending/approved/rejected/changes_requested)
+// that doesn't map onto TaskState/AgentState, so it keeps its own table.
 const APPROVAL_STATUS_TONE: Record<string, Tone> = {
   pending: "amber",
   approved: "green",
@@ -32,40 +13,9 @@ const APPROVAL_STATUS_TONE: Record<string, Tone> = {
   changes_requested: "amber",
 };
 
-export function taskStateTone(state: string): Tone {
-  return TASK_STATE_TONE[state] ?? "gray";
-}
-
-export function agentStateTone(state: string): Tone {
-  return AGENT_STATE_TONE[state] ?? "gray";
-}
-
 export function approvalStatusTone(status: string): Tone {
   return APPROVAL_STATUS_TONE[status] ?? "gray";
 }
-
-const TASK_STATE_LABEL: Record<string, string> = {
-  created: "New",
-  assigned: "Assigned",
-  in_progress: "In Progress",
-  in_review: "In Audit",
-  pending_approval: "Awaiting CEO Decision",
-  retrying: "Reworking",
-  completed: "Completed",
-  failed: "Failed",
-  cancelled: "Cancelled",
-};
-
-const AGENT_STATE_LABEL: Record<string, string> = {
-  idle: "Idle",
-  assigned: "Assigned",
-  planning: "Planning",
-  working: "Working",
-  waiting_review: "Handing Off",
-  blocked: "Blocked",
-  completed: "Wrapping Up",
-  failed: "Failed",
-};
 
 const APPROVAL_STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -79,14 +29,6 @@ const ROLE_LABEL: Record<string, string> = {
   engineer: "Engineer",
   reviewer: "Reviewer",
 };
-
-export function taskStateLabel(state: string): string {
-  return TASK_STATE_LABEL[state] ?? state;
-}
-
-export function agentStateLabel(state: string): string {
-  return AGENT_STATE_LABEL[state] ?? state;
-}
 
 export function approvalStatusLabel(status: string): string {
   return APPROVAL_STATUS_LABEL[status] ?? status;

@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 4.7 — Headquarters UX
- Overall: 10/49 items · 20%
- Now working on: 2.1
- Last update: 2026-07-24 11:20
+ Overall: 14/49 items · 29%
+ Now working on: 3.1
+ Last update: 2026-07-24 12:05
 ================================================
 
 PHASE 1 — Backend Foundations                                  (10/10)
@@ -18,11 +18,11 @@ PHASE 1 — Backend Foundations                                  (10/10)
 [x] 1.9  Profile PUT validates model_ref against registry
 [x] 1.10 Commit: feat(core)
 
-PHASE 2 — Status Vocabulary                                    (0/4)
-[ ] 2.1  Mapping in contracts + TS regen
-[ ] 2.2  StatusWord component + token map
-[ ] 2.3  Replace every status render site (grep-verified)
-[ ] 2.4  Commit: feat(ux)
+PHASE 2 — Status Vocabulary                                    (4/4)
+[x] 2.1  Mapping in contracts + TS regen
+[x] 2.2  StatusWord component + token map
+[x] 2.3  Replace every status render site (grep-verified)
+[x] 2.4  Commit: feat(ux)
 
 PHASE 3 — Decisions Page                                       (0/6)
 [ ] 3.1  /decisions route + sidebar item

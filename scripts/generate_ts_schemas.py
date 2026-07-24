@@ -24,7 +24,15 @@ sys.path.insert(0, str(REPO_ROOT / "apps" / "api"))
 
 from pydantic import BaseModel  # noqa: E402
 
-from app.core.contracts import AgentProfile, DecisionStyle, Personality, WorkingStyle  # noqa: E402
+from app.core.contracts import (  # noqa: E402
+    AGENT_STATE_STATUS_WORD,
+    TASK_STATE_STATUS_WORD,
+    AgentProfile,
+    DecisionStyle,
+    Personality,
+    StatusWord,
+    WorkingStyle,
+)
 from app.core.events.base import Actor, Event  # noqa: E402
 from app.core.events.contracts import PAYLOAD_MODELS  # noqa: E402
 from app.core.events.types import EventType  # noqa: E402
@@ -34,8 +42,15 @@ from app.core.lifecycle.task_states import TaskState  # noqa: E402
 OUT_DIR = REPO_ROOT / "packages" / "event-schemas" / "ts"
 
 # Models to emit, in dependency order (referenced-before-referencing).
-ENUMS: list[type[enum.Enum]] = [EventType, AgentState, TaskState, Personality, WorkingStyle, DecisionStyle]
+ENUMS: list[type[enum.Enum]] = [EventType, AgentState, TaskState, Personality, WorkingStyle, DecisionStyle, StatusWord]
 MODELS: list[type[BaseModel]] = [Actor, AgentProfile, *PAYLOAD_MODELS.values(), Event]
+
+# Internal-state -> StatusWord token maps (UX_SPEC §1) — emitted as TS
+# consts so the frontend never re-derives this mapping by hand.
+STATUS_WORD_MAPS: list[tuple[str, type[enum.Enum], type[enum.Enum], dict]] = [
+    ("TASK_STATE_STATUS_WORD", TaskState, StatusWord, TASK_STATE_STATUS_WORD),
+    ("AGENT_STATE_STATUS_WORD", AgentState, StatusWord, AGENT_STATE_STATUS_WORD),
+]
 
 
 def ts_type(annotation: typing.Any) -> str:
@@ -112,6 +127,14 @@ def emit_payload_map() -> str:
     return "\n".join(lines)
 
 
+def emit_status_word_map(name: str, key_enum: type[enum.Enum], value_enum: type[enum.Enum], mapping: dict) -> str:
+    lines = [f"export const {name}: Record<{key_enum.__name__}, {value_enum.__name__}> = {{"]
+    for key, value in mapping.items():
+        lines.append(f"  [{key_enum.__name__}.{key.name}]: {value_enum.__name__}.{value.name},")
+    lines.append("};\n")
+    return "\n".join(lines)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     header = (
@@ -124,6 +147,8 @@ def main() -> None:
     for m in MODELS:
         parts.append(emit_interface(m))
     parts.append(emit_payload_map())
+    for name, key_enum, value_enum, mapping in STATUS_WORD_MAPS:
+        parts.append(emit_status_word_map(name, key_enum, value_enum, mapping))
 
     out_file = OUT_DIR / "index.ts"
     out_file.write_text("\n".join(parts), encoding="utf-8")

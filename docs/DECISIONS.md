@@ -577,3 +577,49 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     returns every approval for a project ordered by creation time —
     exactly what the Decisions page's History tab (item 3.4) needs. Adding
     the route was a one-line wiring change, not new service logic.
+63. **The status vocabulary is split: backend owns *which token* an
+    internal state maps to, frontend owns *what the token says*.**
+    `app/core/contracts.py` adds a `StatusWord` enum plus
+    `TASK_STATE_STATUS_WORD`/`AGENT_STATE_STATUS_WORD` dicts and regenerates
+    them into `packages/event-schemas/ts` as real TS consts (extended
+    `generate_ts_schemas.py` with `emit_status_word_map`, since the
+    existing generator only knew how to emit enums and Pydantic model
+    interfaces, not arbitrary dict constants). The dashboard's
+    `components/StatusWord.tsx` then owns `STATUS_WORD_LABEL`/
+    `STATUS_WORD_TONE` — the copy and color are UI concerns the backend
+    has no reason to know about, but *which* internal states collapse to
+    the same external word is a domain fact that belongs with the state
+    machines. This keeps "one source of truth" (brief's own wording) for
+    the mapping while leaving room for i18n to be a frontend-only change
+    later — a second locale map, not a second mapping.
+64. **`StatusWord` carries two tokens beyond UX_SPEC §1's seven-row
+    table: `CANCELLED` and `IDLE`.** The spec's vocabulary table doesn't
+    address `TaskState.CANCELLED` (a CEO-initiated terminal state,
+    distinct from `FAILED` — nothing went wrong) or `AgentState.IDLE` (an
+    Employee with no current Mission, the common/default state, not
+    internal jargon needing translation). Omitting them would leave two
+    real states with no external word at all. Both get plain,
+    unsurprising copy ("Cancelled", "Idle") rather than forcing them into
+    an existing token that would misdescribe them.
+65. **`TaskState.ASSIGNED` and `AgentState.ASSIGNED` map to `PLANNING`,
+    and `TaskState.RETRYING` maps to `DEVELOPING`, not a new/different
+    token.** `assigned` is the transient instant between task creation
+    and the workflow engine picking it up — from the CEO's perspective
+    nothing is happening yet, so it reads the same as "not started."
+    `retrying` is the engine's own backoff-and-retry-once machinery
+    (Sprint 3/4 decision, see entry on retry-with-backoff) recovering
+    from a transient provider error automatically; surfacing it as
+    "Blocked" would incorrectly imply the CEO needs to act, when the
+    system is already handling it and will settle back into `DEVELOPING`
+    or fail outright.
+66. **The Missions kanban (`missions/page.tsx`) now buckets columns by
+    `StatusWord` token via `taskStatusWord()`, not a hand-maintained list
+    of raw `TaskState` strings**, and its "In Progress"/"Needs CEO
+    Decision" column labels were renamed to the spec's exact copy
+    ("Developing"/"Needs your decision"). This was flagged during the
+    Phase 2 audit as an independent, fifth status-mapping site in the
+    dashboard (alongside the two now-deleted `TASK_STATE_LABEL`/
+    `AGENT_STATE_LABEL` tables in `lib/utils.ts` and the Headquarters
+    active-Missions filter) — collapsing it onto the shared token map
+    was the entire point of item 2.3 ("replace every status render
+    site"), not just the four `StatusPill` call sites.

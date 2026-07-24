@@ -17,6 +17,9 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .lifecycle.agent_states import AgentState
+from .lifecycle.task_states import TaskState
+
 CUSTOM_INSTRUCTIONS_MAX_LEN = 500
 
 
@@ -53,3 +56,48 @@ class AgentProfile(BaseModel):
     # Never a provider switch, only a model choice within the company's
     # active provider.
     model_ref: str | None = None
+
+
+class StatusWord(str, Enum):
+    """The single source of truth for external status vocabulary (UX_SPEC
+    §1). Internal lifecycle states (TaskState, AgentState) never reach the
+    CEO directly -- every render site maps through one of the two dicts
+    below to a StatusWord token first. The token -> copy text (and, if we
+    ever ship i18n, translations) lives in the frontend's StatusWord
+    component, not here: this module only owns *which* token a given
+    internal state maps to, not what it says.
+    """
+
+    PLANNING = "planning"
+    DEVELOPING = "developing"
+    REVIEWING = "reviewing"
+    NEEDS_DECISION = "needs_decision"
+    BLOCKED = "blocked"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    IDLE = "idle"
+
+
+TASK_STATE_STATUS_WORD: dict[TaskState, StatusWord] = {
+    TaskState.CREATED: StatusWord.PLANNING,
+    TaskState.ASSIGNED: StatusWord.PLANNING,
+    TaskState.IN_PROGRESS: StatusWord.DEVELOPING,
+    TaskState.IN_REVIEW: StatusWord.REVIEWING,
+    TaskState.PENDING_APPROVAL: StatusWord.NEEDS_DECISION,
+    TaskState.RETRYING: StatusWord.DEVELOPING,
+    TaskState.COMPLETED: StatusWord.COMPLETED,
+    TaskState.FAILED: StatusWord.FAILED,
+    TaskState.CANCELLED: StatusWord.CANCELLED,
+}
+
+AGENT_STATE_STATUS_WORD: dict[AgentState, StatusWord] = {
+    AgentState.IDLE: StatusWord.IDLE,
+    AgentState.ASSIGNED: StatusWord.PLANNING,
+    AgentState.PLANNING: StatusWord.PLANNING,
+    AgentState.WORKING: StatusWord.DEVELOPING,
+    AgentState.WAITING_REVIEW: StatusWord.REVIEWING,
+    AgentState.BLOCKED: StatusWord.BLOCKED,
+    AgentState.COMPLETED: StatusWord.COMPLETED,
+    AgentState.FAILED: StatusWord.FAILED,
+}

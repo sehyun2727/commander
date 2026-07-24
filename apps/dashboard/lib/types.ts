@@ -3,7 +3,17 @@
 // layer is responsible for rendering them with Commander terminology
 // (Company/Mission/Employee/CEO Decision).
 export type { Event, EventPayloadMap, Actor, AgentProfile } from "@commander/event-schemas";
-export { EventType, AgentState, TaskState, Personality, WorkingStyle, DecisionStyle } from "@commander/event-schemas";
+export {
+  EventType,
+  AgentState,
+  TaskState,
+  Personality,
+  WorkingStyle,
+  DecisionStyle,
+  StatusWord,
+  TASK_STATE_STATUS_WORD,
+  AGENT_STATE_STATUS_WORD,
+} from "@commander/event-schemas";
 
 import type { AgentProfile } from "@commander/event-schemas";
 

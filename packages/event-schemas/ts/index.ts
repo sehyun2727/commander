@@ -82,6 +82,18 @@ export enum DecisionStyle {
   EXPERIMENTAL = "experimental",
 }
 
+export enum StatusWord {
+  PLANNING = "planning",
+  DEVELOPING = "developing",
+  REVIEWING = "reviewing",
+  NEEDS_DECISION = "needs_decision",
+  BLOCKED = "blocked",
+  COMPLETED = "completed",
+  FAILED = "failed",
+  CANCELLED = "cancelled",
+  IDLE = "idle",
+}
+
 export interface Actor {
   role: "ceo" | "employee" | "system";
   id: string;
@@ -315,3 +327,26 @@ export interface EventPayloadMap {
   "conversation.message": ConversationMessagePayload;
   "conversation.message.delta": ConversationMessageDeltaPayload;
 }
+
+export const TASK_STATE_STATUS_WORD: Record<TaskState, StatusWord> = {
+  [TaskState.CREATED]: StatusWord.PLANNING,
+  [TaskState.ASSIGNED]: StatusWord.PLANNING,
+  [TaskState.IN_PROGRESS]: StatusWord.DEVELOPING,
+  [TaskState.IN_REVIEW]: StatusWord.REVIEWING,
+  [TaskState.PENDING_APPROVAL]: StatusWord.NEEDS_DECISION,
+  [TaskState.RETRYING]: StatusWord.DEVELOPING,
+  [TaskState.COMPLETED]: StatusWord.COMPLETED,
+  [TaskState.FAILED]: StatusWord.FAILED,
+  [TaskState.CANCELLED]: StatusWord.CANCELLED,
+};
+
+export const AGENT_STATE_STATUS_WORD: Record<AgentState, StatusWord> = {
+  [AgentState.IDLE]: StatusWord.IDLE,
+  [AgentState.ASSIGNED]: StatusWord.PLANNING,
+  [AgentState.PLANNING]: StatusWord.PLANNING,
+  [AgentState.WORKING]: StatusWord.DEVELOPING,
+  [AgentState.WAITING_REVIEW]: StatusWord.REVIEWING,
+  [AgentState.BLOCKED]: StatusWord.BLOCKED,
+  [AgentState.COMPLETED]: StatusWord.COMPLETED,
+  [AgentState.FAILED]: StatusWord.FAILED,
+};

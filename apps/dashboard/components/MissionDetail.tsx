@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { ApprovalCard } from "@/components/ApprovalCard";
 import { ChatThread } from "@/components/ChatThread";
-import { StatusPill } from "@/components/StatusPill";
+import { StatusWord, taskStatusWord } from "@/components/StatusWord";
 import { useApprovals, useAssignMission, useMission, useMissionCosts } from "@/lib/hooks";
-import { formatUsd, taskStateLabel, taskStateTone } from "@/lib/utils";
+import { formatUsd } from "@/lib/utils";
 
 export function MissionDetail({ companyId, taskId }: { companyId: string; taskId: string }) {
   const { data: mission, isLoading } = useMission(taskId);
@@ -46,7 +46,7 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
       </header>
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <StatusPill tone={taskStateTone(mission.state)} label={taskStateLabel(mission.state)} />
+        <StatusWord token={taskStatusWord(mission.state)} />
         <span className="text-xs uppercase tracking-wide text-text-faint">Priority: {mission.priority}</span>
         {mission.attempt > 1 && <span className="text-xs text-text-faint">Attempt {mission.attempt}</span>}
         {costs && costs.total_usd > 0 && (

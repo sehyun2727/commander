@@ -4,9 +4,13 @@ import { useMemo } from "react";
 import { ApprovalCard } from "@/components/ApprovalCard";
 import { DailyReportCard } from "@/components/DailyReportCard";
 import { useRealtimeEvents } from "@/components/RealtimeProvider";
+import { taskStatusWord } from "@/components/StatusWord";
 import { TimelineFeed } from "@/components/TimelineFeed";
 import { useApprovals, useCompanyCosts, useEmployees, useMissions, useTimeline } from "@/lib/hooks";
+import { StatusWord as StatusWordToken } from "@/lib/types";
 import { formatUsd } from "@/lib/utils";
+
+const TERMINAL_TOKENS: StatusWordToken[] = [StatusWordToken.COMPLETED, StatusWordToken.FAILED, StatusWordToken.CANCELLED];
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -26,7 +30,7 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
   const { data: costs } = useCompanyCosts(companyId);
   const liveEvents = useRealtimeEvents();
 
-  const activeMissions = missions?.filter((t) => !["completed", "cancelled"].includes(t.state)).length ?? 0;
+  const activeMissions = missions?.filter((t) => !TERMINAL_TOKENS.includes(taskStatusWord(t.state))).length ?? 0;
   const pending = approvals?.filter((a) => a.status === "pending") ?? [];
   const missionById = useMemo(() => new Map((missions ?? []).map((t) => [t.id, t])), [missions]);
 

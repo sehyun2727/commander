@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useAssignMission } from "@/lib/hooks";
 import type { Task } from "@/lib/types";
-import { taskStateLabel, taskStateTone } from "@/lib/utils";
-import { StatusPill } from "./StatusPill";
+import { StatusWord, taskStatusWord } from "./StatusWord";
 
 const PRIORITY_LABEL: Record<string, string> = { low: "Low", normal: "Normal", high: "High", urgent: "Urgent" };
 
@@ -19,7 +18,7 @@ export function MissionCard({ mission, companyId }: { mission: Task; companyId: 
       </Link>
       <div className="mt-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <StatusPill tone={taskStateTone(mission.state)} label={taskStateLabel(mission.state)} />
+          <StatusWord token={taskStatusWord(mission.state)} />
           <span className="text-[11px] uppercase tracking-wide text-text-faint">
             {PRIORITY_LABEL[mission.priority] ?? mission.priority}
           </span>
