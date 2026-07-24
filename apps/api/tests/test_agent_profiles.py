@@ -7,6 +7,7 @@ from app.core.contracts import DecisionStyle, Personality
 from app.core.db_models import AgentORM
 from app.core.events.types import EventType
 from app.modules.agent_profiles import service as agent_profiles
+from app.modules.agent_profiles.service import InvalidModelRefError
 from app.modules.projects.service import create_project
 
 
@@ -81,3 +82,36 @@ async def test_update_profile_unknown_agent_raises(harness):
 async def test_get_profile_unknown_agent_raises(harness):
     with pytest.raises(ValueError):
         await agent_profiles.get_profile(harness.session_factory, "nonexistent-id")
+
+
+@pytest.mark.asyncio
+async def test_update_profile_accepts_a_known_model_ref_for_the_role(harness):
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    agent_id = await _pm_agent_id(harness, project.id)
+
+    updated = await agent_profiles.update_profile(
+        harness.session_factory, harness.event_bus, agent_id, {"model_ref": "mock-planner-v1"}
+    )
+    assert updated.model_ref == "mock-planner-v1"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_rejects_a_model_ref_not_valid_for_the_role(harness):
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    agent_id = await _pm_agent_id(harness, project.id)
+
+    with pytest.raises(InvalidModelRefError):
+        await agent_profiles.update_profile(
+            harness.session_factory, harness.event_bus, agent_id, {"model_ref": "mock-reviewer-v1"}
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_profile_rejects_a_completely_unknown_model_ref(harness):
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    agent_id = await _pm_agent_id(harness, project.id)
+
+    with pytest.raises(InvalidModelRefError):
+        await agent_profiles.update_profile(
+            harness.session_factory, harness.event_bus, agent_id, {"model_ref": "not-a-real-model"}
+        )

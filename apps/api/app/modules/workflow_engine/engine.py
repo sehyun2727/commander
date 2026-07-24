@@ -31,15 +31,23 @@ from ...core.lifecycle.agent_states import AgentState
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
+from ...templates import TEMPLATE
 from .. import prompt_builder
 from ..costs import record_usage
 from ..model_registry import RECOMMENDED_PROVIDER
 from ..provider_gateway import build_gateway
+from . import parsing
 
 logger = logging.getLogger("commander.workflow_engine")
 
 SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
 CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
+
+# The pipeline's fixed shape (PM plans -> Engineer builds -> Reviewer
+# audits) is concrete engine logic, not template-driven -- only the role
+# *identity* (key, model ref) comes from the template (§10.6). See
+# docs/DECISIONS.md "Sprint 4.7".
+_PM, _ENGINEER, _REVIEWER = TEMPLATE.roles
 
 
 def _pause() -> "asyncio.Future[None]":
@@ -70,7 +78,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
     # --- public API -----------------------------------------------------
 
     async def start_task(self, task_id: str) -> None:
-        asyncio.create_task(self._run_pipeline(task_id, resume_from="pm"))
+        asyncio.create_task(self._run_pipeline(task_id, resume_from=_PM.key))
 
     async def resume_after_decision(
         self, task_id: str, decision: str, comment: str | None
@@ -116,7 +124,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 )
             )
             asyncio.create_task(
-                self._run_pipeline(task_id, resume_from="engineer", ceo_comment=comment)
+                self._run_pipeline(task_id, resume_from=_ENGINEER.key, ceo_comment=comment)
             )
 
     # --- internals --------------------------------------------------------
@@ -289,64 +297,68 @@ class CommanderWorkflowEngine(WorkflowEngine):
             agents = await self._agents_for(project_id)
             gateway = await self._gateway_for(project_id)
 
-            if resume_from == "pm":
+            if resume_from == _PM.key:
                 await self._set_task_state(
                     task_id, TaskState.IN_PROGRESS, "PM began planning", SYSTEM_ACTOR
                 )
+                pm_agent = agents[_PM.key]
                 await self._event_bus.publish(
                     build_event(
                         type=EventType.TASK_STARTED,
                         project_id=project_id,
-                        actor=Actor(role="employee", id=agents["pm"].id, name=agents["pm"].name),
-                        payload={"task_id": task_id, "agent_id": agents["pm"].id},
+                        actor=Actor(role="employee", id=pm_agent.id, name=pm_agent.name),
+                        payload={"task_id": task_id, "agent_id": pm_agent.id},
                         reason=f"PM started planning '{title}'",
                     )
                 )
-                plan, pm_usage = await self._run_role(agents["pm"], task, gateway, "planner-default", "", None)
-                await self._record_usage(project_id, task_id, agents["pm"], gateway, "planner-default", pm_usage)
+                plan, pm_usage = await self._run_role(pm_agent, task, gateway, _PM.model_ref, "", None)
+                await self._record_usage(project_id, task_id, pm_agent, gateway, _PM.model_ref, pm_usage)
             else:
                 plan, pm_usage = "", {}
 
+            engineer_agent = agents[_ENGINEER.key]
             await self._event_bus.publish(
                 build_event(
                     type=EventType.CODING_STARTED,
                     project_id=project_id,
-                    actor=Actor(role="employee", id=agents["engineer"].id, name=agents["engineer"].name),
-                    payload={"agent_id": agents["engineer"].id, "task_id": task_id},
+                    actor=Actor(role="employee", id=engineer_agent.id, name=engineer_agent.name),
+                    payload={"agent_id": engineer_agent.id, "task_id": task_id},
                     reason="Engineer began building the deliverable",
                 )
             )
             deliverable, engineer_usage = await self._run_role(
-                agents["engineer"], task, gateway, "builder-default", plan, ceo_comment
+                engineer_agent, task, gateway, _ENGINEER.model_ref, plan, ceo_comment
             )
             await self._record_usage(
-                project_id, task_id, agents["engineer"], gateway, "builder-default", engineer_usage
+                project_id, task_id, engineer_agent, gateway, _ENGINEER.model_ref, engineer_usage
             )
 
             await self._set_task_state(
                 task_id, TaskState.IN_REVIEW, "Engineer finished; handing to Reviewer", SYSTEM_ACTOR
             )
+            reviewer_agent = agents[_REVIEWER.key]
             await self._event_bus.publish(
                 build_event(
                     type=EventType.REVIEW_STARTED,
                     project_id=project_id,
-                    actor=Actor(role="employee", id=agents["reviewer"].id, name=agents["reviewer"].name),
-                    payload={"task_id": task_id, "reviewer_agent_id": agents["reviewer"].id},
+                    actor=Actor(role="employee", id=reviewer_agent.id, name=reviewer_agent.name),
+                    payload={"task_id": task_id, "reviewer_agent_id": reviewer_agent.id},
                     reason="Reviewer began the audit",
                 )
             )
             audit, reviewer_usage = await self._run_role(
-                agents["reviewer"], task, gateway, "reviewer-default", deliverable, None
+                reviewer_agent, task, gateway, _REVIEWER.model_ref, deliverable, None
             )
             await self._record_usage(
-                project_id, task_id, agents["reviewer"], gateway, "reviewer-default", reviewer_usage
+                project_id, task_id, reviewer_agent, gateway, _REVIEWER.model_ref, reviewer_usage
             )
-            outcome = "changes_requested" if "changes requested" in audit.lower() else "approved"
+            outcome = parsing.parse_verdict(audit)
+            sections = parsing.parse_decision_sections(audit)
             await self._event_bus.publish(
                 build_event(
                     type=EventType.REVIEW_COMPLETED,
                     project_id=project_id,
-                    actor=Actor(role="employee", id=agents["reviewer"].id, name=agents["reviewer"].name),
+                    actor=Actor(role="employee", id=reviewer_agent.id, name=reviewer_agent.name),
                     payload={"task_id": task_id, "outcome": outcome},
                     reason=f"Reviewer verdict: {outcome}",
                 )
@@ -361,6 +373,10 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     task_id=task_id,
                     subject="task_review",
                     status="pending",
+                    reviewer_agent_id=reviewer_agent.id,
+                    reviewer_name=reviewer_agent.name,
+                    sections=sections,
+                    raw_summary=audit,
                 )
                 session.add(approval)
                 await session.commit()

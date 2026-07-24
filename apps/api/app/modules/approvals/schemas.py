@@ -20,5 +20,9 @@ class ApprovalResponse(BaseModel):
     subject: str
     status: str
     comment: str | None
+    reviewer_agent_id: str | None
+    reviewer_name: str | None
+    sections: dict[str, str]
+    raw_summary: str
     created_at: datetime
     decided_at: datetime | None

@@ -508,3 +508,72 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     without duplicating the Company Settings page's per-role model
     table — the CEO sees the effective model right where they'd change
     the override, not in a second place that could drift out of sync.
+
+### Sprint 4.7 — Headquarters UX
+
+57. **The template (§10.6) centralizes role *identity* — key, founding
+    name, avatar color, model ref, role contract, default profile,
+    intro line — not the pipeline's *shape*.** `workflow_engine.py` still
+    hardcodes a 3-step PM -> Engineer -> Reviewer sequence of awaits;
+    only the literal `"pm"`/`"engineer"`/`"reviewer"` strings and
+    `"planner-default"`/`"builder-default"`/`"reviewer-default"` refs
+    inside it were replaced with `TEMPLATE.roles` lookups. A fully
+    data-driven pipeline (N roles, engine loops over `TEMPLATE.roles`)
+    is out of scope for a sprint whose brief only asks for one template
+    (`software_company`) and explicitly bars adding speculative
+    multi-template machinery — item 1.4 ("no hardcoded role-name
+    branching outside template") is satisfied because no code outside
+    `app/templates/` tests role identity by string comparison anymore,
+    not because the pipeline itself is generic.
+58. **The Situation Report is ephemeral, not cached or event-sourced.**
+    `GET /projects/{id}/situation` calls the provider fresh on every
+    request and wraps the call in try/except, falling back to a cheap
+    deterministic sentence built from DB facts (`_fallback_text`) on any
+    provider error or timeout. A cached/scheduled version would need a
+    new table, a refresh trigger, and staleness handling — none of which
+    the brief asks for — and a dashboard read must never 500 or hang
+    just because the CEO hasn't configured a real API key. Mock mode and
+    real-provider mode both degrade to the same fallback path on error,
+    so the endpoint can't break CLAUDE.md's "must fully work with
+    `COMMANDER_PROVIDER=mock`" rule.
+59. **`InvalidModelRefError` subclasses `ValueError` instead of being a
+    new sibling exception.** `agent_profiles.update_profile` already
+    raises bare `ValueError` for "unknown agent" (Sprint 4.5,
+    `test_update_profile_unknown_agent_raises`), and `routes.py` mapped
+    every `ValueError` to a 404. A model-ref validation failure is a 422
+    (bad request body), not a 404 (missing resource), but changing the
+    404 test's exception type would break an existing, still-correct
+    test. Subclassing keeps `except ValueError` callers (including the
+    old test) working unchanged while giving `routes.py` a strictly
+    narrower `except InvalidModelRefError` branch it can catch *first*
+    and map to 422.
+60. **`ApprovalORM` gained `reviewer_agent_id`, `reviewer_name`,
+    `sections`, and `raw_summary` columns, captured at approval-creation
+    time in `workflow_engine.py` rather than derived later via a join.**
+    The Decisions page (Phase 3) needs reviewer attribution and the
+    parsed Problem/Recommendation/Risk/Impact sections on every
+    `ApprovalResponse`; the reviewer identity and full audit text are
+    already in scope at the moment the workflow engine creates the
+    `ApprovalORM` row (it just finished awaiting the Reviewer's
+    response), so writing them once at creation is simpler and cheaper
+    than joining `AgentORM` and re-parsing `raw_summary` on every read.
+    No migration was needed — no `commander.db` exists yet in this repo
+    checkout, so `create_all` picks up the new columns on next boot.
+61. **`parse_decision_sections` bounds each section's capture group with
+    a paragraph-break lookahead (`(?=\n\s*\n|\Z)`) instead of splitting
+    on the next known label or `**Verdict:**`.** A naive "capture until
+    the next label" regex let the last section (Impact) swallow the
+    trailing markdown checklist that sits between it and the Verdict
+    line, producing a garbled multi-paragraph value — caught by manual
+    live E2E verification (`TestClient`, real pipeline run), not by unit
+    tests, since the section-parsing tests were written after the fix.
+    Bounding on the next blank line instead of a label match is also
+    provider-robust: a real LLM's prose is not guaranteed to always emit
+    every label, but paragraph breaks between sections are a much safer
+    assumption than exhaustive label enumeration.
+62. **`GET /api/approvals/history` reuses the existing `list_all` service
+    function rather than a new query.** `approvals/service.py` already
+    had an unused-by-routes `list_all(session_factory, project_id)` that
+    returns every approval for a project ordered by creation time —
+    exactly what the Decisions page's History tab (item 3.4) needs. Adding
+    the route was a one-line wiring change, not new service logic.

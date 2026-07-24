@@ -14,6 +14,11 @@ async def list_pending(project_id: str | None = None, session_factory=Depends(ge
     return await service.list_pending(session_factory, project_id)
 
 
+@router.get("/history", response_model=list[ApprovalResponse])
+async def list_history(project_id: str, session_factory=Depends(get_session_factory)):
+    return await service.list_all(session_factory, project_id)
+
+
 @router.post("/{approval_id}/decision", response_model=ApprovalResponse)
 async def decide(
     approval_id: str,

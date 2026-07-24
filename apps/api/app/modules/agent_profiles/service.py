@@ -1,11 +1,24 @@
 from __future__ import annotations
 
 from ...core.contracts import AgentProfile
-from ...core.db_models import AgentORM
+from ...core.db_models import AgentORM, ProjectORM
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.event_bus import EventBus
+from ...templates import TEMPLATE
+from ..model_registry import options_for_role
 
 CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
+
+
+class InvalidModelRefError(ValueError):
+    """Raised when a profile PUT names a model_ref the registry doesn't
+    know for this Employee's role -- a ValueError subclass so existing
+    callers still catch it, but distinguishable so routes.py can answer
+    422 instead of the generic 404 for an unknown agent."""
+
+
+def _registry_role_for(agent_role: str) -> str:
+    return TEMPLATE.model_ref_for_role[agent_role].removesuffix("-default")
 
 
 async def get_profile(session_factory, agent_id: str) -> AgentProfile:
@@ -25,7 +38,8 @@ async def update_profile(
     """Merge `updates` (already `exclude_unset` from the request schema) onto
     the current profile and revalidate as a whole `AgentProfile`, so a
     partial PUT can never leave the stored profile in a state the model
-    itself wouldn't accept."""
+    itself wouldn't accept. A non-null model_ref must also name a model the
+    registry recognizes for this Employee's role (Sprint 4.5 review note)."""
     async with session_factory() as session:
         agent = await session.get(AgentORM, agent_id)
         if agent is None:
@@ -33,6 +47,16 @@ async def update_profile(
         current = AgentProfile.model_validate(agent.profile)
         changed_fields = [field for field, value in updates.items() if getattr(current, field) != value]
         merged = AgentProfile(**{**current.model_dump(), **updates})
+
+        if merged.model_ref is not None:
+            project = await session.get(ProjectORM, agent.project_id)
+            registry_role = _registry_role_for(agent.role)
+            if merged.model_ref not in options_for_role(project.provider, registry_role):
+                raise InvalidModelRefError(
+                    f"{merged.model_ref!r} is not a known model for role {agent.role!r} "
+                    f"on provider {project.provider!r}"
+                )
+
         agent.profile = merged.model_dump(mode="json")
         project_id, agent_name = agent.project_id, agent.name
         await session.commit()

@@ -8,32 +8,25 @@ AgentStateChanged with the `reason` the caller gave.
 
 from __future__ import annotations
 
-from ...core.contracts import AgentProfile
 from ...core.db_models import AgentORM
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
 from ...core.interfaces.event_bus import EventBus
 from ...core.lifecycle.agent_states import AGENT_TRANSITIONS, AgentState
 from ...core.lifecycle.state_machine import transition
+from ...templates import TEMPLATE
 
 SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
 
+# The founding trio, role order, and default profiles all come from the
+# active company template (see app/templates) -- founding never hardcodes
+# a role name the template doesn't already provide.
 DEPARTMENT_ROSTER = [
-    dict(role="pm", name="Priya Shah", avatar_color="#8b5cf6"),
-    dict(role="engineer", name="Devon Cole", avatar_color="#3b82f6"),
-    dict(role="reviewer", name="Ari Kim", avatar_color="#14b8a6"),
+    dict(role=role.key, name=role.founding_name, avatar_color=role.avatar_color)
+    for role in TEMPLATE.roles
 ]
 
-# Every Employee is founded with the same neutral trait defaults (the
-# AgentProfile field defaults themselves) — role-specific voice comes from
-# PromptBuilder's immutable role contract layer (modules/prompt_builder),
-# not from personality/working/decision style. Keyed by role so founding
-# (create_department) and any future re-seed of a role can look its
-# default up without re-deriving it.
-DEFAULT_PROFILES: dict[str, AgentProfile] = {
-    member["role"]: AgentProfile(name=member["name"], role=member["role"])
-    for member in DEPARTMENT_ROSTER
-}
+DEFAULT_PROFILES = TEMPLATE.default_profiles
 
 
 class DBAgentRuntime(AgentRuntime):

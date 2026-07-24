@@ -12,13 +12,14 @@ from ...core.interfaces.workflow_engine import WorkflowEngine
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
+from ...templates import TEMPLATE
 from .. import prompt_builder
 from ..costs import record_usage
 from ..provider_gateway import build_gateway
 
 CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
 
-_MODEL_REF_FOR_ROLE = {"pm": "planner-default", "engineer": "builder-default", "reviewer": "reviewer-default"}
+_PM_KEY = TEMPLATE.roles[0].key
 
 
 async def create_task(
@@ -75,7 +76,7 @@ async def assign_task(
 
         if agent_id is None:
             result = await session.execute(
-                select(AgentORM).where(AgentORM.project_id == task.project_id, AgentORM.role == "pm")
+                select(AgentORM).where(AgentORM.project_id == task.project_id, AgentORM.role == _PM_KEY)
             )
             pm = result.scalars().first()
             agent_id = pm.id if pm else None
@@ -128,7 +129,7 @@ async def post_message(
         agent = result.scalars().first()
         if agent is None:
             result = await session.execute(
-                select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role == "pm")
+                select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role == _PM_KEY)
             )
             agent = result.scalars().first()
 
@@ -148,7 +149,7 @@ async def post_message(
         project_id=project_id,
         session_factory=session_factory,
     )
-    model_ref = _MODEL_REF_FOR_ROLE.get(agent.role, "planner-default")
+    model_ref = TEMPLATE.model_ref_for_role.get(agent.role, TEMPLATE.roles[0].model_ref)
     actor = Actor(role="employee", id=agent.id, name=agent.name)
     profile = AgentProfile.model_validate(agent.profile)
     buffer: list[str] = []

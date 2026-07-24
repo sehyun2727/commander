@@ -45,6 +45,18 @@ _AUDIT_CHECKS = [
     "Scope matches the mission brief (no drive-by changes)",
 ]
 
+_RISKS_IF_APPROVED = [
+    "Scope could creep on the next mission if this precedent isn't documented.",
+    "No automated test coverage for this yet, so a regression could slip through.",
+    "Low risk -- the change is small and easy to revert.",
+]
+
+_IMPACTS = [
+    "Moves the mission off the CEO's plate and into Completed.",
+    "Unblocks whatever mission was waiting on this one.",
+    "Small, incremental progress toward the company's goals.",
+]
+
 
 def _role_from_ref(model_ref: str) -> str:
     if "planner" in model_ref:
@@ -53,6 +65,8 @@ def _role_from_ref(model_ref: str) -> str:
         return "builder"
     if "reporter" in model_ref:
         return "reporter"
+    if "situation" in model_ref:
+        return "situation"
     return "reviewer"
 
 
@@ -85,8 +99,21 @@ def _audit_text(title: str, context: str) -> str:
         if approved
         else "\n\n**Requested change:** please add more detail to the deliverable before re-review."
     )
+    problem = f"The mission needed someone to deliver \"{title}\" and have it verified before shipping."
+    recommendation = (
+        f"Approve the deliverable for \"{title}\" as submitted."
+        if approved
+        else f"Send \"{title}\" back for one more pass before approving."
+    )
+    risk = random.choice(_RISKS_IF_APPROVED)
+    impact = random.choice(_IMPACTS)
     return (
-        f"## Audit: {title}\n\n{checks}{concern}\n\n**Verdict:** {verdict}"
+        f"## Audit: {title}\n\n"
+        f"**Problem:** {problem}\n\n"
+        f"**Recommendation:** {recommendation}\n\n"
+        f"**Risk:** {risk}\n\n"
+        f"**Impact:** {impact}\n\n"
+        f"{checks}{concern}\n\n**Verdict:** {verdict}"
     )
 
 
@@ -116,6 +143,26 @@ def _report_text(opts: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _situation_text(opts: dict[str, Any]) -> str:
+    pending = opts.get("pending_decisions", 0)
+    active = opts.get("missions_active", 0)
+    last_reason = opts.get("last_event_reason")
+
+    pieces = []
+    if pending:
+        pieces.append(f"{pending} decision{'s' if pending != 1 else ''} waiting on you")
+    if active:
+        pieces.append(f"{active} mission{'s' if active != 1 else ''} in flight")
+
+    if not pieces:
+        base = "Everything's quiet right now — no missions in flight and nothing needs your decision."
+    else:
+        base = "Right now: " + ", ".join(pieces) + "."
+    if last_reason:
+        base += f" Most recently: {last_reason}."
+    return base
+
+
 def _flavor_suffix(system: str) -> str:
     """Light personality flavor sniffed from the system prompt's trait text
     (see prompt_builder.traits) — mock provider has no real model to steer
@@ -134,6 +181,8 @@ def _text_for(model_ref: str, system: str, opts: dict[str, Any]) -> str:
     role = _role_from_ref(model_ref)
     if role == "reporter":
         return _report_text(opts)
+    if role == "situation":
+        return _situation_text(opts)
     title = opts.get("task_title", "this mission")
     description = opts.get("task_description", "")
     context = opts.get("context", "")

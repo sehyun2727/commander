@@ -92,6 +92,16 @@ class ApprovalORM(Base):
     subject: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="pending")
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Reviewer identity captured at approval-creation time (avoids a join
+    # to render "Reviewer avatar + name" on the DecisionCard).
+    reviewer_agent_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    reviewer_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Leniently parsed Problem/Recommendation/Risk/Impact -- any subset may
+    # be present; never a hard contract (see workflow_engine.parsing).
+    sections: Mapped[dict] = mapped_column(JSON, default=dict)
+    # The Reviewer's full raw audit text, so the UI can always render
+    # something meaningful even when every structured section is missing.
+    raw_summary: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
