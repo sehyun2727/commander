@@ -3,9 +3,16 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from ...core.events.base import Event
-from ...deps import get_agent_runtime, get_event_bus, get_secrets, get_session_factory, get_workflow_engine
+from ...deps import (
+    get_agent_runtime,
+    get_event_bus,
+    get_secrets,
+    get_session_factory,
+    get_workflow_engine,
+    get_workspace_manager,
+)
 from . import service
-from .schemas import MessageCreateRequest, TaskAssignRequest, TaskCreateRequest, TaskResponse
+from .schemas import DiffResponse, MessageCreateRequest, TaskAssignRequest, TaskCreateRequest, TaskResponse
 
 router = APIRouter(prefix="/api", tags=["tasks"])
 
@@ -39,6 +46,19 @@ async def get_task(task_id: str, session_factory=Depends(get_session_factory)):
     if task is None:
         raise HTTPException(status_code=404, detail="Mission not found")
     return task
+
+
+@router.get("/tasks/{task_id}/diff", response_model=DiffResponse)
+async def get_diff(
+    task_id: str,
+    session_factory=Depends(get_session_factory),
+    workspace_manager=Depends(get_workspace_manager),
+):
+    result = await service.get_diff(session_factory, workspace_manager, task_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="No diff available for this mission")
+    diff_text, truncated = result
+    return DiffResponse(diff_text=diff_text, truncated=truncated)
 
 
 @router.post("/tasks/{task_id}/assign", response_model=TaskResponse)

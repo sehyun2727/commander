@@ -124,3 +124,23 @@ export interface Starter {
   title: string;
   description: string;
 }
+
+export interface WorkspaceFileEntry {
+  path: string;
+}
+
+export interface WorkspaceMergeRecord {
+  commit_sha: string;
+  subject: string;
+  merged_at: string;
+}
+
+export interface WorkspaceFileContent {
+  path: string;
+  content: string;
+}
+
+export interface DiffResponse {
+  diff_text: string;
+  truncated: boolean;
+}

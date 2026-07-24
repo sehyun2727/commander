@@ -68,6 +68,13 @@ async def get_task(session_factory, task_id: str) -> TaskORM | None:
         return await session.get(TaskORM, task_id)
 
 
+async def get_diff(session_factory, workspace_manager, task_id: str) -> tuple[str, bool] | None:
+    task = await get_task(session_factory, task_id)
+    if task is None or task.branch_name is None:
+        return None
+    return await workspace_manager.diff(task.project_id, task.branch_name)
+
+
 async def assign_task(
     session_factory,
     event_bus: EventBus,

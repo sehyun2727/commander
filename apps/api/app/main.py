@@ -29,6 +29,7 @@ from .modules.tasks import router as tasks_router
 from .modules.timeline import router as timeline_router
 from .modules.workflow_engine import CommanderWorkflowEngine
 from .modules.workspace_manager import LocalGitWorkspaceManager
+from .modules.workspace_manager import router as workspace_router
 
 
 @asynccontextmanager
@@ -75,6 +76,7 @@ app.include_router(costs_router)
 app.include_router(models_router)
 app.include_router(reports_router)
 app.include_router(situation_router)
+app.include_router(workspace_router)
 
 
 @app.get("/api/health")

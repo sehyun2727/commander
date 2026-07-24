@@ -922,3 +922,24 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     independently rather than one deriving it from the other's target
     `TaskState`. No auto-resolution is attempted on the conflict itself,
     per the brief.
+93. **Per-file diff stats (Expansion 1) are parsed client-side from the
+    existing `GET /tasks/{id}/diff` response rather than adding a
+    per-file-stat backend endpoint.** `CommitResult`/`code_stats` only
+    carry aggregate counts (files_added/modified/deleted, additions,
+    deletions summed across the commit); a real per-file breakdown only
+    exists in the unified diff text itself. Since `diff()` already returns
+    that text, `lib/utils.ts`'s `parseUnifiedDiff` slices it on
+    `diff --git` boundaries and counts +/- lines per file — no new git
+    plumbing, no new response shape, and the diff stays lazy-loaded (only
+    fetched when the CEO expands "View file changes", never on the
+    landing view, per item 4.5).
+94. **The task-scoped diff endpoint lives in `tasks/routes.py` /
+    `tasks/service.py`, not `workspace_manager/routes.py`.** `diff()`
+    needs a `branch_name`, which only `TaskORM` knows (per-mission);
+    `list_tree`/`read_file`/`recent_merges` are project-wide against a
+    `ref` (default `"main"`) and have no task context, so they live in the
+    new `workspace_manager` module instead. Both modules resolve "does
+    this company exist" by querying `ProjectORM` directly in their own
+    `service.py` (mirroring `reports`/`situation`), rather than importing
+    each other's service functions, per the "modules never import each
+    other's internals" rule.

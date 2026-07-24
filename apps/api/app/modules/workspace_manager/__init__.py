@@ -12,5 +12,6 @@ this module -- write/read/diff/merge only.
 """
 
 from .local_git import LocalGitWorkspaceManager
+from .routes import router
 
-__all__ = ["LocalGitWorkspaceManager"]
+__all__ = ["LocalGitWorkspaceManager", "router"]

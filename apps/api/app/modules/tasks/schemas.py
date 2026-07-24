@@ -20,6 +20,11 @@ class MessageCreateRequest(BaseModel):
     text: str
 
 
+class DiffResponse(BaseModel):
+    diff_text: str
+    truncated: bool
+
+
 class TaskResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 5 — Workspace
- Overall: 25/44 items · 57%
- Now working on: 4.1
- Last update: 2026-07-24 18:20
+ Overall: 34/44 items · 77%
+ Now working on: 5.1
+ Last update: 2026-07-24 19:10
 ================================================
 
 PHASE 1 — WorkspaceManager                                     (9/9)
@@ -36,18 +36,18 @@ PHASE 3 — Pipeline Integration                                 (9/9)
 [x] 3.6  Reject -> branch left unmerged
 [x] 3.7  Merge-failure -> blocked with plain reason
 [x] 3.8  Streaming / Payroll / retries unaffected (102 tests green)
-[ ] 3.9  Commit: feat(pipeline)
+[x] 3.9  Commit: feat(pipeline)  →  360c838
 
-PHASE 4 — Frontend                                             (0/10)
-[ ] 4.1  /workspace page + sidebar item (tree + file viewer + merges)
-[ ] 4.2  ChangeSummaryCard (summary, N files +A/-B, verdict chip)
-[ ] 4.3  Expansion 1: per-file stat list
-[ ] 4.4  Expansion 2: unified diff viewer
-[ ] 4.5  Diff never the landing view (mission detail leads with summary)
-[ ] 4.6  DecisionCard stats line for code missions
-[ ] 4.7  Timeline rows for code.changed / branch.merged
-[ ] 4.8  Mission create: deliverable toggle (default code)
-[ ] 4.9  tsc --noEmit + next build clean
+PHASE 4 — Frontend                                             (9/10)
+[x] 4.1  /workspace page + sidebar item (tree + file viewer + merges)
+[x] 4.2  ChangeSummaryCard (summary, N files +A/-B, verdict chip)
+[x] 4.3  Expansion 1: per-file stat list (parsed client-side from diff)
+[x] 4.4  Expansion 2: unified diff viewer
+[x] 4.5  Diff never the landing view (mission detail leads with summary)
+[x] 4.6  DecisionCard stats line for code missions
+[x] 4.7  Timeline rows for code.changed / branch.merged (narrate() reason fallback, no change needed)
+[x] 4.8  Mission create: deliverable toggle (default code)
+[x] 4.9  tsc --noEmit + next build clean
 [ ] 4.10 Commit: feat(dashboard)
 
 PHASE 5 — Verification & Doc Sync                              (0/8)

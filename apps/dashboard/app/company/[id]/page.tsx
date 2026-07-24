@@ -65,6 +65,7 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
                   (approval.reviewer_agent_id && employeeById.get(approval.reviewer_agent_id)?.avatar_color) ||
                   undefined
                 }
+                codeStats={missionById.get(approval.task_id)?.code_stats}
               />
             ))}
           </div>

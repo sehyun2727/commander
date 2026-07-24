@@ -102,6 +102,33 @@ export function formatUsd(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
+export interface DiffFile {
+  path: string;
+  additions: number;
+  deletions: number;
+  hunkText: string;
+}
+
+// Parses `git diff`'s unified format into per-file hunks so the Workspace
+// view can show a per-file stat list without a dedicated backend endpoint
+// -- diff() already returns the full text, this just slices it client-side.
+export function parseUnifiedDiff(diffText: string): DiffFile[] {
+  if (!diffText) return [];
+  const chunks = diffText.split(/(?=^diff --git )/m).filter((chunk) => chunk.startsWith("diff --git "));
+  return chunks.map((chunk) => {
+    const headerMatch = chunk.match(/^diff --git a\/(.+?) b\/(.+)$/m);
+    const path = headerMatch ? headerMatch[2] : "unknown file";
+    let additions = 0;
+    let deletions = 0;
+    for (const line of chunk.split("\n")) {
+      if (line.startsWith("+++") || line.startsWith("---")) continue;
+      if (line.startsWith("+")) additions++;
+      else if (line.startsWith("-")) deletions++;
+    }
+    return { path, additions, deletions, hunkText: chunk };
+  });
+}
+
 export function relativeTime(iso: string): string {
   const then = new Date(iso.endsWith("Z") ? iso : `${iso}Z`).getTime();
   const diffMs = Date.now() - then;

@@ -23,6 +23,11 @@ export const keys = {
   report: (reportId: string) => ["report", reportId] as const,
   situation: (companyId: string) => ["situation", companyId] as const,
   starters: (companyId: string) => ["starters", companyId] as const,
+  workspaceTree: (companyId: string, ref: string) => ["workspaceTree", companyId, ref] as const,
+  workspaceFile: (companyId: string, path: string, ref: string) =>
+    ["workspaceFile", companyId, path, ref] as const,
+  workspaceMerges: (companyId: string) => ["workspaceMerges", companyId] as const,
+  missionDiff: (taskId: string) => ["missionDiff", taskId] as const,
 };
 
 export function useCompanies() {
@@ -175,7 +180,7 @@ export function useUpdateCompanySettings(companyId: string) {
 export function useCreateMission(companyId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { title: string; description: string; priority: string }) =>
+    mutationFn: (body: { title: string; description: string; priority: string; deliverable_type?: string }) =>
       api.createMission(companyId, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.missions(companyId) }),
   });
@@ -183,6 +188,36 @@ export function useCreateMission(companyId: string) {
 
 export function useStarters(companyId: string) {
   return useQuery({ queryKey: keys.starters(companyId), queryFn: () => api.listStarters(companyId) });
+}
+
+export function useWorkspaceTree(companyId: string, ref = "main") {
+  return useQuery({
+    queryKey: keys.workspaceTree(companyId, ref),
+    queryFn: () => api.getWorkspaceTree(companyId, ref),
+  });
+}
+
+export function useWorkspaceFile(companyId: string, path: string | null, ref = "main") {
+  return useQuery({
+    queryKey: keys.workspaceFile(companyId, path ?? "", ref),
+    queryFn: () => api.getWorkspaceFile(companyId, path as string, ref),
+    enabled: Boolean(path),
+  });
+}
+
+export function useWorkspaceMerges(companyId: string) {
+  return useQuery({
+    queryKey: keys.workspaceMerges(companyId),
+    queryFn: () => api.getWorkspaceMerges(companyId),
+  });
+}
+
+export function useMissionDiff(taskId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.missionDiff(taskId),
+    queryFn: () => api.getMissionDiff(taskId),
+    enabled,
+  });
 }
 
 export function useAssignMission(companyId: string) {

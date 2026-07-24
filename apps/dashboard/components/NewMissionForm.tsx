@@ -8,15 +8,17 @@ export function NewMissionForm({ companyId }: { companyId: string }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("normal");
+  const [deliverableType, setDeliverableType] = useState<"code" | "document">("code");
   const create = useCreateMission(companyId);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
-    await create.mutateAsync({ title: title.trim(), description, priority });
+    await create.mutateAsync({ title: title.trim(), description, priority, deliverable_type: deliverableType });
     setTitle("");
     setDescription("");
     setPriority("normal");
+    setDeliverableType("code");
     setOpen(false);
   }
 
@@ -59,6 +61,26 @@ export function NewMissionForm({ companyId }: { companyId: string }) {
         rows={2}
         className="mt-3 w-full resize-none rounded-lg border border-base-border bg-base-raised px-3 py-2 text-sm text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
       />
+      <div className="mt-3 flex gap-1 rounded-lg border border-base-border bg-base-raised p-1 text-xs font-medium">
+        <button
+          type="button"
+          onClick={() => setDeliverableType("code")}
+          className={`flex-1 rounded-md px-2 py-1.5 transition-colors ${
+            deliverableType === "code" ? "bg-accent text-white" : "text-text-muted hover:text-text"
+          }`}
+        >
+          Code (Workspace)
+        </button>
+        <button
+          type="button"
+          onClick={() => setDeliverableType("document")}
+          className={`flex-1 rounded-md px-2 py-1.5 transition-colors ${
+            deliverableType === "document" ? "bg-accent text-white" : "text-text-muted hover:text-text"
+          }`}
+        >
+          Document
+        </button>
+      </div>
       <div className="mt-3 flex gap-2">
         <button
           type="submit"

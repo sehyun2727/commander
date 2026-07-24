@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChangeSummaryCard } from "@/components/ChangeSummaryCard";
 import { ChatThread } from "@/components/ChatThread";
 import { DecisionCard } from "@/components/DecisionCard";
 import { StatusWord, taskStatusWord } from "@/components/StatusWord";
@@ -73,9 +74,18 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
       {mission.result_markdown && (
         <section className="mb-6">
           <h2 className="mb-2 text-sm font-semibold text-text">Latest Deliverable</h2>
-          <div className="rounded-xl border border-base-border bg-base-card p-4 shadow-panel">
-            <pre className="whitespace-pre-wrap font-sans text-sm text-text-muted">{mission.result_markdown}</pre>
-          </div>
+          {mission.deliverable_type === "code" && mission.code_stats ? (
+            <ChangeSummaryCard
+              taskId={taskId}
+              summary={mission.result_markdown}
+              stats={mission.code_stats}
+              verdict={pendingApproval?.status}
+            />
+          ) : (
+            <div className="rounded-xl border border-base-border bg-base-card p-4 shadow-panel">
+              <pre className="whitespace-pre-wrap font-sans text-sm text-text-muted">{mission.result_markdown}</pre>
+            </div>
+          )}
         </section>
       )}
 

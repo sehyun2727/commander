@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useDecideApproval } from "@/lib/hooks";
-import type { Approval } from "@/lib/types";
+import type { Approval, CodeStats } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
 
 const DECISION_LABEL: Record<string, string> = {
@@ -46,6 +46,7 @@ export function DecisionCard({
   reviewerColor = DEFAULT_REVIEWER_COLOR,
   linkToMission = true,
   outcome,
+  codeStats,
 }: {
   approval: Approval;
   companyId: string;
@@ -53,6 +54,7 @@ export function DecisionCard({
   reviewerColor?: string;
   linkToMission?: boolean;
   outcome?: string;
+  codeStats?: CodeStats | null;
 }) {
   const [comment, setComment] = useState("");
   const decide = useDecideApproval(companyId, approval.task_id);
@@ -88,6 +90,13 @@ export function DecisionCard({
             </Link>
           ) : (
             <p className="text-sm font-medium text-text">{missionTitle}</p>
+          )}
+          {codeStats && (
+            <p className="mt-0.5 text-xs text-text-faint">
+              {codeStats.files_added + codeStats.files_modified + codeStats.files_deleted} files{" "}
+              <span className="text-status-green">+{codeStats.additions}</span>{" "}
+              <span className="text-status-red">−{codeStats.deletions}</span>
+            </p>
           )}
         </div>
         {!isPending && (

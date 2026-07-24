@@ -2,6 +2,7 @@ import type {
   AgentProfile,
   Approval,
   DecisionStyle,
+  DiffResponse,
   Event,
   ModelCatalogEntry,
   Personality,
@@ -14,6 +15,9 @@ import type {
   TaskCostSummary,
   TimelinePage,
   WorkingStyle,
+  WorkspaceFileContent,
+  WorkspaceFileEntry,
+  WorkspaceMergeRecord,
 } from "./types";
 import type { Agent } from "./types";
 
@@ -117,4 +121,15 @@ export const api = {
 
   // Situation Report
   getSituation: (companyId: string) => request<Situation>(`/api/projects/${companyId}/situation`),
+
+  // Workspace
+  getWorkspaceTree: (companyId: string, ref = "main") =>
+    request<WorkspaceFileEntry[]>(`/api/projects/${companyId}/workspace/tree?ref=${encodeURIComponent(ref)}`),
+  getWorkspaceFile: (companyId: string, path: string, ref = "main") =>
+    request<WorkspaceFileContent>(
+      `/api/projects/${companyId}/workspace/file?path=${encodeURIComponent(path)}&ref=${encodeURIComponent(ref)}`
+    ),
+  getWorkspaceMerges: (companyId: string, limit = 10) =>
+    request<WorkspaceMergeRecord[]>(`/api/projects/${companyId}/workspace/merges?limit=${limit}`),
+  getMissionDiff: (taskId: string) => request<DiffResponse>(`/api/tasks/${taskId}/diff`),
 };

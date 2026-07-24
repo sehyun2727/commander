@@ -80,6 +80,7 @@ export default function DecisionsPage({ params }: { params: { id: string } }) {
                 (approval.reviewer_agent_id && employeeById.get(approval.reviewer_agent_id)?.avatar_color) || undefined
               }
               outcome={tab === "history" ? outcomeForTask(missionById.get(approval.task_id)?.state) : undefined}
+              codeStats={missionById.get(approval.task_id)?.code_stats}
             />
           ))}
         </div>
