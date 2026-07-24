@@ -1,7 +1,7 @@
 # Commander Architecture
 
-Version: v2.2 (As-Built)
-Status: Synced with Sprint 4.5 ("Employee Profiles") implementation — 2026-07
+Version: v2.3 (As-Built)
+Status: Synced with Sprint 4.7 ("Headquarters UX") implementation — 2026-07
 Supersedes: v1.0 Draft (pre-implementation vision)
 
 ---
@@ -80,19 +80,21 @@ Event envelope: `id, project_id, kind, type, actor {role, id, name}, payload, re
 | Module | Responsibility | Status |
 |---|---|---|
 | `event_bus` | Persist → fan out → SSE push. Dependency floor: depends only on core. | ✅ In-process |
-| `projects` | Company CRUD. Founding a company auto-creates a Department with 3 Employees (PM / Engineer / Reviewer), each founded with default `AgentProfile` field values. | ✅ |
+| `projects` | Company CRUD. Founding a company auto-creates a Department with 3 Employees (PM / Engineer / Reviewer), each founded with default `AgentProfile` field values, and posts each Employee's template `intro` line as a task-less conversation event. `GET /projects/{id}/starters` serves the template's one-click starter Mission suggestions. | ✅ |
 | `tasks` | Mission CRUD, assignment, Meeting messages. Assignment triggers the workflow. | ✅ |
 | `workflow_engine` | The brain. PM → Engineer → Reviewer pipeline as background asyncio tasks; publishes every beat; creates CEO Decisions. System prompts built per call via `prompt_builder.build(profile, role)`. | ✅ Single fixed pipeline |
 | `agent_runtime` | Employee state + validated transitions (state machine in `core/lifecycle`). Founds Employees with role-keyed default `AgentProfile`s. | ✅ DB-backed |
+| `templates` | Not an event-driven module — a static internal data file (`app/templates/software_company.py`, §10.6). Single source of the founding trio, pipeline role order, each role's immutable prompt contract, founding profile defaults, and onboarding data (intro lines, starter Missions). `agent_runtime`, `workflow_engine`, and `prompt_builder` all read from it; no component branches on a hardcoded role name. One template, no picker (§10.4). | ✅ |
 | `agent_profiles` | CEO-editable Employee configuration: `AgentProfile` (personality / working style / decision style / custom instructions / per-Employee model override), persisted as JSON on `AgentORM.profile`. `GET`/`PUT /api/agents/{agent_id}/profile`; `PUT` emits `agent.profile_updated` (changed fields only) via EventBus. | ✅ |
 | `prompt_builder` | Pure function: `AgentProfile` + role → system prompt. Layers personality/working/decision trait text, then optional custom instructions, then the immutable per-role contract appended LAST — no profile configuration (including adversarial custom instructions) can suppress the Reviewer's trailing `**Verdict:**` requirement. No DB/provider deps. | ✅ |
 | `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (httpx, streaming, retry-with-backoff). Verdicts parsed from a trailing `**Verdict:**` line — provider-agnostic. Resolves models via three-tier precedence: Employee `profile.model_ref` override > CEO per-role override > registry default. | ✅ |
 | `model_registry` | Logical refs (`planner-default`, `builder-default`, `reviewer-default`, `reporter-default`) → (provider, model). `COMMANDER_PROVIDER=mock\|anthropic`. CEO can reassign the model behind planner/builder/reviewer per company (override stored in `settings_kv`, Anthropic only — mock roles are template-locked). | ✅ |
 | `costs` | Per-call token usage → USD via `PRICE_PER_MILLION_TOKENS`. Payroll (calendar-month, per company + per Employee) and Mission Budget (all-time, per mission) summaries. | ✅ |
 | `approvals` | CEO Decisions: approve → completed · request_changes → Engineer re-run (attempt+1) · reject → cancelled. | ✅ |
-| `timeline` | Cursor-paginated event reads + kind filter. | ✅ |
+| `timeline` | Cursor-paginated event reads + kind filter, newest-first (`cursor=None` returns the most recent page; passing back the returned `next_cursor` walks further into the past). | ✅ |
 | `realtime` | SSE stream per company; live streaming deltas for in-flight replies. | ✅ |
-| `reports` | On-demand CEO Daily Report: trailing-24h summary (missions, decisions, payroll, highlights) from the Timeline's own event history, written via `ProviderGateway`. | ✅ |
+| `reports` | On-demand CEO Daily Report: trailing-24h summary (missions, decisions, payroll, highlights) from the Timeline's own event history, written via `ProviderGateway`. Now its own page/list (`/reports`), not a Headquarters card. | ✅ |
+| `situation` | `GET /projects/{id}/situation` — 1-2 sentence PM-voiced glanceable status (pending decisions, missions in flight, last notable event), generated via `ProviderGateway` with a deterministic mock fallback. Ephemeral/uncached, regenerated on read; distinct from the Daily Report. | ✅ |
 | `core/secrets` | `SecretsProvider` port. `DBSecretsProvider`: `settings_kv` override → `.env` fallback, so keys can be pasted in Company Settings at runtime. Write-only through the API. | ✅ Plaintext (local MVP) |
 | `auth` | Single hardcoded local CEO. | 🔲 Placeholder |
 | `workspace_manager` | Git repo / branch / diff / human-readable summaries. Interface defined only. | 🔲 Interface only |
@@ -118,12 +120,16 @@ No circular deps. Modules communicate only via EventBus. Agents never call each 
 
 Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark Render.com-style theme, Commander terminology throughout.
 
-- **Headquarters** `/company/[id]` — pending CEO Decisions (hero), company vitals (incl. Payroll this month), Daily Report card (latest summary + generate button), live Timeline
-- **Missions** — kanban (Backlog / In Progress / Waiting CEO Decision / Done) + create modal
-- **Mission detail / Meeting** — conversation-kind transcript with live streaming replies, CEO can message, Mission Budget spent
+- **My Companies** `/` — founding invitation (name + optional "what should it build") that skips straight to a live Mission when filled in; `CompanyCard` per company (status word, "n/m Missions" milestone bar, live employee avatar stack, latest activity line, decision badge)
+- **Headquarters** `/company/[id]` — top to bottom: Decision strip hero (pending `DecisionCard`s, quiet "Nothing needs your decision." when empty) → Situation Report block (PM attribution + timestamp) → four Vitals linked to their source pages (Missions active, Employees working now, Risks open — proxied via FAILED-mission count, Payroll this month) → condensed live Timeline with an "Open full Timeline" link
+- **Missions** — kanban (Backlog / Developing / Needs your decision / Done); empty state offers a one-click starter Mission (from the template's `starters`, via `GET /projects/{id}/starters`) + create modal
+- **Mission detail / Meeting** — conversation-kind transcript with live streaming replies, CEO can message, Mission Budget spent, reuses `DecisionCard` for its pending Approval
 - **Employees** — live state cards
+- **Decisions** `/company/[id]/decisions` — Pending / History tabs; `DecisionCard`'s full anatomy (Problem / Recommendation with reviewer attribution / Risk / Impact + Approve · Request changes · Reject), History adds the CEO's decision + outcome
+- **Timeline** `/company/[id]/timeline` — full-page live feed (cursor-paginated "load earlier"), filter tabs (All / Meetings / Decisions / System), CEO view ↔ Technical view toggle (hidden mechanism-event set defined as data in `lib/timelineVocabulary.ts`), 4+ consecutive minor system events collapse into an expandable digest row
+- **Reports** `/company/[id]/reports` — list + Generate Report button; **Report detail** `/company/[id]/reports/[reportId]` — full report + past-report history
 - **Company Settings** — provider select, write-only API key field, per-role model reassignment
-- **Report detail** `/company/[id]/reports/[reportId]` — full report + past-report history
+- **Status vocabulary** — one external-facing status word table (`components/StatusWord.tsx`) shared by every card/badge/kanban column/filter; `companyStatusWord()` reduces a company's Missions to a single priority-ranked token for `CompanyCard`
 - Realtime: one SSE connection per company (`RealtimeProvider`), events dedup by id, query invalidation per event, transient streaming-delta bubble for in-flight replies
 
 ---

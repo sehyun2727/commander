@@ -1,6 +1,6 @@
 # CLAUDE.md — Commander
 
-Commander is an operating system where a solo developer becomes the **CEO of an AI software company**. AI agents work as Employees; the CEO instructs, observes, and decides. Sprint 3 shipped a working vertical slice: FastAPI backend + event bus + mock/Anthropic providers + SSE realtime + Next.js dashboard. Sprint 4 ("Real Intelligence") hardened the provider path (streaming, retries, real token usage) and added CEO-facing levers on top of it: Payroll, per-role model reassignment, and the Daily Report. Sprint 4.5 ("Employee Profiles") let the CEO customize each Employee's personality/working style/decision style and give per-Employee custom instructions and a model override, all flowing into the actual system prompt via `prompt_builder`.
+Commander is an operating system where a solo developer becomes the **CEO of an AI software company**. AI agents work as Employees; the CEO instructs, observes, and decides. Sprint 3 shipped a working vertical slice: FastAPI backend + event bus + mock/Anthropic providers + SSE realtime + Next.js dashboard. Sprint 4 ("Real Intelligence") hardened the provider path (streaming, retries, real token usage) and added CEO-facing levers on top of it: Payroll, per-role model reassignment, and the Daily Report. Sprint 4.5 ("Employee Profiles") let the CEO customize each Employee's personality/working style/decision style and give per-Employee custom instructions and a model override, all flowing into the actual system prompt via `prompt_builder`. Sprint 4.7 ("Headquarters UX") applied `docs/design/UX_SPEC.md`'s core: unified status vocabulary, the Decisions and Timeline pages, a reworked decision-first Headquarters, upgraded My Companies cards, onboarding (Employee intros + starter Missions), and an internal-only `software_company` template (§10.6) that the founding trio, workflow order, and role contracts now read from instead of holding their own hardcoded copies.
 
 ## Product Terminology (MANDATORY in all UI text)
 
@@ -39,9 +39,12 @@ Code/DB/API use internal terms. UI labels, page titles, toasts, empty states use
 ```
 apps/api/          FastAPI backend (Python 3.11+, async SQLAlchemy, SQLite)
   app/core/        events (schemas), interfaces (ports), lifecycle (state machines), db, secrets, config
+  app/templates/   software_company.py — internal-only template: founding trio, pipeline order, role
+                   contracts, default profiles, onboarding intros/starters. Single source, no picker.
   app/modules/     projects, tasks, approvals, timeline, agent_runtime, agent_profiles, prompt_builder,
-                   workflow_engine, event_bus, provider_gateway, model_registry, costs, reports, realtime (SSE)
-  tests/           pytest suite (56 tests)
+                   workflow_engine, event_bus, provider_gateway, model_registry, costs, reports,
+                   situation, realtime (SSE)
+  tests/           pytest suite (75 tests)
 apps/dashboard/    Next.js App Router + TS + Tailwind + TanStack Query (dark Render-style theme)
 packages/event-schemas/ts/   generated TS event types — DO NOT hand-edit; regenerate
 scripts/           generate_ts_schemas.py, seed.py
@@ -70,9 +73,9 @@ python scripts/generate_ts_schemas.py   # after ANY event schema change
 - Commit style: `feat(scope): ...` / `fix(scope): ...` / `docs: ...` / `chore: ...`. Commit per meaningful unit.
 - Every non-obvious judgment call gets one entry in `docs/DECISIONS.md`.
 
-## Current Status (post-Sprint 4.5)
+## Current Status (post-Sprint 4.7)
 
-Working: company CRUD + auto-founded 3 Employees (PM/Engineer/Reviewer), Mission kanban, PM→Engineer→Reviewer pipeline with streaming replies and retry-with-backoff, CEO Decisions (approve / request changes / reject), unified Timeline + SSE live feed, Meeting chat, Company Settings with runtime API-key entry and per-role model reassignment, Payroll (real token usage → USD, company + per-Employee + per-Mission), on-demand CEO Daily Report (trailing-24h executive summary), seed/demo mode, Employee Profiles (CEO-editable personality/working-style/decision-style + up to 500-char custom instructions + per-Employee model override; three-tier model resolution is agent override > CEO per-role override > registry default; the Reviewer's role contract is appended last by `prompt_builder` and survives any custom instruction).
+Working: company CRUD + auto-founded 3 Employees (PM/Engineer/Reviewer) reading from the internal `software_company` template, Mission kanban, PM→Engineer→Reviewer pipeline with streaming replies and retry-with-backoff, CEO Decisions page (Pending/History tabs, full DecisionCard anatomy: Problem/Recommendation/Risk/Impact + reviewer attribution), unified Timeline page (CEO/Technical toggle, filters, digest grouping, cursor pagination) + SSE live feed, Meeting chat, Company Settings with runtime API-key entry and per-role model reassignment, Payroll (real token usage → USD, company + per-Employee + per-Mission), on-demand CEO Daily Report (trailing-24h executive summary, now its own `/reports` page), on-demand Situation Report (`GET /projects/{id}/situation`, PM-voiced glanceable status), a reworked decision-first Headquarters (decision strip hero → situation report → linked Vitals → condensed Timeline), a unified status-vocabulary token shared by every card/badge/column, onboarding (founding purpose field → live Mission, per-Employee intro events in the Timeline, one-click starter Missions), seed/demo mode, Employee Profiles (CEO-editable personality/working-style/decision-style + up to 500-char custom instructions + per-Employee model override; three-tier model resolution is agent override > CEO per-role override > registry default; the Reviewer's role contract is appended last by `prompt_builder` and survives any custom instruction).
 
 Not built yet (do NOT add without an explicit sprint brief): auth, execution sandbox, real code execution, Workspace Manager (git), cloud runner, deployment/Launch, multi-provider beyond Anthropic+mock.
 

@@ -827,3 +827,16 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     existing action affordances, so wrapping them in the `EmptyState`
     component would be a pure refactor with no behavior change — skipped
     per the standing "don't refactor beyond what the task requires" rule.
+86. **New Phase 6 backend behavior (founding intro events, `GET
+    /starters`) gets one new test file, `tests/test_onboarding.py`,
+    reusing the existing `Harness` service-layer pattern rather than
+    introducing HTTP test infrastructure.** No test in the suite uses
+    `TestClient`/`AsyncClient`; every existing test drives service
+    functions directly against the harness fixture. Adding a second
+    testing style for two tests wasn't worth the inconsistency. Full
+    suite is 75/75 after the addition (was 73 before Sprint 4.7 Phase
+    6); Phase 1-5 coverage (template founding parity, section parsing,
+    situation endpoint, status mapping, model_ref validation) was
+    already satisfied by `test_template.py`, `test_decision_parsing.py`,
+    `test_situation.py`, `test_status_vocabulary.py`, and
+    `test_agent_profiles.py` — no additional files needed for those.

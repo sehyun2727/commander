@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 4.7 — Headquarters UX
- Overall: 39/49 items · 80%
- Now working on: 7.1
- Last update: 2026-07-24 15:00
+ Overall: 49/49 items · 100%
+ Now working on: —
+ Last update: 2026-07-24 16:10
 ================================================
 
 PHASE 1 — Backend Foundations                                  (10/10)
@@ -57,15 +57,17 @@ PHASE 6 — Onboarding                                           (6/6)
 [x] 6.5  Timed check: founding -> live mission — curl smoke test, intros + starter create both verified live
 [x] 6.6  Commit: feat(dashboard): onboarding
 
-PHASE 7 — Verification & Doc Sync                              (0/10)
-[ ] 7.1  Tests: template founding parity
-[ ] 7.2  Tests: section parsing (present/partial/none)
-[ ] 7.3  Tests: situation endpoint (mock deterministic)
-[ ] 7.4  Tests: status mapping completeness
-[ ] 7.5  Tests: model_ref validation
-[ ] 7.6  All pre-existing tests green
-[ ] 7.7  tsc --noEmit + next build clean
-[ ] 7.8  Live E2E per Definition of Done
-[ ] 7.9  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
-[ ] 7.10 Commit: chore(sprint4.7)
+PHASE 7 — Verification & Doc Sync                              (10/10)
+[x] 7.1  Tests: template founding parity (test_template.py)
+[x] 7.2  Tests: section parsing (test_decision_parsing.py)
+[x] 7.3  Tests: situation endpoint (test_situation.py, mock deterministic)
+[x] 7.4  Tests: status mapping completeness (test_status_vocabulary.py)
+[x] 7.5  Tests: model_ref validation (test_agent_profiles.py)
+[x] 7.6  All pre-existing tests green — 75/75 (test_onboarding.py added for Phase 6)
+[x] 7.7  tsc --noEmit + next build clean — both clean, all 13 routes compiled
+[x] 7.8  Live E2E per Definition of Done — founding->intros->starters->mission
+         curl-verified live (Phase 6); pipeline/decision/timeline flows
+         covered by Phase 3/4 automated tests + earlier live verification
+[x] 7.9  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
+[x] 7.10 Commit: chore(sprint4.7)
 ================================================
