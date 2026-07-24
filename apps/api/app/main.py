@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.db import async_session_factory, init_db
 from .core.secrets import DBSecretsProvider
+from .modules.agent_profiles import router as agent_profiles_router
 from .modules.agent_runtime import DBAgentRuntime
 from .modules.agent_runtime import router as agents_router
 from .modules.approvals import router as approvals_router
@@ -62,6 +63,7 @@ app.include_router(tasks_router)
 app.include_router(approvals_router)
 app.include_router(timeline_router)
 app.include_router(agents_router)
+app.include_router(agent_profiles_router)
 app.include_router(realtime_router)
 app.include_router(costs_router)
 app.include_router(models_router)
