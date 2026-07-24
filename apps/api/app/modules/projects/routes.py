@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ...core.config import settings
 from ...deps import get_agent_runtime, get_event_bus, get_secrets, get_session_factory
+from ...templates import TEMPLATE
 from . import service
-from .schemas import CompanySettingsRequest, ProjectCreateRequest, ProjectResponse
+from .schemas import CompanySettingsRequest, ProjectCreateRequest, ProjectResponse, StarterResponse
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -46,6 +47,13 @@ async def archive_project(
     if project is None:
         raise HTTPException(status_code=404, detail="Company not found")
     return project
+
+
+@router.get("/{project_id}/starters", response_model=list[StarterResponse])
+async def list_starters(project_id: str):
+    # Static, template-owned onboarding suggestions (§6) -- no per-project
+    # state, so no DB lookup; only one template exists (§10.4).
+    return TEMPLATE.starters
 
 
 @router.patch("/{project_id}/settings", response_model=ProjectResponse)

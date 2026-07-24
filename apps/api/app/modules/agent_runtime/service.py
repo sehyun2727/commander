@@ -64,6 +64,21 @@ class DBAgentRuntime(AgentRuntime):
                     reason=f"Company Department bootstrap hired a {row.role}",
                 )
             )
+
+        # Each Employee introduces themself in the Timeline right after
+        # founding (§6 onboarding) -- the template's own `intro` line,
+        # posted as a task-less conversation event (task_id=None) so it
+        # shows up in the company Timeline but never in a Mission Meeting.
+        for row in rows:
+            await self._event_bus.publish(
+                build_event(
+                    type=EventType.CONVERSATION_MESSAGE,
+                    project_id=project_id,
+                    actor=Actor(role="employee", id=row.id, name=row.name),
+                    payload={"text": TEMPLATE.roles_by_key[row.role].intro, "agent_id": row.id, "task_id": None},
+                    reason="Introduced themself at founding",
+                )
+            )
         return agent_ids
 
     async def transition(self, agent_id: str, target: AgentState, reason: str) -> None:

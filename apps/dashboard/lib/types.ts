@@ -106,3 +106,8 @@ export interface Situation {
   text: string;
   generated_at: string;
 }
+
+export interface Starter {
+  title: string;
+  description: string;
+}

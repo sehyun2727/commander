@@ -22,6 +22,7 @@ export const keys = {
   reports: (companyId: string) => ["reports", companyId] as const,
   report: (reportId: string) => ["report", reportId] as const,
   situation: (companyId: string) => ["situation", companyId] as const,
+  starters: (companyId: string) => ["starters", companyId] as const,
 };
 
 export function useCompanies() {
@@ -178,6 +179,10 @@ export function useCreateMission(companyId: string) {
       api.createMission(companyId, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.missions(companyId) }),
   });
+}
+
+export function useStarters(companyId: string) {
+  return useQuery({ queryKey: keys.starters(companyId), queryFn: () => api.listStarters(companyId) });
 }
 
 export function useAssignMission(companyId: string) {

@@ -24,3 +24,8 @@ class ProjectResponse(BaseModel):
     provider: str
     archived: bool
     created_at: datetime
+
+
+class StarterResponse(BaseModel):
+    title: str
+    description: str

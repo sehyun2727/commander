@@ -775,3 +775,55 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     than embedding report generation/preview inline, keeping the
     Headquarters page focused on the CEO's Decision strip, Situation
     Report, Vitals, and condensed Timeline per UX_SPEC §3.2.
+81. **Employee intro lines are posted as task-less conversation events**
+    (`ConversationMessagePayload.task_id=None`) **right after `AGENT_CREATED`
+    in `DBAgentRuntime.create_department`, not through the Meeting/message
+    API.** The payload contract already allowed `task_id: str | None`, so
+    no schema change was needed. Task-less means intros show up in the
+    company Timeline (where onboarding needs them, §6) but never leak
+    into a specific Mission's Meeting transcript, which is exactly the
+    boundary the brief draws ("introduce themselves in the Timeline").
+    Intros are emitted in template role order (PM, Engineer, Reviewer),
+    which is also pipeline order — reads narratively correct once the
+    Timeline's newest-first ordering (decision 71) puts them in a
+    contiguous block right after founding.
+82. **Starter Missions are served from a new `GET
+    /api/projects/{id}/starters` endpoint that returns `TEMPLATE.starters`
+    directly, with no DB lookup or project-existence check.** The data is
+    static and template-owned (§10.4: one template, no picker), so there
+    is nothing project-specific to look up — treating it as a per-project
+    REST resource (`/projects/{id}/starters`) rather than a global
+    `/starters` endpoint was still the right call for consistency with
+    every other project-scoped route and to leave room for a future
+    template-per-project model without a URL change.
+83. **The Missions page's empty state creates the first starter
+    (`starters[0]`) directly via `useCreateMission`, not a picker over
+    all `TEMPLATE.starters`.** The brief calls for "one starter Mission
+    suggestion," singular — `STARTERS` keeps a second entry only so a
+    future template swap has more than one to choose from (see the
+    template file's own comment), not because today's UI should surface
+    a choice.
+84. **The My Companies founding form's optional "what it should build"
+    field (§3.1) immediately creates a Mission from that text via a
+    direct `api.createMission` call, not `useCreateMission`.** It fires
+    once, imperatively, inside the same submit handler that creates the
+    company and before the CEO ever lands on a page that has that hook
+    mounted — using the mutation hook here would mean calling a hook
+    conditionally, which breaks the Rules of Hooks. The page the CEO
+    lands on (`/company/[id]`) fetches its own fresh Mission list on
+    mount, so no manual cache write-back is needed. If left blank, the
+    CEO instead sees the Missions page's starter-suggestion empty state
+    (decision 83) — both paths reach a live Mission, just via different
+    numbers of clicks.
+85. **No EmptyState-component pass on Employees, Decisions, Reports, or
+    the Meeting transcript.** Employees is founded with the trio and can
+    never actually be empty in this template, so an empty state there is
+    dead code. Decisions' empty state is intentionally a quiet
+    non-actionable line ("Nothing needs your decision.") per the brief's
+    own wording — turning it into an "invitation to act" would misrepresent
+    a state where there is nothing for the CEO to do. Reports and the
+    Meeting transcript already carry inline invitational copy ("Generate
+    one to get started.", "Say hello to the Department.") next to their
+    existing action affordances, so wrapping them in the `EmptyState`
+    component would be a pure refactor with no behavior change — skipped
+    per the standing "don't refactor beyond what the task requires" rule.

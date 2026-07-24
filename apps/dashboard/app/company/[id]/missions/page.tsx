@@ -1,9 +1,10 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import { MissionCard } from "@/components/MissionCard";
 import { NewMissionForm } from "@/components/NewMissionForm";
 import { taskStatusWord } from "@/components/StatusWord";
-import { useMissions } from "@/lib/hooks";
+import { useCreateMission, useMissions, useStarters } from "@/lib/hooks";
 import { StatusWord as StatusWordToken } from "@/lib/types";
 import type { Task } from "@/lib/types";
 
@@ -23,6 +24,9 @@ const COLUMNS: { key: string; label: string; tokens: StatusWordToken[] }[] = [
 export default function MissionsPage({ params }: { params: { id: string } }) {
   const companyId = params.id;
   const { data: missions, isLoading } = useMissions(companyId);
+  const { data: starters } = useStarters(companyId);
+  const createMission = useCreateMission(companyId);
+  const starter = starters?.[0];
 
   const grouped = (missions ?? []).reduce<Record<string, Task[]>>((acc, task) => {
     const token = taskStatusWord(task.state);
@@ -44,6 +48,28 @@ export default function MissionsPage({ params }: { params: { id: string } }) {
 
       {isLoading ? (
         <p className="text-sm text-text-muted">Loading missions…</p>
+      ) : missions?.length === 0 ? (
+        <EmptyState
+          title="No Missions yet"
+          description={
+            starter
+              ? `Not sure where to start? Try: "${starter.title}" — ${starter.description}`
+              : "Give the Department its first brief above."
+          }
+          action={
+            starter && (
+              <button
+                onClick={() =>
+                  createMission.mutate({ title: starter.title, description: starter.description, priority: "normal" })
+                }
+                disabled={createMission.isPending}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+              >
+                {createMission.isPending ? "Creating…" : `Create: ${starter.title}`}
+              </button>
+            )
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           {COLUMNS.map((column) => (

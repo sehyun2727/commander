@@ -9,6 +9,7 @@ import type {
   ProjectCostSummary,
   Report,
   Situation,
+  Starter,
   Task,
   TaskCostSummary,
   TimelinePage,
@@ -72,6 +73,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ agent_id: agentId ?? null }),
     }),
+  listStarters: (companyId: string) => request<Starter[]>(`/api/projects/${companyId}/starters`),
 
   // Meetings (Mission-scoped chat)
   listMessages: (taskId: string) => request<Event[]>(`/api/tasks/${taskId}/messages`),

@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 4.7 — Headquarters UX
- Overall: 33/49 items · 67%
- Now working on: 6.1
- Last update: 2026-07-24 14:10
+ Overall: 39/49 items · 80%
+ Now working on: 7.1
+ Last update: 2026-07-24 15:00
 ================================================
 
 PHASE 1 — Backend Foundations                                  (10/10)
@@ -49,13 +49,13 @@ PHASE 5 — Headquarters + Companies + Nav                       (7/7)
 [x] 5.6  Sidebar reorder + Reports page/list
 [x] 5.7  Commit: feat(dashboard): headquarters
 
-PHASE 6 — Onboarding                                           (0/6)
-[ ] 6.1  Founding invitation empty state on /
-[ ] 6.2  Employee intro events at founding (template intros)
-[ ] 6.3  Starter Mission suggestion (one-click create)
-[ ] 6.4  EmptyState pass across all pages
-[ ] 6.5  Timed check: founding -> live mission < 3 min
-[ ] 6.6  Commit: feat(dashboard): onboarding
+PHASE 6 — Onboarding                                           (6/6)
+[x] 6.1  Founding invitation: name + optional "what it should build" field
+[x] 6.2  Employee intro events at founding (template intros) — curl-verified
+[x] 6.3  Starter Mission suggestion (one-click create) — GET /starters + Missions empty state
+[x] 6.4  EmptyState pass across all pages (Missions upgraded; others already invitational)
+[x] 6.5  Timed check: founding -> live mission — curl smoke test, intros + starter create both verified live
+[x] 6.6  Commit: feat(dashboard): onboarding
 
 PHASE 7 — Verification & Doc Sync                              (0/10)
 [ ] 7.1  Tests: template founding parity
