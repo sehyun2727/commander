@@ -1,4 +1,4 @@
-.PHONY: install dev seed test
+.PHONY: install dev seed test sandbox-image
 
 API_DIR := apps/api
 API_VENV := $(CURDIR)/$(API_DIR)/.venv
@@ -27,3 +27,6 @@ test:
 	cd $(API_DIR) && $(API_PY) -m pytest
 	pnpm --filter @commander/dashboard typecheck
 	pnpm --filter @commander/dashboard build
+
+sandbox-image:
+	docker build -t commander-sandbox -f sandbox/Dockerfile sandbox
