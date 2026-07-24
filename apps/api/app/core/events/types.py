@@ -28,6 +28,7 @@ class EventType(str, Enum):
     AGENT_STARTED = "agent.started"
     AGENT_STOPPED = "agent.stopped"
     AGENT_STATE_CHANGED = "agent.state_changed"
+    AGENT_PROFILE_UPDATED = "agent.profile_updated"
     CODING_STARTED = "agent.coding_started"
 
     # Workspace (Workspace/Repository)

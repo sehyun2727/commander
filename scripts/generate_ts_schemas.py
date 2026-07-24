@@ -24,6 +24,7 @@ sys.path.insert(0, str(REPO_ROOT / "apps" / "api"))
 
 from pydantic import BaseModel  # noqa: E402
 
+from app.core.contracts import AgentProfile, DecisionStyle, Personality, WorkingStyle  # noqa: E402
 from app.core.events.base import Actor, Event  # noqa: E402
 from app.core.events.contracts import PAYLOAD_MODELS  # noqa: E402
 from app.core.events.types import EventType  # noqa: E402
@@ -33,8 +34,8 @@ from app.core.lifecycle.task_states import TaskState  # noqa: E402
 OUT_DIR = REPO_ROOT / "packages" / "event-schemas" / "ts"
 
 # Models to emit, in dependency order (referenced-before-referencing).
-ENUMS: list[type[enum.Enum]] = [EventType, AgentState, TaskState]
-MODELS: list[type[BaseModel]] = [Actor, *PAYLOAD_MODELS.values(), Event]
+ENUMS: list[type[enum.Enum]] = [EventType, AgentState, TaskState, Personality, WorkingStyle, DecisionStyle]
+MODELS: list[type[BaseModel]] = [Actor, AgentProfile, *PAYLOAD_MODELS.values(), Event]
 
 
 def ts_type(annotation: typing.Any) -> str:

@@ -8,6 +8,7 @@ AgentStateChanged with the `reason` the caller gave.
 
 from __future__ import annotations
 
+from ...core.contracts import AgentProfile
 from ...core.db_models import AgentORM
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
@@ -18,37 +19,21 @@ from ...core.lifecycle.state_machine import transition
 SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
 
 DEPARTMENT_ROSTER = [
-    dict(
-        role="pm",
-        name="Priya Shah",
-        avatar_color="#8b5cf6",
-        persona=(
-            "You are the PM (planner) for this company. You turn a mission "
-            "brief into a short, numbered execution plan before anyone "
-            "writes anything. Be concrete: name concrete steps, not vibes."
-        ),
-    ),
-    dict(
-        role="engineer",
-        name="Devon Cole",
-        avatar_color="#3b82f6",
-        persona=(
-            "You are the Engineer (builder) for this company. You take the "
-            "PM's plan and produce a concrete deliverable — a markdown "
-            "write-up or pseudo-diff — that satisfies the mission brief."
-        ),
-    ),
-    dict(
-        role="reviewer",
-        name="Ari Kim",
-        avatar_color="#14b8a6",
-        persona=(
-            "You are the Reviewer (auditor) for this company. You audit the "
-            "Engineer's deliverable against the PM's plan and the mission "
-            "brief, and give a clear approve / changes-requested verdict."
-        ),
-    ),
+    dict(role="pm", name="Priya Shah", avatar_color="#8b5cf6"),
+    dict(role="engineer", name="Devon Cole", avatar_color="#3b82f6"),
+    dict(role="reviewer", name="Ari Kim", avatar_color="#14b8a6"),
 ]
+
+# Every Employee is founded with the same neutral trait defaults (the
+# AgentProfile field defaults themselves) — role-specific voice comes from
+# PromptBuilder's immutable role contract layer (modules/prompt_builder),
+# not from personality/working/decision style. Keyed by role so founding
+# (create_department) and any future re-seed of a role can look its
+# default up without re-deriving it.
+DEFAULT_PROFILES: dict[str, AgentProfile] = {
+    member["role"]: AgentProfile(name=member["name"], role=member["role"])
+    for member in DEPARTMENT_ROSTER
+}
 
 
 class DBAgentRuntime(AgentRuntime):
@@ -65,7 +50,7 @@ class DBAgentRuntime(AgentRuntime):
                     project_id=project_id,
                     role=member["role"],
                     name=member["name"],
-                    persona=member["persona"],
+                    profile=DEFAULT_PROFILES[member["role"]].model_dump(mode="json"),
                     avatar_color=member["avatar_color"],
                     state=AgentState.IDLE.value,
                 )

@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from ...core.contracts import AgentProfile
+
 
 class AgentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -12,7 +14,7 @@ class AgentResponse(BaseModel):
     project_id: str
     role: str
     name: str
-    persona: str
+    profile: AgentProfile
     avatar_color: str
     state: str
     current_task_id: str | None

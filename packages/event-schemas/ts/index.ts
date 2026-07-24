@@ -17,6 +17,7 @@ export enum EventType {
   AGENT_STARTED = "agent.started",
   AGENT_STOPPED = "agent.stopped",
   AGENT_STATE_CHANGED = "agent.state_changed",
+  AGENT_PROFILE_UPDATED = "agent.profile_updated",
   CODING_STARTED = "agent.coding_started",
   WORKSPACE_FILE_CHANGED = "workspace.file_changed",
   WORKSPACE_COMMITTED = "workspace.committed",
@@ -62,10 +63,39 @@ export enum TaskState {
   CANCELLED = "cancelled",
 }
 
+export enum Personality {
+  PROFESSIONAL = "professional",
+  FRIENDLY = "friendly",
+  DIRECT = "direct",
+  CONSERVATIVE = "conservative",
+}
+
+export enum WorkingStyle {
+  FAST = "fast",
+  BALANCED = "balanced",
+  DETAIL_ORIENTED = "detail_oriented",
+}
+
+export enum DecisionStyle {
+  RISK_AVOIDING = "risk_avoiding",
+  BALANCED = "balanced",
+  EXPERIMENTAL = "experimental",
+}
+
 export interface Actor {
   role: "ceo" | "employee" | "system";
   id: string;
   name: string;
+}
+
+export interface AgentProfile {
+  name: string;
+  role: string;
+  personality: Personality;
+  working_style: WorkingStyle;
+  decision_style: DecisionStyle;
+  custom_instructions: string;
+  model_ref?: string | null;
 }
 
 export interface ProjectCreatedPayload {
@@ -134,6 +164,11 @@ export interface AgentStateChangedPayload {
   agent_id: string;
   previous_state: AgentState;
   new_state: AgentState;
+}
+
+export interface AgentProfileUpdatedPayload {
+  agent_id: string;
+  changed_fields: string[];
 }
 
 export interface CodingStartedPayload {
@@ -258,6 +293,7 @@ export interface EventPayloadMap {
   "agent.started": AgentStartedPayload;
   "agent.stopped": AgentStoppedPayload;
   "agent.state_changed": AgentStateChangedPayload;
+  "agent.profile_updated": AgentProfileUpdatedPayload;
   "agent.coding_started": CodingStartedPayload;
   "workspace.file_changed": WorkspaceFileChangedPayload;
   "workspace.committed": WorkspaceCommittedPayload;

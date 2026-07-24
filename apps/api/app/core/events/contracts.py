@@ -100,6 +100,11 @@ class CodingStartedPayload(Payload):
     task_id: str
 
 
+class AgentProfileUpdatedPayload(Payload):
+    agent_id: str
+    changed_fields: list[str]
+
+
 # --- Workspace -----------------------------------------------------------------
 
 class WorkspaceFileChangedPayload(Payload):
@@ -219,6 +224,7 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.AGENT_STARTED: AgentStartedPayload,
     EventType.AGENT_STOPPED: AgentStoppedPayload,
     EventType.AGENT_STATE_CHANGED: AgentStateChangedPayload,
+    EventType.AGENT_PROFILE_UPDATED: AgentProfileUpdatedPayload,
     EventType.CODING_STARTED: CodingStartedPayload,
     EventType.WORKSPACE_FILE_CHANGED: WorkspaceFileChangedPayload,
     EventType.WORKSPACE_COMMITTED: WorkspaceCommittedPayload,
