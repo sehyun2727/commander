@@ -13,6 +13,7 @@ export function Sidebar({ companyId }: { companyId: string }) {
     { href: `/company/${companyId}/decisions`, label: "Decisions" },
     { href: `/company/${companyId}/missions`, label: "Missions" },
     { href: `/company/${companyId}/employees`, label: "Employees" },
+    { href: `/company/${companyId}/timeline`, label: "Timeline" },
     { href: `/company/${companyId}/settings`, label: "Company Settings" },
   ];
 

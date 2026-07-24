@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import type { ProfileUpdateRequest } from "./api";
 
@@ -15,6 +15,7 @@ export const keys = {
   approvalHistory: (companyId: string) => ["approvalHistory", companyId] as const,
   messages: (taskId: string) => ["messages", taskId] as const,
   timeline: (companyId: string) => ["timeline", companyId] as const,
+  timelineFeed: (companyId: string) => ["timelineFeed", companyId] as const,
   companyCosts: (companyId: string) => ["companyCosts", companyId] as const,
   missionCosts: (taskId: string) => ["missionCosts", taskId] as const,
   models: (companyId: string) => ["models", companyId] as const,
@@ -56,6 +57,20 @@ export function useMessages(taskId: string) {
 
 export function useTimeline(companyId: string) {
   return useQuery({ queryKey: keys.timeline(companyId), queryFn: () => api.getTimeline(companyId) });
+}
+
+/** Full Timeline page: cursor-paginated "load earlier" over the newest-
+ * first event page(). Kept as its own infinite query (distinct cache key
+ * from useTimeline's single most-recent page) since the two consumers
+ * need different-shaped data. SSE-driven invalidation (invalidateForEvent)
+ * refetches every already-loaded page, so an open Timeline stays live. */
+export function useTimelineFeed(companyId: string) {
+  return useInfiniteQuery({
+    queryKey: keys.timelineFeed(companyId),
+    queryFn: ({ pageParam }: { pageParam: number | undefined }) => api.getTimeline(companyId, pageParam),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+  });
 }
 
 export function useCompanyCosts(companyId: string) {
@@ -209,6 +224,7 @@ export function invalidateForEvent(
   qc.invalidateQueries({ queryKey: keys.approvals(companyId) });
   qc.invalidateQueries({ queryKey: keys.approvalHistory(companyId) });
   qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
+  qc.invalidateQueries({ queryKey: keys.timelineFeed(companyId) });
   qc.invalidateQueries({ queryKey: keys.companyCosts(companyId) });
   qc.invalidateQueries({ queryKey: keys.models(companyId) });
   if (taskId) {

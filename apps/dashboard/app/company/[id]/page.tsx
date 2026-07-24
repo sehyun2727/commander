@@ -35,7 +35,7 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
   const missionById = useMemo(() => new Map((missions ?? []).map((t) => [t.id, t])), [missions]);
   const employeeById = useMemo(() => new Map((employees ?? []).map((e) => [e.id, e])), [employees]);
 
-  const feedEvents = liveEvents.length > 0 ? liveEvents : timelinePage?.items.slice().reverse() ?? [];
+  const feedEvents = liveEvents.length > 0 ? liveEvents : timelinePage?.items ?? [];
 
   return (
     <main className="mx-auto max-w-5xl px-8 py-10">

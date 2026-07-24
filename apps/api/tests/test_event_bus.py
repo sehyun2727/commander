@@ -55,10 +55,15 @@ async def test_page_pagination_advances_the_cursor(harness):
     page1, cursor1 = await harness.event_bus.page("p1", cursor=None, limit=2, kind=None)
     assert len(page1) == 2
     assert cursor1 is not None
+    # Newest-first: the default (no cursor) page is the two most recent
+    # events, t2 then t1 -- not the oldest, so a CEO opening the Timeline
+    # sees current activity without paging through history first.
+    assert [e.payload["task_id"] for e in page1] == ["t2", "t1"]
 
     page2, cursor2 = await harness.event_bus.page("p1", cursor=cursor1, limit=2, kind=None)
     assert len(page2) == 1
     assert cursor2 is not None
+    assert page2[0].payload["task_id"] == "t0"
 
 
 @pytest.mark.asyncio

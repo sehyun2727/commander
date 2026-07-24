@@ -103,15 +103,18 @@ class InProcessEventBus(EventBus):
         limit: int,
         kind: str | None,
     ) -> tuple[list[Event], int | None]:
-        """Cursor pagination for the Timeline: cursor is the last-seen
-        `seq`, page moves forward in time (oldest-of-page first)."""
+        """Cursor pagination for the Timeline: newest-first. `cursor` is
+        the lowest `seq` already seen; passing it back walks further into
+        the past (`seq < cursor`, still newest-of-page first), so the
+        default call (`cursor=None`) always returns the most recent page
+        and "load earlier" is a natural forward call chain."""
         async with self._session_factory() as session:
             stmt = select(EventORM).where(EventORM.project_id == project_id)
             if kind:
                 stmt = stmt.where(EventORM.kind == kind)
             if cursor is not None:
-                stmt = stmt.where(EventORM.seq > cursor)
-            stmt = stmt.order_by(EventORM.seq.asc()).limit(limit)
+                stmt = stmt.where(EventORM.seq < cursor)
+            stmt = stmt.order_by(EventORM.seq.desc()).limit(limit)
             result = await session.execute(stmt)
             rows = list(result.scalars().all())
         next_cursor = rows[-1].seq if rows else None

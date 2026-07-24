@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 4.7 — Headquarters UX
- Overall: 20/49 items · 41%
- Now working on: 4.1
- Last update: 2026-07-24 12:40
+ Overall: 26/49 items · 53%
+ Now working on: 5.1
+ Last update: 2026-07-24 13:20
 ================================================
 
 PHASE 1 — Backend Foundations                                  (10/10)
@@ -32,13 +32,13 @@ PHASE 3 — Decisions Page                                       (6/6)
 [x] 3.5  Headquarters + Mission Detail reuse the same DecisionCard
 [x] 3.6  Commit: feat(dashboard): decisions
 
-PHASE 4 — Timeline Page                                        (0/6)
-[ ] 4.1  /timeline route + sidebar item (SSE live)
-[ ] 4.2  Filters: All / Meetings / Decisions / System
-[ ] 4.3  CEO/Technical toggle (hidden set defined as data)
-[ ] 4.4  Digest grouping (4+ minor system events collapse)
-[ ] 4.5  Cursor pagination (load earlier)
-[ ] 4.6  Commit: feat(dashboard): timeline
+PHASE 4 — Timeline Page                                        (6/6)
+[x] 4.1  /timeline route + sidebar item (SSE live)
+[x] 4.2  Filters: All / Meetings / Decisions / System
+[x] 4.3  CEO/Technical toggle (hidden set defined as data)
+[x] 4.4  Digest grouping (4+ minor system events collapse)
+[x] 4.5  Cursor pagination (load earlier) — fixed page() to newest-first
+[x] 4.6  Commit: feat(dashboard): timeline
 
 PHASE 5 — Headquarters + Companies + Nav                       (0/7)
 [ ] 5.1  Decision strip hero (+ calm empty line)

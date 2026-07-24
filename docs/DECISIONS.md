@@ -658,3 +658,66 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     matching the brief's target nav order and reflecting that CEO
     Decisions are meant to be a first-class, frequently-visited surface,
     not something only reachable by drilling into a Mission.
+71. **`EventBus.page()`'s cursor direction was flipped from oldest-first
+    to newest-first — a bug fix surfaced by building the Timeline page,
+    not a Phase 4 feature in its own right.** The old contract (`cursor`
+    = last-seen `seq`, `seq > cursor`, ascending) meant the *first* page
+    of any company's Timeline was always its oldest 50 events — for any
+    company with meaningful history, opening the Timeline showed ancient
+    activity, not current. Headquarters' condensed feed only avoided this
+    by fully replacing the historical query with the session's live SSE
+    buffer the instant one event arrived, which just hid the bug rather
+    than fixing it (and showed nothing-recent on a fresh page load with
+    no new events yet). The new contract (`cursor` = lowest `seq` seen,
+    `seq < cursor`, descending) makes `cursor=None` always mean "the most
+    recent page" and turns "load earlier" into a direct forward call
+    chain — the exact semantics the brief's "Cursor pagination for
+    history (load earlier)" describes. `next_cursor`'s "always return if
+    `rows` is non-empty" behavior (even on a short final page) is kept
+    unchanged from before, so the existing pagination test's assertions
+    hold either way; a new assertion on the actual event order was added
+    since the old test never pinned it down.
+72. **`useTimelineFeed` is a separate `useInfiniteQuery` hook with its
+    own cache key (`timelineFeed`), not a reuse of the existing
+    `useTimeline`.** Headquarters' `useTimeline` wants exactly one page
+    (the most recent N events, condensed); the Timeline page wants an
+    accumulating, paginated list. Sharing one cache key between a
+    single-object query and a multi-page infinite query would mean each
+    hook occasionally reads a cache entry shaped for the other. Both keys
+    are invalidated together in `invalidateForEvent` on every SSE event,
+    so an open Timeline page stays live by refetching its already-loaded
+    pages (React Query's default infinite-query invalidation behavior) —
+    reusing the app's existing "SSE event -> invalidate -> refetch"
+    convention rather than building a bespoke live-merge path for this
+    page. Trade-off accepted: if new events push the boundary of an
+    already-fetched page while the CEO is mid-session, a handful of
+    events at that exact seam can go temporarily unlisted until "Load
+    earlier" is clicked — acceptable at this MVP's event volume, not
+    worth a windowed/merge-aware pagination scheme.
+73. **The CEO/Technical hidden set (`MECHANISM_EVENT_TYPES` in
+    `lib/timelineVocabulary.ts`) is `TASK_STATE_CHANGED`,
+    `AGENT_STATE_CHANGED`, `PROVIDER_RETRIED`, `SYSTEM_HEARTBEAT`, and
+    `WORKSPACE_FILE_CHANGED`.** Each mirrors a state transition or retry
+    mechanism that's already narrated elsewhere by a more meaningful
+    event (e.g. `TASK_STARTED`/`REVIEW_STARTED`/`TASK_COMPLETED` cover
+    the same moments `TASK_STATE_CHANGED` fires for) or is pure plumbing
+    a CEO never needs to act on. `MODEL_CHANGED` was deliberately **not**
+    included even though the brief's example phrase says "model
+    resolution" — `MODEL_CHANGED` only fires when the CEO themselves
+    reassigns a per-role model from Company Settings, so hiding it would
+    hide the CEO's own action from their own Timeline. The same set
+    doubles as the digest-grouping predicate (`groupForDigest`) — one
+    definition of "minor," not a second list to keep in sync.
+74. **Digest grouping only activates in Technical view.** CEO view
+    already filters `MECHANISM_EVENT_TYPES` out of the feed entirely
+    (Phase 4 hidden-set behavior), so by the time a Technical-view-only
+    digest pass would run there's nothing minor left to group — the two
+    features are complementary, not overlapping: CEO view hides the
+    noise, Technical view shows it but keeps it compact.
+75. **`TimelineFeed`'s default (`technical` prop omitted) now filters
+    mechanism events, changing Headquarters' condensed feed's existing
+    behavior, not just adding a new page.** `TimelineFeed` is the ★-rated
+    shared component (UX_SPEC §5) — upgrading it once for both call sites
+    was preferred over forking a page-only variant, and CEO view as the
+    default matches Headquarters' "condensed" framing (§3.2) better than
+    the previous unfiltered dump of every internal state-change event.
