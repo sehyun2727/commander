@@ -29,9 +29,16 @@ async def create_task(
     title: str,
     description: str,
     priority: str,
+    deliverable_type: str = TEMPLATE.deliverable_type,
 ) -> TaskORM:
     async with session_factory() as session:
-        task = TaskORM(project_id=project_id, title=title, description=description, priority=priority)
+        task = TaskORM(
+            project_id=project_id,
+            title=title,
+            description=description,
+            priority=priority,
+            deliverable_type=deliverable_type,
+        )
         session.add(task)
         await session.commit()
         await session.refresh(task)

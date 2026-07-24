@@ -90,6 +90,68 @@ def _deliverable_text(title: str, description: str, context: str) -> str:
     )
 
 
+# Marker string unique to the code-mission Engineer contract (see
+# app/templates/software_company.py _ENGINEER_CONTRACT_CODE) -- sniffing
+# it from the system prompt lets the mock provider pick the right output
+# shape without workflow_engine having to pass deliverable_type through
+# `opts` separately. Same technique _flavor_suffix already uses below.
+_CODE_CONTRACT_MARKER = "===== FILE:"
+
+
+def _code_deliverable_text(title: str, description: str, context: str) -> str:
+    """Deterministic 2-file static-site output for code missions. Re-runs
+    (context carries the "CEO feedback to address" marker _run_role adds
+    on request-changes) produce a plausibly-edited variant rather than
+    identical content, so the second commit on the branch has a real diff."""
+    is_revision = "CEO feedback to address" in context
+    heading = (title.strip() or "Mission")[:40]
+    tagline = description.strip() or f"A small static page for {heading}."
+    accent = "#16a34a" if is_revision else "#2563eb"
+
+    if is_revision:
+        feedback = context.split("CEO feedback to address:", 1)[-1].strip().splitlines()[0][:120]
+        summary = (
+            f"Updated the {heading} page to address the CEO's feedback ({feedback}). "
+            "Refreshed the accent color and tightened the hero copy; the page "
+            "structure is unchanged, so this should be a low-risk follow-up."
+        )
+    else:
+        summary = (
+            f"Added a small static landing page for \"{heading}\": a hero section, a "
+            "one-line tagline, and a stylesheet. Kept it to two files since this is "
+            "a first pass. Risk: the copy is placeholder and will need a real pass "
+            "before it's public-facing."
+        )
+
+    index_html = (
+        "<!DOCTYPE html>\n"
+        "<html lang=\"en\">\n"
+        "<head>\n"
+        "  <meta charset=\"utf-8\">\n"
+        f"  <title>{heading}</title>\n"
+        "  <link rel=\"stylesheet\" href=\"style.css\">\n"
+        "</head>\n"
+        "<body>\n"
+        "  <main class=\"hero\">\n"
+        f"    <h1>{heading}</h1>\n"
+        f"    <p>{tagline}</p>\n"
+        "  </main>\n"
+        "</body>\n"
+        "</html>\n"
+    )
+    style_css = (
+        "body { font-family: sans-serif; margin: 0; }\n"
+        f".hero {{ padding: 4rem 2rem; text-align: center; color: {accent}; }}\n"
+        ".hero h1 { font-size: 2rem; margin-bottom: 0.5rem; }\n"
+    )
+
+    return (
+        f"**Change Summary:** {summary}\n\n"
+        f"===== FILE: index.html =====\n{index_html}===== END FILE =====\n\n"
+        f"===== FILE: style.css =====\n{style_css}===== END FILE ====="
+    )
+
+
 def _audit_text(title: str, context: str) -> str:
     checks = "\n".join(f"- [x] {c}" for c in _AUDIT_CHECKS)
     approved = random.random() < 0.7
@@ -190,6 +252,8 @@ def _text_for(model_ref: str, system: str, opts: dict[str, Any]) -> str:
     if role == "planner":
         return _plan_text(title, description) + _flavor_suffix(system)
     if role == "builder":
+        if _CODE_CONTRACT_MARKER in system:
+            return _code_deliverable_text(title, description, context)
         return _deliverable_text(title, description, context) + _flavor_suffix(system)
     # Reviewer output must end in the trailing "**Verdict:** ..." line
     # (workflow_engine parses it verbatim) — never append flavor text after it.

@@ -12,11 +12,11 @@ any CEO-authored custom instruction.
 from __future__ import annotations
 
 from ...core.contracts import AgentProfile
-from .role_contracts import ROLE_CONTRACTS
+from .role_contracts import ENGINEER_CONTRACT_BY_DELIVERABLE, ENGINEER_ROLE_KEY, ROLE_CONTRACTS
 from .traits import DECISION_STYLE_TRAITS, PERSONALITY_TRAITS, WORKING_STYLE_TRAITS
 
 
-def build(profile: AgentProfile, role: str) -> str:
+def build(profile: AgentProfile, role: str, deliverable_type: str = "document") -> str:
     sections = [
         PERSONALITY_TRAITS[profile.personality],
         WORKING_STYLE_TRAITS[profile.working_style],
@@ -24,5 +24,8 @@ def build(profile: AgentProfile, role: str) -> str:
     ]
     if profile.custom_instructions.strip():
         sections.append(f"CEO's custom instructions for you: {profile.custom_instructions.strip()}")
-    sections.append(ROLE_CONTRACTS[role])
+    if role == ENGINEER_ROLE_KEY:
+        sections.append(ENGINEER_CONTRACT_BY_DELIVERABLE[deliverable_type])
+    else:
+        sections.append(ROLE_CONTRACTS[role])
     return "\n\n".join(sections)

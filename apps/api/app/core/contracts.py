@@ -89,6 +89,7 @@ TASK_STATE_STATUS_WORD: dict[TaskState, StatusWord] = {
     TaskState.COMPLETED: StatusWord.COMPLETED,
     TaskState.FAILED: StatusWord.FAILED,
     TaskState.CANCELLED: StatusWord.CANCELLED,
+    TaskState.BLOCKED: StatusWord.BLOCKED,
 }
 
 AGENT_STATE_STATUS_WORD: dict[AgentState, StatusWord] = {

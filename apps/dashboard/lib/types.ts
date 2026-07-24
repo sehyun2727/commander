@@ -37,6 +37,16 @@ export interface Agent {
   created_at: string;
 }
 
+export interface CodeStats {
+  commit_sha: string;
+  files_added: number;
+  files_modified: number;
+  files_deleted: number;
+  additions: number;
+  deletions: number;
+  summary: string;
+}
+
 export interface Task {
   id: string;
   project_id: string;
@@ -46,6 +56,9 @@ export interface Task {
   state: string;
   attempt: number;
   result_markdown: string;
+  deliverable_type: "code" | "document";
+  branch_name: string | null;
+  code_stats: CodeStats | null;
   created_at: string;
   updated_at: string;
 }

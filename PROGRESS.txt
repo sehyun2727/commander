@@ -1,12 +1,12 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 5 — Workspace
- Overall: 8/44 items · 18%
- Now working on: 1.9
- Last update: 2026-07-24 17:10
+ Overall: 16/44 items · 36%
+ Now working on: 2.8
+ Last update: 2026-07-24 17:45
 ================================================
 
-PHASE 1 — WorkspaceManager                                     (8/9)
+PHASE 1 — WorkspaceManager                                     (9/9)
 [x] 1.1  Async git subprocess wrapper
 [x] 1.2  Lazy repo init + README on main (+ workspace.initialized)
 [x] 1.3  create_branch / commit / merge / diff / file-tree / read
@@ -15,16 +15,16 @@ PHASE 1 — WorkspaceManager                                     (8/9)
 [x] 1.6  COMMANDER_WORKSPACE_ROOT env + gitignore
 [x] 1.7  Unit tests: temp-dir git ops
 [x] 1.8  Unit tests: path-safety suite
-[ ] 1.9  Commit: feat(workspace)
+[x] 1.9  Commit: feat(workspace)  →  34fa716
 
-PHASE 2 — Contracts & Template                                 (0/8)
-[ ] 2.1  deliverable_type on tasks + API + TS regen
-[ ] 2.2  Engineer contract: FILE blocks + Change Summary (code only)
-[ ] 2.3  Events: workspace.initialized / code.changed / branch.merged
-[ ] 2.4  Strict block parser
-[ ] 2.5  Lenient summary parser
-[ ] 2.6  Zero-blocks -> document fallback (never failure)
-[ ] 2.7  MockProvider deterministic multi-file output + re-run edits
+PHASE 2 — Contracts & Template                                 (7/8)
+[x] 2.1  deliverable_type on tasks + API + TS regen
+[x] 2.2  Engineer contract: FILE blocks + Change Summary (code only)
+[x] 2.3  Events: workspace.initialized / code.changed / branch.merged
+[x] 2.4  Strict block parser
+[x] 2.5  Lenient summary parser
+[x] 2.6  Zero-blocks -> document fallback (parser returns {} gracefully; pipeline wiring in 3.1)
+[x] 2.7  MockProvider deterministic multi-file output + re-run edits
 [ ] 2.8  Commit: feat(contracts)
 
 PHASE 3 — Pipeline Integration                                 (0/9)

@@ -23,10 +23,31 @@ _PM_CONTRACT = (
     "writes anything. Be concrete: name concrete steps, not vibes."
 )
 
-_ENGINEER_CONTRACT = (
+_ENGINEER_CONTRACT_DOCUMENT = (
     "You are the Engineer (builder) for this company. You take the "
     "PM's plan and produce a concrete deliverable -- a markdown "
     "write-up or pseudo-diff -- that satisfies the mission brief."
+)
+
+_ENGINEER_CONTRACT_CODE = (
+    "You are the Engineer (builder) for this company. This mission "
+    "produces real code in the company's git workspace. Nothing you "
+    "write is ever executed -- you are writing files a human Reviewer "
+    "will read, not a program that will run. First, write a "
+    "'**Change Summary:**' section: 2-4 plain-language sentences (what "
+    "changed, why, and one potential risk) written for a non-technical "
+    "CEO, not a commit message. Then, after the Change Summary, output "
+    "one block per file you are creating or changing, in exactly this "
+    "format and no other, with no text before, after, or between "
+    "blocks:\n\n"
+    "===== FILE: relative/path/to/file.ext =====\n"
+    "<the complete file content>\n"
+    "===== END FILE =====\n\n"
+    "Rules: every path must be relative (never starting with '/' or a "
+    "drive letter), must never contain '..', and must never target "
+    "anything under '.git/'. Each block holds the file's complete "
+    "content, never a diff or excerpt. Prefer a small, focused set of "
+    "files over a sprawling scaffold."
 )
 
 _REVIEWER_CONTRACT = (
@@ -79,7 +100,7 @@ ENGINEER = RoleSpec(
     founding_name="Devon Cole",
     avatar_color="#3b82f6",
     model_ref="builder-default",
-    contract=_ENGINEER_CONTRACT,
+    contract=_ENGINEER_CONTRACT_DOCUMENT,
     intro=(
         "Devon here, your Engineer. I take Priya's plans and turn them "
         "into real deliverables."
@@ -105,6 +126,14 @@ ROLES: tuple[RoleSpec, ...] = (PM, ENGINEER, REVIEWER)
 ROLES_BY_KEY: dict[str, RoleSpec] = {role.key: role for role in ROLES}
 ROLE_CONTRACTS: dict[str, str] = {role.key: role.contract for role in ROLES}
 MODEL_REF_FOR_ROLE: dict[str, str] = {role.key: role.model_ref for role in ROLES}
+
+# The Engineer's contract varies by mission deliverable_type; every other
+# role's contract is deliverable-agnostic (see ROLE_CONTRACTS above).
+# Keyed by TaskORM.deliverable_type ("code" | "document").
+ENGINEER_CONTRACT_BY_DELIVERABLE: dict[str, str] = {
+    "code": _ENGINEER_CONTRACT_CODE,
+    "document": _ENGINEER_CONTRACT_DOCUMENT,
+}
 
 # Every Employee is founded with the same neutral trait defaults (the
 # AgentProfile field defaults) -- role-specific voice comes from the
@@ -148,6 +177,7 @@ class CompanyTemplate:
     roles_by_key: dict[str, RoleSpec]
     default_profiles: dict[str, AgentProfile]
     role_contracts: dict[str, str]
+    engineer_contract_by_deliverable: dict[str, str]
     model_ref_for_role: dict[str, str]
     deliverable_type: str
     vocabulary_overrides: dict[str, str]
@@ -160,6 +190,7 @@ TEMPLATE = CompanyTemplate(
     roles_by_key=ROLES_BY_KEY,
     default_profiles=DEFAULT_PROFILES,
     role_contracts=ROLE_CONTRACTS,
+    engineer_contract_by_deliverable=ENGINEER_CONTRACT_BY_DELIVERABLE,
     model_ref_for_role=MODEL_REF_FOR_ROLE,
     deliverable_type=DELIVERABLE_TYPE,
     vocabulary_overrides=VOCABULARY_OVERRIDES,

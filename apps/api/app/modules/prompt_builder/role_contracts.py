@@ -16,3 +16,7 @@ from __future__ import annotations
 from ...templates import TEMPLATE
 
 ROLE_CONTRACTS: dict[str, str] = TEMPLATE.role_contracts
+ENGINEER_CONTRACT_BY_DELIVERABLE: dict[str, str] = TEMPLATE.engineer_contract_by_deliverable
+# Tuple order is (PM, Engineer, Reviewer) -- see software_company.py's
+# ROLES comment; engine.py relies on the same positional unpacking.
+ENGINEER_ROLE_KEY: str = TEMPLATE.roles[1].key

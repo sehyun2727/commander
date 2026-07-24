@@ -9,6 +9,7 @@ class TaskCreateRequest(BaseModel):
     title: str
     description: str = ""
     priority: str = "normal"
+    deliverable_type: str = "code"
 
 
 class TaskAssignRequest(BaseModel):
@@ -30,5 +31,8 @@ class TaskResponse(BaseModel):
     state: str
     attempt: int
     result_markdown: str
+    deliverable_type: str
+    branch_name: str | None
+    code_stats: dict | None
     created_at: datetime
     updated_at: datetime

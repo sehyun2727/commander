@@ -66,8 +66,10 @@ export const api = {
   // Missions
   listMissions: (companyId: string) => request<Task[]>(`/api/projects/${companyId}/tasks`),
   getMission: (taskId: string) => request<Task>(`/api/tasks/${taskId}`),
-  createMission: (companyId: string, body: { title: string; description: string; priority: string }) =>
-    request<Task>(`/api/projects/${companyId}/tasks`, { method: "POST", body: JSON.stringify(body) }),
+  createMission: (
+    companyId: string,
+    body: { title: string; description: string; priority: string; deliverable_type?: string },
+  ) => request<Task>(`/api/projects/${companyId}/tasks`, { method: "POST", body: JSON.stringify(body) }),
   assignMission: (taskId: string, agentId?: string) =>
     request<Task>(`/api/tasks/${taskId}/assign`, {
       method: "POST",

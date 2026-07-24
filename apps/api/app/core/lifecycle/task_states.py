@@ -16,6 +16,7 @@ class TaskState(str, Enum):
     FAILED = "failed"
     RETRYING = "retrying"
     CANCELLED = "cancelled"
+    BLOCKED = "blocked"  # Sprint 5: merge-to-main failed on approve; no auto-resolution
 
 
 TASK_TRANSITIONS: dict[TaskState, set[TaskState]] = {
@@ -32,9 +33,11 @@ TASK_TRANSITIONS: dict[TaskState, set[TaskState]] = {
         TaskState.COMPLETED,
         TaskState.IN_PROGRESS,  # rejected -> rework
         TaskState.CANCELLED,  # rejected -> abandon
+        TaskState.BLOCKED,  # approved but merge to main failed
     },
     TaskState.FAILED: {TaskState.RETRYING, TaskState.CANCELLED},
     TaskState.RETRYING: {TaskState.ASSIGNED},
     TaskState.COMPLETED: set(),
     TaskState.CANCELLED: set(),
+    TaskState.BLOCKED: set(),
 }

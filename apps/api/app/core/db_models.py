@@ -63,6 +63,9 @@ class TaskORM(Base):
     state: Mapped[str] = mapped_column(String, default="created")
     attempt: Mapped[int] = mapped_column(Integer, default=1)
     result_markdown: Mapped[str] = mapped_column(Text, default="")
+    deliverable_type: Mapped[str] = mapped_column(String, default="code")
+    branch_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    code_stats: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 

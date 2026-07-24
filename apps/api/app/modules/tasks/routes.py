@@ -18,7 +18,13 @@ async def create_task(
     session_factory=Depends(get_session_factory),
 ):
     return await service.create_task(
-        session_factory, event_bus, project_id, body.title, body.description, body.priority
+        session_factory,
+        event_bus,
+        project_id,
+        body.title,
+        body.description,
+        body.priority,
+        body.deliverable_type,
     )
 
 

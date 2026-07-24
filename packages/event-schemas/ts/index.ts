@@ -19,9 +19,9 @@ export enum EventType {
   AGENT_STATE_CHANGED = "agent.state_changed",
   AGENT_PROFILE_UPDATED = "agent.profile_updated",
   CODING_STARTED = "agent.coding_started",
-  WORKSPACE_FILE_CHANGED = "workspace.file_changed",
-  WORKSPACE_COMMITTED = "workspace.committed",
-  WORKSPACE_BRANCH_CREATED = "workspace.branch_created",
+  WORKSPACE_INITIALIZED = "workspace.initialized",
+  CODE_CHANGED = "code.changed",
+  BRANCH_MERGED = "branch.merged",
   MODEL_CHANGED = "model.changed",
   PROVIDER_CHANGED = "provider.changed",
   PROVIDER_RETRIED = "provider.retried",
@@ -61,6 +61,7 @@ export enum TaskState {
   FAILED = "failed",
   RETRYING = "retrying",
   CANCELLED = "cancelled",
+  BLOCKED = "blocked",
 }
 
 export enum Personality {
@@ -188,18 +189,23 @@ export interface CodingStartedPayload {
   task_id: string;
 }
 
-export interface WorkspaceFileChangedPayload {
-  path: string;
-  change_kind: string;
+export interface WorkspaceInitializedPayload {
 }
 
-export interface WorkspaceCommittedPayload {
+export interface CodeChangedPayload {
+  branch_name: string;
   commit_sha: string;
+  files_added: number;
+  files_modified: number;
+  files_deleted: number;
+  additions: number;
+  deletions: number;
   summary: string;
 }
 
-export interface WorkspaceBranchCreatedPayload {
+export interface BranchMergedPayload {
   branch_name: string;
+  commit_sha: string;
 }
 
 export interface ModelChangedPayload {
@@ -307,9 +313,9 @@ export interface EventPayloadMap {
   "agent.state_changed": AgentStateChangedPayload;
   "agent.profile_updated": AgentProfileUpdatedPayload;
   "agent.coding_started": CodingStartedPayload;
-  "workspace.file_changed": WorkspaceFileChangedPayload;
-  "workspace.committed": WorkspaceCommittedPayload;
-  "workspace.branch_created": WorkspaceBranchCreatedPayload;
+  "workspace.initialized": WorkspaceInitializedPayload;
+  "code.changed": CodeChangedPayload;
+  "branch.merged": BranchMergedPayload;
   "model.changed": ModelChangedPayload;
   "provider.changed": ProviderChangedPayload;
   "provider.retried": ProviderRetriedPayload;
@@ -338,6 +344,7 @@ export const TASK_STATE_STATUS_WORD: Record<TaskState, StatusWord> = {
   [TaskState.COMPLETED]: StatusWord.COMPLETED,
   [TaskState.FAILED]: StatusWord.FAILED,
   [TaskState.CANCELLED]: StatusWord.CANCELLED,
+  [TaskState.BLOCKED]: StatusWord.BLOCKED,
 };
 
 export const AGENT_STATE_STATUS_WORD: Record<AgentState, StatusWord> = {
