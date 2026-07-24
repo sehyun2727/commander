@@ -1,6 +1,6 @@
 # CLAUDE.md — Commander
 
-Commander is an operating system where a solo developer becomes the **CEO of an AI software company**. AI agents work as Employees; the CEO instructs, observes, and decides. Sprint 3 shipped a working vertical slice: FastAPI backend + event bus + mock/Anthropic providers + SSE realtime + Next.js dashboard.
+Commander is an operating system where a solo developer becomes the **CEO of an AI software company**. AI agents work as Employees; the CEO instructs, observes, and decides. Sprint 3 shipped a working vertical slice: FastAPI backend + event bus + mock/Anthropic providers + SSE realtime + Next.js dashboard. Sprint 4 ("Real Intelligence") hardened the provider path (streaming, retries, real token usage) and added CEO-facing levers on top of it: Payroll, per-role model reassignment, and the Daily Report.
 
 ## Product Terminology (MANDATORY in all UI text)
 
@@ -40,8 +40,8 @@ Code/DB/API use internal terms. UI labels, page titles, toasts, empty states use
 apps/api/          FastAPI backend (Python 3.11+, async SQLAlchemy, SQLite)
   app/core/        events (schemas), interfaces (ports), lifecycle (state machines), db, secrets, config
   app/modules/     projects, tasks, approvals, timeline, agent_runtime, workflow_engine,
-                   event_bus, provider_gateway, model_registry, realtime (SSE)
-  tests/           pytest suite (19 tests)
+                   event_bus, provider_gateway, model_registry, costs, reports, realtime (SSE)
+  tests/           pytest suite (42 tests)
 apps/dashboard/    Next.js App Router + TS + Tailwind + TanStack Query (dark Render-style theme)
 packages/event-schemas/ts/   generated TS event types — DO NOT hand-edit; regenerate
 scripts/           generate_ts_schemas.py, seed.py
@@ -68,13 +68,13 @@ python scripts/generate_ts_schemas.py   # after ANY event schema change
 - Commit style: `feat(scope): ...` / `fix(scope): ...` / `docs: ...` / `chore: ...`. Commit per meaningful unit.
 - Every non-obvious judgment call gets one entry in `docs/DECISIONS.md`.
 
-## Current Status (post-Sprint 3)
+## Current Status (post-Sprint 4)
 
-Working: company CRUD + auto-founded 3 Employees (PM/Engineer/Reviewer), Mission kanban, PM→Engineer→Reviewer pipeline (mock provider), CEO Decisions (approve / request changes / reject), unified Timeline + SSE live feed, Meeting chat, Company Settings with runtime API-key entry, seed/demo mode.
+Working: company CRUD + auto-founded 3 Employees (PM/Engineer/Reviewer), Mission kanban, PM→Engineer→Reviewer pipeline with streaming replies and retry-with-backoff, CEO Decisions (approve / request changes / reject), unified Timeline + SSE live feed, Meeting chat, Company Settings with runtime API-key entry and per-role model reassignment, Payroll (real token usage → USD, company + per-Employee + per-Mission), on-demand CEO Daily Report (trailing-24h executive summary), seed/demo mode.
 
-Not built yet (do NOT add without an explicit sprint brief): auth, execution sandbox, real code execution, Workspace Manager (git), cloud runner, deployment/Launch, multi-provider beyond Anthropic+mock, reports module.
+Not built yet (do NOT add without an explicit sprint brief): auth, execution sandbox, real code execution, Workspace Manager (git), cloud runner, deployment/Launch, multi-provider beyond Anthropic+mock.
 
-Known accepted MVP tradeoffs: plaintext secrets in local SQLite, in-process event bus (single worker), inline subscriber execution in `publish`, Python-side conversation filtering. See `docs/DECISIONS.md` before "fixing" any of these.
+Known accepted MVP tradeoffs: plaintext secrets in local SQLite, in-process event bus (single worker), inline subscriber execution in `publish`, Python-side conversation filtering, no DB migrations (`create_all` on boot). See `docs/DECISIONS.md` before "fixing" any of these.
 
 ## Working Style
 

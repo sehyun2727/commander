@@ -1,7 +1,7 @@
 # Commander Architecture
 
-Version: v2.0 (As-Built)
-Status: Synced with Sprint 3 implementation — 2026-07
+Version: v2.1 (As-Built)
+Status: Synced with Sprint 4 ("Real Intelligence") implementation — 2026-07
 Supersedes: v1.0 Draft (pre-implementation vision)
 
 ---
@@ -49,7 +49,9 @@ Every action performed by AI must be **visible, explainable, reviewable, and rep
       │          │         tasks,     Provider   Provider
       │          │         agents,   (default)  (httpx)
       │          │         approvals,
-      │          │         settings_kv)
+      │          │         settings_kv,
+      │          │         cost_entries,
+      │          │         reports)
 ```
 
 Realtime is **SSE** (not WebSocket): one endpoint per company, replays last 50 events on connect, heartbeat every 15s, client dedups by `event.id`.
@@ -82,15 +84,16 @@ Event envelope: `id, project_id, kind, type, actor {role, id, name}, payload, re
 | `tasks` | Mission CRUD, assignment, Meeting messages. Assignment triggers the workflow. | ✅ |
 | `workflow_engine` | The brain. PM → Engineer → Reviewer pipeline as background asyncio tasks; publishes every beat; creates CEO Decisions. | ✅ Single fixed pipeline |
 | `agent_runtime` | Employee state + validated transitions (state machine in `core/lifecycle`). | ✅ DB-backed |
-| `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (httpx). Verdicts parsed from a trailing `**Verdict:**` line — provider-agnostic. | ✅ |
-| `model_registry` | Logical refs (`planner-default` etc.) → (provider, model). `COMMANDER_PROVIDER=mock\|anthropic`. Changing models never requires code changes. | ✅ Static map |
+| `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (httpx, streaming, retry-with-backoff). Verdicts parsed from a trailing `**Verdict:**` line — provider-agnostic. | ✅ |
+| `model_registry` | Logical refs (`planner-default`, `builder-default`, `reviewer-default`, `reporter-default`) → (provider, model). `COMMANDER_PROVIDER=mock\|anthropic`. CEO can reassign the model behind planner/builder/reviewer per company (override stored in `settings_kv`, Anthropic only — mock roles are template-locked). | ✅ |
+| `costs` | Per-call token usage → USD via `PRICE_PER_MILLION_TOKENS`. Payroll (calendar-month, per company + per Employee) and Mission Budget (all-time, per mission) summaries. | ✅ |
 | `approvals` | CEO Decisions: approve → completed · request_changes → Engineer re-run (attempt+1) · reject → cancelled. | ✅ |
 | `timeline` | Cursor-paginated event reads + kind filter. | ✅ |
-| `realtime` | SSE stream per company. | ✅ |
+| `realtime` | SSE stream per company; live streaming deltas for in-flight replies. | ✅ |
+| `reports` | On-demand CEO Daily Report: trailing-24h summary (missions, decisions, payroll, highlights) from the Timeline's own event history, written via `ProviderGateway`. | ✅ |
 | `core/secrets` | `SecretsProvider` port. `DBSecretsProvider`: `settings_kv` override → `.env` fallback, so keys can be pasted in Company Settings at runtime. Write-only through the API. | ✅ Plaintext (local MVP) |
 | `auth` | Single hardcoded local CEO. | 🔲 Placeholder |
 | `workspace_manager` | Git repo / branch / diff / human-readable summaries. Interface defined only. | 🔲 Interface only |
-| `reports` | Daily reports. | 🔲 Placeholder |
 
 ### Lifecycles
 
@@ -113,12 +116,13 @@ No circular deps. Modules communicate only via EventBus. Agents never call each 
 
 Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark Render.com-style theme, Commander terminology throughout.
 
-- **Headquarters** `/company/[id]` — pending CEO Decisions (hero), company vitals, live Timeline
+- **Headquarters** `/company/[id]` — pending CEO Decisions (hero), company vitals (incl. Payroll this month), Daily Report card (latest summary + generate button), live Timeline
 - **Missions** — kanban (Backlog / In Progress / Waiting CEO Decision / Done) + create modal
-- **Mission detail / Meeting** — conversation-kind transcript, CEO can message
+- **Mission detail / Meeting** — conversation-kind transcript with live streaming replies, CEO can message, Mission Budget spent
 - **Employees** — live state cards
-- **Company Settings** — provider select, write-only API key field
-- Realtime: one SSE connection per company (`RealtimeProvider`), events dedup by id, query invalidation per event
+- **Company Settings** — provider select, write-only API key field, per-role model reassignment
+- **Report detail** `/company/[id]/reports/[reportId]` — full report + past-report history
+- Realtime: one SSE connection per company (`RealtimeProvider`), events dedup by id, query invalidation per event, transient streaming-delta bubble for in-flight replies
 
 ---
 
@@ -136,7 +140,7 @@ Future extraction points if scaled: Agent Runtime Service, Workflow Service, Eve
 
 ## Not Built Yet (requires an explicit sprint brief)
 
-Execution sandbox · real code execution · Workspace Manager implementation · deployment/Launch · auth · cloud runner · additional providers (OpenAI/Google/OpenRouter/local) · reports · plugin marketplace · multi-company orgs.
+Execution sandbox · real code execution · Workspace Manager implementation · deployment/Launch · auth · cloud runner · additional providers (OpenAI/Google/OpenRouter/local) · plugin marketplace · multi-company orgs.
 
 **Sandbox gate:** no AI-generated code is ever executed until an isolation layer exists. Until then, Engineers produce plans/text/diff artifacts only.
 

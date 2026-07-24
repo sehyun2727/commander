@@ -416,3 +416,21 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     tradeoff as every other table in this codebase (Decision 35):
     `ReportORM` added straight to `db_models.py`, picked up by
     `Base.metadata.create_all` on next boot.
+
+### Phase 5 — Verification & docs sync
+
+48. **`docs/ARCHITECTURE.md`'s module table and Frontend section had
+    drifted since Sprint 4 Phase 2** — the `costs` module was never added
+    as a row, `model_registry`'s description still read "Static map" after
+    Phase 3 added CEO overrides, and Frontend bullets didn't mention
+    Payroll, streaming replies, or model reassignment. Caught and fixed
+    during this phase's doc-sync pass rather than earlier, since Phases
+    1-3 each ended with a commit but not a full doc re-read — worth noting
+    here since the Doc Sync Rule expects updates in the *same* commit as
+    the change; this sprint corrects it retroactively in one pass instead.
+    Full backend suite (42 tests) and dashboard `tsc --noEmit` + `next
+    build` verified green, then the Daily Report card and detail page
+    verified in a real headless browser (Playwright, scratch install per
+    Decision 16) against the live seeded company: generate → card updates
+    → view full report → past-reports list on a second generate, zero
+    console/page errors.
