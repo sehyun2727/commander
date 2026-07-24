@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeSummaryCard } from "@/components/ChangeSummaryCard";
 import { ChatThread } from "@/components/ChatThread";
 import { DecisionCard } from "@/components/DecisionCard";
+import { ExecutionResults } from "@/components/ExecutionResults";
 import { StatusWord, taskStatusWord } from "@/components/StatusWord";
 import { useApprovals, useAssignMission, useEmployees, useMission, useMissionCosts } from "@/lib/hooks";
 import { formatUsd } from "@/lib/utils";
@@ -67,6 +68,7 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
             missionTitle={mission.title}
             reviewerColor={reviewer?.avatar_color}
             linkToMission={false}
+            checkResults={mission.check_results}
           />
         </div>
       )}
@@ -80,12 +82,19 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
               summary={mission.result_markdown}
               stats={mission.code_stats}
               verdict={pendingApproval?.status}
+              checkResults={mission.check_results}
             />
           ) : (
             <div className="rounded-xl border border-base-border bg-base-card p-4 shadow-panel">
               <pre className="whitespace-pre-wrap font-sans text-sm text-text-muted">{mission.result_markdown}</pre>
             </div>
           )}
+        </section>
+      )}
+
+      {mission.check_results && mission.check_results.length > 0 && (
+        <section className="mb-6">
+          <ExecutionResults results={mission.check_results} />
         </section>
       )}
 

@@ -37,8 +37,10 @@ from app.modules.agent_runtime import DBAgentRuntime  # noqa: E402
 from app.modules.approvals import service as approvals_service  # noqa: E402
 from app.modules.event_bus import InProcessEventBus  # noqa: E402
 from app.modules.projects import service as projects_service  # noqa: E402
+from app.modules.sandbox import DockerSandbox  # noqa: E402
 from app.modules.tasks import service as tasks_service  # noqa: E402
 from app.modules.workflow_engine import CommanderWorkflowEngine  # noqa: E402
+from app.modules.workspace_manager import LocalGitWorkspaceManager  # noqa: E402
 
 
 async def wait_for_state(session_factory, task_id: str, *states: TaskState, timeout: float = 35.0) -> None:
@@ -75,7 +77,11 @@ async def main() -> None:
     secrets = DBSecretsProvider(session_factory)
     event_bus = InProcessEventBus(session_factory)
     agent_runtime = DBAgentRuntime(session_factory, event_bus)
-    workflow_engine = CommanderWorkflowEngine(session_factory, event_bus, agent_runtime, secrets)
+    workspace_manager = LocalGitWorkspaceManager(settings.commander_workspace_root)
+    sandbox_runner = DockerSandbox()
+    workflow_engine = CommanderWorkflowEngine(
+        session_factory, event_bus, agent_runtime, secrets, workspace_manager, sandbox_runner
+    )
 
     project = await projects_service.create_project(
         session_factory, event_bus, agent_runtime, name="Acme AI", provider="mock"

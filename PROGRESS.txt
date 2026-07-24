@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 6 — Execution Sandbox
- Overall: 23/40 items · 57%
- Now working on: 3.1
- Last update: 2026-07-24 21:40
+ Overall: 32/40 items · 80%
+ Now working on: 4.1
+ Last update: 2026-07-24 22:20
 ================================================
 
 PHASE 0 — Hygiene                                              (4/4)
@@ -35,16 +35,16 @@ PHASE 2 — Checks & Pipeline                                    (9/9)
 [x] 2.8  Streaming / Payroll / retries unaffected (verified)
 [x] 2.9  Commit+push: feat(pipeline)
 
-PHASE 3 — Frontend                                             (0/9)
-[ ] 3.1  ExecutionResults section (chips + duration)
-[ ] 3.2  Output tail at disclosure level 2
-[ ] 3.3  ChangeSummaryCard + DecisionCard checks verdict line
-[ ] 3.4  Timeline rows (CEO verdict row / Technical per-check)
-[ ] 3.5  Settings: capability status + toggle
-[ ] 3.6  Graceful hiding when Docker absent
+PHASE 3 — Frontend                                             (9/9)
+[x] 3.1  ExecutionResults section (chips + duration)
+[x] 3.2  Output tail at disclosure level 2
+[x] 3.3  ChangeSummaryCard + DecisionCard checks verdict line
+[x] 3.4  Timeline rows (CEO verdict row / Technical per-check)
+[x] 3.5  Settings: capability status + toggle
+[x] 3.6  Graceful hiding when Docker absent
 [x] 3.7  Engineer contract line: stdlib/built-ins only (v1) (done early, Phase 2)
-[ ] 3.8  tsc --noEmit + next build clean
-[ ] 3.9  Commit+push: feat(dashboard)
+[x] 3.8  tsc --noEmit + next build clean
+[x] 3.9  Commit+push: feat(dashboard)
 
 PHASE 4 — Verification & Doc Sync                              (0/8)
 [ ] 4.1  Tests: detection matrix

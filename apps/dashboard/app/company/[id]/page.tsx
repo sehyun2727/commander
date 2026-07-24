@@ -66,6 +66,7 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
                   undefined
                 }
                 codeStats={missionById.get(approval.task_id)?.code_stats}
+                checkResults={missionById.get(approval.task_id)?.check_results}
               />
             ))}
           </div>

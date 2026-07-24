@@ -2,7 +2,14 @@
 // internal names (Project/Task/Agent/Approval) stay internal here; the UI
 // layer is responsible for rendering them with Commander terminology
 // (Company/Mission/Employee/CEO Decision).
-export type { Event, EventPayloadMap, Actor, AgentProfile } from "@commander/event-schemas";
+export type {
+  Event,
+  EventPayloadMap,
+  Actor,
+  AgentProfile,
+  CheckOutcome,
+  ExecutionCompletedPayload,
+} from "@commander/event-schemas";
 export {
   EventType,
   AgentState,
@@ -15,7 +22,7 @@ export {
   AGENT_STATE_STATUS_WORD,
 } from "@commander/event-schemas";
 
-import type { AgentProfile } from "@commander/event-schemas";
+import type { AgentProfile, CheckOutcome } from "@commander/event-schemas";
 
 export interface Project {
   id: string;
@@ -59,6 +66,7 @@ export interface Task {
   deliverable_type: "code" | "document";
   branch_name: string | null;
   code_stats: CodeStats | null;
+  check_results: CheckOutcome[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -143,4 +151,15 @@ export interface WorkspaceFileContent {
 export interface DiffResponse {
   diff_text: string;
   truncated: boolean;
+}
+
+export interface Capability {
+  execution: boolean;
+  reason: string | null;
+}
+
+export interface ExecutionSettings {
+  execution_available: boolean;
+  reason: string | null;
+  execution_enabled: boolean;
 }

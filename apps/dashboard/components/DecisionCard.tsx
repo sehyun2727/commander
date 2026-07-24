@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useDecideApproval } from "@/lib/hooks";
-import type { Approval, CodeStats } from "@/lib/types";
-import { relativeTime } from "@/lib/utils";
+import type { Approval, CheckOutcome, CodeStats } from "@/lib/types";
+import { checksSummary, relativeTime } from "@/lib/utils";
 
 const DECISION_LABEL: Record<string, string> = {
   approved: "Approved",
@@ -20,6 +20,13 @@ const DECISION_TONE_CLASS: Record<string, string> = {
 };
 
 const DEFAULT_REVIEWER_COLOR = "#64748b";
+
+const CHECKS_TONE_CLASS: Record<string, string> = {
+  green: "text-status-green",
+  amber: "text-status-amber",
+  red: "text-status-red",
+  gray: "text-text-faint",
+};
 
 function Section({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
@@ -47,6 +54,7 @@ export function DecisionCard({
   linkToMission = true,
   outcome,
   codeStats,
+  checkResults,
 }: {
   approval: Approval;
   companyId: string;
@@ -55,6 +63,7 @@ export function DecisionCard({
   linkToMission?: boolean;
   outcome?: string;
   codeStats?: CodeStats | null;
+  checkResults?: CheckOutcome[] | null;
 }) {
   const [comment, setComment] = useState("");
   const decide = useDecideApproval(companyId, approval.task_id);
@@ -96,6 +105,11 @@ export function DecisionCard({
               {codeStats.files_added + codeStats.files_modified + codeStats.files_deleted} files{" "}
               <span className="text-status-green">+{codeStats.additions}</span>{" "}
               <span className="text-status-red">−{codeStats.deletions}</span>
+            </p>
+          )}
+          {checkResults && checkResults.length > 0 && (
+            <p className={`mt-0.5 text-xs font-medium ${CHECKS_TONE_CLASS[checksSummary(checkResults).tone]}`}>
+              {checksSummary(checkResults).label}
             </p>
           )}
         </div>

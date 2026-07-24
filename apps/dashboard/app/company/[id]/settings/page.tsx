@@ -2,7 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useArchiveCompany, useCompany, useModels, useSetModel, useUpdateCompanySettings } from "@/lib/hooks";
+import {
+  useArchiveCompany,
+  useCompany,
+  useExecutionSettings,
+  useModels,
+  useSetExecutionEnabled,
+  useSetModel,
+  useUpdateCompanySettings,
+} from "@/lib/hooks";
 
 const ROLE_LABEL: Record<string, string> = { planner: "PM", builder: "Engineer", reviewer: "Reviewer" };
 
@@ -14,6 +22,8 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
   const archive = useArchiveCompany(companyId);
   const { data: models } = useModels(companyId);
   const setModel = useSetModel(companyId);
+  const { data: execSettings } = useExecutionSettings(companyId);
+  const setExecutionEnabled = useSetExecutionEnabled(companyId);
 
   const [name, setName] = useState("");
   const [provider, setProvider] = useState<"mock" | "anthropic">("mock");
@@ -141,6 +151,37 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
           })}
         </div>
       </div>
+
+      {execSettings && (
+        <div className="mt-8 rounded-xl border border-base-border bg-base-card p-6 shadow-panel">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-text">Execution Sandbox</p>
+              <p className="mt-1 text-xs text-text-muted">
+                {execSettings.execution_available
+                  ? "Automated checks (syntax, tests) run in an isolated sandbox after the Engineer commits code, before Reviewer audit."
+                  : `Requires Docker Desktop — ${execSettings.reason ?? "sandbox unavailable"}.`}
+              </p>
+            </div>
+            <label className="flex shrink-0 items-center gap-2 text-sm text-text-muted">
+              <input
+                type="checkbox"
+                checked={execSettings.execution_enabled}
+                disabled={setExecutionEnabled.isPending}
+                onChange={(e) => setExecutionEnabled.mutate(e.target.checked)}
+                className="h-4 w-4 rounded border-base-border accent-accent"
+              />
+              Run automated checks
+            </label>
+          </div>
+          {!execSettings.execution_available && (
+            <p className="mt-3 text-xs text-text-faint">
+              Missions will skip automated checks until Docker Desktop is running and the sandbox image is built
+              (<code className="font-mono">make sandbox-image</code>).
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="mt-8 rounded-xl border border-status-red/30 bg-status-red-soft/30 p-6">
         <p className="text-sm font-semibold text-text">Danger Zone</p>

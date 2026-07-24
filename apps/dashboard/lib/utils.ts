@@ -1,4 +1,4 @@
-import type { AgentProfile, Event } from "./types";
+import type { AgentProfile, CheckOutcome, Event } from "./types";
 
 export type Tone = "green" | "amber" | "red" | "gray";
 
@@ -127,6 +127,20 @@ export function parseUnifiedDiff(diffText: string): DiffFile[] {
     }
     return { path, additions, deletions, hunkText: chunk };
   });
+}
+
+// CEO-facing copy per UX_SPEC: plain verdicts ("All 3 checks passed" / "1
+// of 3 checks failed"), never raw output at L1 -- output tails are opt-in
+// (ExecutionResults/Timeline technical rows), never shown here.
+export function checksSummary(results: CheckOutcome[]): { label: string; tone: Tone } {
+  const total = results.length;
+  const passed = results.filter((r) => r.status === "passed").length;
+  const failed = results.filter((r) => r.status === "failed").length;
+  const couldNotRun = total - passed - failed;
+  if (couldNotRun === total) return { label: "Checks could not run", tone: "gray" };
+  if (failed > 0) return { label: `${failed} of ${total} check${total === 1 ? "" : "s"} failed`, tone: "red" };
+  if (passed === total) return { label: total === 1 ? "Check passed" : `All ${total} checks passed`, tone: "green" };
+  return { label: `${passed} of ${total} checks passed`, tone: "amber" };
 }
 
 export function relativeTime(iso: string): string {

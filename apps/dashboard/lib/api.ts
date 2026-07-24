@@ -1,9 +1,11 @@
 import type {
   AgentProfile,
   Approval,
+  Capability,
   DecisionStyle,
   DiffResponse,
   Event,
+  ExecutionSettings,
   ModelCatalogEntry,
   Personality,
   Project,
@@ -132,4 +134,14 @@ export const api = {
   getWorkspaceMerges: (companyId: string, limit = 10) =>
     request<WorkspaceMergeRecord[]>(`/api/projects/${companyId}/workspace/merges?limit=${limit}`),
   getMissionDiff: (taskId: string) => request<DiffResponse>(`/api/tasks/${taskId}/diff`),
+
+  // Execution Sandbox
+  getCapabilities: () => request<Capability>("/api/system/capabilities"),
+  getExecutionSettings: (companyId: string) =>
+    request<ExecutionSettings>(`/api/projects/${companyId}/execution-settings`),
+  setExecutionEnabled: (companyId: string, enabled: boolean) =>
+    request<ExecutionSettings>(`/api/projects/${companyId}/execution-settings`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
 };

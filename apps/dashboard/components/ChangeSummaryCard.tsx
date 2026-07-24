@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useMissionDiff } from "@/lib/hooks";
-import type { CodeStats } from "@/lib/types";
-import { approvalStatusLabel, approvalStatusTone, parseUnifiedDiff } from "@/lib/utils";
+import type { CheckOutcome, CodeStats } from "@/lib/types";
+import { approvalStatusLabel, approvalStatusTone, checksSummary, parseUnifiedDiff } from "@/lib/utils";
 
 const TONE_CLASS: Record<string, string> = {
   green: "text-status-green",
@@ -36,11 +36,13 @@ export function ChangeSummaryCard({
   summary,
   stats,
   verdict,
+  checkResults,
 }: {
   taskId: string;
   summary: string;
   stats: CodeStats;
   verdict?: string;
+  checkResults?: CheckOutcome[] | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [openFile, setOpenFile] = useState<string | null>(null);
@@ -64,6 +66,12 @@ export function ChangeSummaryCard({
           </span>
         )}
       </div>
+
+      {checkResults && checkResults.length > 0 && (
+        <p className={`mt-1.5 text-xs font-medium ${TONE_CLASS[checksSummary(checkResults).tone]}`}>
+          {checksSummary(checkResults).label}
+        </p>
+      )}
 
       <p className="mt-2 whitespace-pre-wrap text-sm text-text-muted">{summary}</p>
 

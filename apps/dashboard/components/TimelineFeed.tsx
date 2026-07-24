@@ -2,10 +2,18 @@
 
 import { useState } from "react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { StatusPill } from "@/components/StatusPill";
 import { groupForDigest, isMechanismEvent } from "@/lib/timelineVocabulary";
 import type { TimelineRow } from "@/lib/timelineVocabulary";
-import type { Agent, Event } from "@/lib/types";
+import type { Agent, CheckOutcome, Event, ExecutionCompletedPayload } from "@/lib/types";
+import { EventType } from "@/lib/types";
 import { narrate, relativeTime } from "@/lib/utils";
+
+const CHECK_TONE: Record<CheckOutcome["status"], "green" | "red" | "gray"> = {
+  passed: "green",
+  failed: "red",
+  could_not_run: "gray",
+};
 
 const SYSTEM_DOT: Record<string, string> = {
   ceo: "bg-accent",
@@ -42,6 +50,40 @@ function SystemRow({ event }: { event: Event }) {
       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${SYSTEM_DOT[event.actor.role] ?? "bg-status-gray"}`} />
       <p className="min-w-0 flex-1 truncate text-[13px] text-text-muted">{narrate(event)}</p>
       <span className="shrink-0 text-[11px] text-text-faint">{relativeTime(event.created_at)}</span>
+    </li>
+  );
+}
+
+// Technical-view-only expansion of an execution.completed row: the CEO
+// view's plain verdict text (via narrate()'s reason fallback, e.g. "2/2
+// checks passed") is already the right L1 copy, so this only adds a
+// per-check breakdown behind a click -- never rendered when technical is
+// false (TimelineFeed only mounts this row in that branch).
+function ExecutionRow({ event }: { event: Event }) {
+  const [open, setOpen] = useState(false);
+  const payload = event.payload as unknown as ExecutionCompletedPayload;
+  return (
+    <li className="border-b border-base-border/60 px-1 py-2.5 last:border-none">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="mt-0 h-2 w-2 shrink-0 rounded-full bg-status-gray" />
+          <span className="min-w-0 truncate text-[13px] text-text-muted">{narrate(event)}</span>
+        </span>
+        <span className="shrink-0 text-[11px] text-text-faint">{relativeTime(event.created_at)}</span>
+      </button>
+      {open && (
+        <ol className="mt-2 space-y-1.5 border-l border-base-border pl-4">
+          {payload.results.map((check) => (
+            <li key={check.name} className="flex items-center gap-2">
+              <StatusPill tone={CHECK_TONE[check.status]} label={check.name} />
+              <span className="text-[11px] text-text-faint">{check.duration_seconds.toFixed(1)}s</span>
+            </li>
+          ))}
+        </ol>
+      )}
     </li>
   );
 }
@@ -104,6 +146,8 @@ export function TimelineFeed({
           <DigestRow key={row.events[0].id} events={row.events} />
         ) : row.event.kind === "conversation" ? (
           <MeetingBubble key={row.event.id} event={row.event} employeeById={employeeById} />
+        ) : technical && row.event.type === EventType.EXECUTION_COMPLETED ? (
+          <ExecutionRow key={row.event.id} event={row.event} />
         ) : (
           <SystemRow key={row.event.id} event={row.event} />
         )

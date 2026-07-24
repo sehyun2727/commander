@@ -81,6 +81,7 @@ export default function DecisionsPage({ params }: { params: { id: string } }) {
               }
               outcome={tab === "history" ? outcomeForTask(missionById.get(approval.task_id)?.state) : undefined}
               codeStats={missionById.get(approval.task_id)?.code_stats}
+              checkResults={missionById.get(approval.task_id)?.check_results}
             />
           ))}
         </div>

@@ -28,6 +28,8 @@ export const keys = {
     ["workspaceFile", companyId, path, ref] as const,
   workspaceMerges: (companyId: string) => ["workspaceMerges", companyId] as const,
   missionDiff: (taskId: string) => ["missionDiff", taskId] as const,
+  capabilities: ["capabilities"] as const,
+  executionSettings: (companyId: string) => ["executionSettings", companyId] as const,
 };
 
 export function useCompanies() {
@@ -217,6 +219,29 @@ export function useMissionDiff(taskId: string, enabled: boolean) {
     queryKey: keys.missionDiff(taskId),
     queryFn: () => api.getMissionDiff(taskId),
     enabled,
+  });
+}
+
+/** Global (not per-company) Docker/sandbox capability probe, polled so a
+ * Docker Desktop started/stopped mid-session is reflected without a
+ * page reload -- capability is cheap (cached server-side, see
+ * DockerSandbox.capability()). */
+export function useCapabilities() {
+  return useQuery({ queryKey: keys.capabilities, queryFn: api.getCapabilities, refetchInterval: 30_000 });
+}
+
+export function useExecutionSettings(companyId: string) {
+  return useQuery({
+    queryKey: keys.executionSettings(companyId),
+    queryFn: () => api.getExecutionSettings(companyId),
+  });
+}
+
+export function useSetExecutionEnabled(companyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => api.setExecutionEnabled(companyId, enabled),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.executionSettings(companyId) }),
   });
 }
 

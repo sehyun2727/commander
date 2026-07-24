@@ -1006,3 +1006,51 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     always-fires-but-sometimes-empty event would force every consumer
     (Timeline rows, Payroll, tests) to special-case a no-op event instead
     of just checking whether the pair of events exists at all.
+102. **The CEO-facing checks verdict ("All N checks passed" / "N of M
+    checks failed" / "Checks could not run") is computed client-side from
+    `TaskORM.check_results` (`lib/utils.ts`'s `checksSummary`), not
+    persisted as its own string.** Mirrors decision #93's
+    `parseUnifiedDiff` precedent: the raw per-check array is already the
+    full source of truth and is small, so deriving the one-line summary
+    in three places (`ChangeSummaryCard`, `DecisionCard`,
+    `ExecutionResults`) from one shared function costs nothing and avoids
+    a second backend-computed string that could drift from the array it
+    summarizes.
+103. **The Timeline's execution rows need no special-casing in CEO view.**
+    `execution.completed`'s `reason` (`"{passed}/{total} checks passed"`,
+    set server-side in `_run_checks`) already reads as the plain verdict
+    UX_SPEC asks for, so the existing generic `SystemRow` (which renders
+    `event.reason`) is the CEO-view row for free. Only Technical view gets
+    a dedicated `ExecutionRow` component (`TimelineFeed.tsx`) that expands
+    to the per-check chip breakdown — CEO view is intentionally left on
+    the default path rather than given its own bespoke row, since the
+    default already satisfies the requirement.
+104. **The execution-enabled toggle in Company Settings stays interactive
+    even when `execution_available` is false (no Docker).** The setting
+    is a durable company preference ("should checks run when a sandbox
+    becomes available"), not a live control over something happening
+    right now — disabling it because Docker is absent today would forget
+    the CEO's preference the moment Docker Desktop starts, which is
+    exactly the "flip it off once, stays off" ergonomics item 96 already
+    established for the opposite direction.
+105. **`scripts/seed.py` was broken before this sprint** (missing the
+    Sprint 5 `workspace_manager` constructor arg entirely, on top of this
+    sprint's new `sandbox_runner` one) — caught only because Phase 3's
+    manual verification actually ran `make seed` for the first time in a
+    while. Fixed by wiring `LocalGitWorkspaceManager` +
+    `DockerSandbox` the same way `main.py`'s `lifespan()` does, rather
+    than inventing a seed-only construction path. No `CLAUDE.md`
+    "Working Style" self-verify step had caught this because "boot the
+    slice when behavior changed" was being read as scoped to whichever
+    module changed, not exercised end-to-end via the actual demo path —
+    worth remembering `make seed` as part of that check going forward.
+106. **Phase 3 UI verification was done without a browser tool**: `tsc
+    --noEmit` and `next build` both clean, plus curl-driven smoke tests
+    against the live dev servers (page routes return 200, a real code
+    mission run through the mock provider end-to-end produces the
+    expected `check_results: null` / zero `execution.*` events since the
+    mock deliverable never matches a check's `detect_globs`). No actual
+    rendered-pixel verification of the new chips/toggle/timeline rows was
+    possible in this environment — noted here per CLAUDE.md's instruction
+    to say so explicitly rather than claim a browser check that didn't
+    happen.
