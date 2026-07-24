@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 6 — Execution Sandbox
- Overall: 32/40 items · 80%
- Now working on: 4.1
- Last update: 2026-07-24 22:20
+ Overall: 40/40 items · 100%
+ Now working on: done — Sprint 6 shipped
+ Last update: 2026-07-24 23:05
 ================================================
 
 PHASE 0 — Hygiene                                              (4/4)
@@ -46,13 +46,14 @@ PHASE 3 — Frontend                                             (9/9)
 [x] 3.8  tsc --noEmit + next build clean
 [x] 3.9  Commit+push: feat(dashboard)
 
-PHASE 4 — Verification & Doc Sync                              (0/8)
-[ ] 4.1  Tests: detection matrix
-[ ] 4.2  Tests: degradation paths
-[ ] 4.3  Tests: toggle-off skips execution
-[ ] 4.4  Tests: path-fix regression
-[ ] 4.5  All pre-existing tests green
-[ ] 4.6  E2E (real Docker if available, else Fake + DECISIONS note)
-[ ] 4.7  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
-[ ] 4.8  Final commit+push, remote HEAD confirmed
+PHASE 4 — Verification & Doc Sync                              (8/8)
+[x] 4.1  Tests: detection matrix
+[x] 4.2  Tests: degradation paths
+[x] 4.3  Tests: toggle-off skips execution
+[x] 4.4  Tests: path-fix regression
+[x] 4.5  All pre-existing tests green (142 passed, 4 skipped w/o Docker daemon)
+[x] 4.6  E2E (real Docker unavailable locally — FakeSandbox E2E + live mock-mode
+    smoke test instead; DECISIONS.md #107 notes real-Docker verification pending)
+[x] 4.7  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
+[x] 4.8  Final commit+push, remote HEAD confirmed
 ================================================

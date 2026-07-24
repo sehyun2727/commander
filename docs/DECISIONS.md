@@ -1054,3 +1054,22 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     possible in this environment — noted here per CLAUDE.md's instruction
     to say so explicitly rather than claim a browser check that didn't
     happen.
+107. **Phase 4 item 4.6 (real-Docker E2E) is pending, not done — Docker
+    Desktop is confirmed not running in this dev environment** (a live
+    `GET /api/system/capabilities` returned
+    `{"execution": false, "reason": "Docker Desktop is not running"}`
+    during Phase 3 verification). Per the sprint brief's own fallback
+    instruction ("otherwise FakeSandbox E2E + note in DECISIONS.md that
+    real-Docker verification is pending"), the closest available
+    substitute was exercised instead: the `FakeSandbox`-driven pipeline
+    tests (`test_run_checks_detects_and_runs_matched_checks` and
+    siblings in `test_execution_pipeline.py`, calling `_land_code_changes`
+    / `_run_checks` directly so real `CheckOutcome` data is produced) plus
+    a live mock-mode smoke test through the actual running dev server
+    (Phase 3, entry #106). Neither exercises the real `docker create` /
+    tar-copy / `docker rm` path in `DockerSandbox` itself — that remains
+    unverified on this machine. Whoever next has Docker Desktop available
+    should run `make sandbox-image` then the 4 skipped
+    `@pytest.mark.skipif` tests in `test_sandbox.py` (and ideally one real
+    code mission through a running `make dev`) to close this out; nothing
+    in Sprint 6's design assumes that verification already happened.
