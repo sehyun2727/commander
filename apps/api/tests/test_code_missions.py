@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from sqlalchemy import select
 
+from app.core.db_models import AgentORM
 from app.core.lifecycle.task_states import TaskState
 from app.modules.approvals import service as approvals_service
 from app.modules.projects import service as projects_service
@@ -223,3 +225,48 @@ async def test_merge_conflict_blocks_the_mission(harness):
 
     approval = await approvals_service.list_all(harness.session_factory, project.id)
     assert approval[0].status == "approved"
+
+
+@pytest.mark.asyncio
+async def test_truncated_diff_gets_a_note_for_the_reviewer_but_not_persisted_stats(harness):
+    """WorkspaceManager.diff() truncating (test_workspace_manager.py covers
+    that in isolation) must also surface as a human-readable note in the
+    text handed to the Reviewer, without that note leaking into the
+    aggregate stats persisted on TaskORM.code_stats. Drives _land_code_changes
+    directly with a monkeypatched diff() since the mock provider's fixed
+    2-file output is far too small to naturally exceed max_chars."""
+    project = await projects_service.create_project(
+        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    )
+    task = await tasks_service.create_task(
+        harness.session_factory,
+        harness.event_bus,
+        project.id,
+        "Build a big page",
+        "lots of markup",
+        "normal",
+        deliverable_type="code",
+    )
+    async with harness.session_factory() as session:
+        engineer_agent = (
+            await session.execute(
+                select(AgentORM).where(AgentORM.project_id == project.id, AgentORM.role == "engineer")
+            )
+        ).scalar_one()
+
+    async def _fake_diff(project_id, branch_name, **kwargs):
+        return "x" * 100, True
+
+    harness.workspace_manager.diff = _fake_diff
+
+    deliverable = (
+        "**Change Summary:**\nAdded a big page.\n\n"
+        "===== FILE: index.html =====\n<html></html>\n===== END FILE ====="
+    )
+    change_summary, stats = await harness.workflow_engine._land_code_changes(task, engineer_agent, deliverable)
+
+    assert change_summary == "Added a big page."
+    assert stats["diff_text"] == "x" * 100 + "\n\n[diff truncated -- showing the first portion only]"
+
+    persisted = await tasks_service.get_task(harness.session_factory, task.id)
+    assert "diff_text" not in persisted.code_stats

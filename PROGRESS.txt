@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 5 — Workspace
- Overall: 34/44 items · 77%
- Now working on: 5.1
- Last update: 2026-07-24 19:10
+ Overall: 44/44 items · 100%
+ Now working on: done
+ Last update: 2026-07-24 19:40
 ================================================
 
 PHASE 1 — WorkspaceManager                                     (9/9)
@@ -48,15 +48,15 @@ PHASE 4 — Frontend                                             (9/10)
 [x] 4.7  Timeline rows for code.changed / branch.merged (narrate() reason fallback, no change needed)
 [x] 4.8  Mission create: deliverable toggle (default code)
 [x] 4.9  tsc --noEmit + next build clean
-[ ] 4.10 Commit: feat(dashboard)
+[x] 4.10 Commit: feat(dashboard)  →  93c0fea
 
-PHASE 5 — Verification & Doc Sync                              (0/8)
-[ ] 5.1  Tests: parser valid/malformed/fallback
-[ ] 5.2  Tests: branch lifecycle (3 decision outcomes)
-[ ] 5.3  Tests: diff truncation note
-[ ] 5.4  Tests: document missions unaffected
-[ ] 5.5  All 75 pre-existing tests green
-[ ] 5.6  Live mock E2E per Definition of Done
-[ ] 5.7  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
-[ ] 5.8  Commit: chore(sprint5)
+PHASE 5 — Verification & Doc Sync                              (8/8)
+[x] 5.1  Tests: parser valid/malformed/fallback (test_code_contract_parsing.py, 7 tests)
+[x] 5.2  Tests: branch lifecycle (3 decision outcomes) (covered by test_code_missions.py since Phase 3)
+[x] 5.3  Tests: diff truncation note (test_code_missions.py: truncated diff -> reviewer note, not persisted)
+[x] 5.4  Tests: document missions unaffected (covered by test_code_missions.py since Phase 3)
+[x] 5.5  All tests green (113 passed)
+[x] 5.6  Live mock E2E per Definition of Done (curl flow: create -> assign -> tree/file/diff pre-merge -> approve -> tree/file/merges post-merge, verified during Phase 4)
+[x] 5.7  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
+[x] 5.8  Commit: chore(sprint5)
 ================================================

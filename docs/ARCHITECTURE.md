@@ -1,7 +1,7 @@
 # Commander Architecture
 
-Version: v2.3 (As-Built)
-Status: Synced with Sprint 4.7 ("Headquarters UX") implementation — 2026-07
+Version: v2.4 (As-Built)
+Status: Synced with Sprint 5 ("Workspace") implementation — 2026-07
 Supersedes: v1.0 Draft (pre-implementation vision)
 
 ---
@@ -69,6 +69,7 @@ Every significant company action publishes an `Event` through the EventBus, whic
 Event envelope: `id, project_id, kind, type, actor {role, id, name}, payload, reason, created_at`.
 
 - `kind: "system" | "conversation"` — one storage model, two renderings. Conversation messages ARE events. (Resolves the v1.0 pending "Timeline data model" question.)
+- Code-mission events: `workspace.initialized` (first code mission for a company), `code.changed` (Engineer commit landed on the mission branch — stats payload), `branch.merged` (CEO approval merged the branch into `main`). Rendered by the same generic Timeline row via `event.reason` — no special-cased renderer needed.
 - `reason` makes every agent action explainable (Rule 2).
 - Payload shapes are validated per-type via `PAYLOAD_MODELS` in `build_event()`.
 - TypeScript types are **generated** from the Pydantic contracts (`scripts/generate_ts_schemas.py` → `packages/event-schemas/ts/`). Frontend never redeclares event shapes.
@@ -81,8 +82,8 @@ Event envelope: `id, project_id, kind, type, actor {role, id, name}, payload, re
 |---|---|---|
 | `event_bus` | Persist → fan out → SSE push. Dependency floor: depends only on core. | ✅ In-process |
 | `projects` | Company CRUD. Founding a company auto-creates a Department with 3 Employees (PM / Engineer / Reviewer), each founded with default `AgentProfile` field values, and posts each Employee's template `intro` line as a task-less conversation event. `GET /projects/{id}/starters` serves the template's one-click starter Mission suggestions. | ✅ |
-| `tasks` | Mission CRUD, assignment, Meeting messages. Assignment triggers the workflow. | ✅ |
-| `workflow_engine` | The brain. PM → Engineer → Reviewer pipeline as background asyncio tasks; publishes every beat; creates CEO Decisions. System prompts built per call via `prompt_builder.build(profile, role)`. | ✅ Single fixed pipeline |
+| `tasks` | Mission CRUD, assignment, Meeting messages, `deliverable_type: "code" \| "document"` (defaults `"code"`). Assignment triggers the workflow. Serves `GET /tasks/{id}/diff` (real diff + truncation flag) since it owns `branch_name`. | ✅ |
+| `workflow_engine` | The brain. PM → Engineer → Reviewer pipeline as background asyncio tasks; publishes every beat; creates CEO Decisions. System prompts built per call via `prompt_builder.build(profile, role, deliverable_type)`. For code missions, the Engineer's FILE-block output is parsed (`parsing.parse_file_blocks` / `parse_change_summary`), written + committed to the mission branch via `WorkspaceManager`, and the Reviewer's context becomes the Change Summary + a real (possibly truncated) diff — never the raw deliverable text. Zero valid FILE blocks silently falls back to a document mission rather than failing the pipeline. Approve → merge → `branch.merged`; reject → branch left unmerged; request_changes → same-branch recommit (attempt+1); merge conflict → `blocked` with a plain-language reason (no AI code is ever executed to resolve it). | ✅ Single fixed pipeline |
 | `agent_runtime` | Employee state + validated transitions (state machine in `core/lifecycle`). Founds Employees with role-keyed default `AgentProfile`s. | ✅ DB-backed |
 | `templates` | Not an event-driven module — a static internal data file (`app/templates/software_company.py`, §10.6). Single source of the founding trio, pipeline role order, each role's immutable prompt contract, founding profile defaults, and onboarding data (intro lines, starter Missions). `agent_runtime`, `workflow_engine`, and `prompt_builder` all read from it; no component branches on a hardcoded role name. One template, no picker (§10.4). | ✅ |
 | `agent_profiles` | CEO-editable Employee configuration: `AgentProfile` (personality / working style / decision style / custom instructions / per-Employee model override), persisted as JSON on `AgentORM.profile`. `GET`/`PUT /api/agents/{agent_id}/profile`; `PUT` emits `agent.profile_updated` (changed fields only) via EventBus. | ✅ |
@@ -97,7 +98,7 @@ Event envelope: `id, project_id, kind, type, actor {role, id, name}, payload, re
 | `situation` | `GET /projects/{id}/situation` — 1-2 sentence PM-voiced glanceable status (pending decisions, missions in flight, last notable event), generated via `ProviderGateway` with a deterministic mock fallback. Ephemeral/uncached, regenerated on read; distinct from the Daily Report. | ✅ |
 | `core/secrets` | `SecretsProvider` port. `DBSecretsProvider`: `settings_kv` override → `.env` fallback, so keys can be pasted in Company Settings at runtime. Write-only through the API. | ✅ Plaintext (local MVP) |
 | `auth` | Single hardcoded local CEO. | 🔲 Placeholder |
-| `workspace_manager` | Git repo / branch / diff / human-readable summaries. Interface defined only. | 🔲 Interface only |
+| `workspace_manager` | One real git repo per company at `${COMMANDER_WORKSPACE_ROOT}/{project_id}` (`LocalGitWorkspaceManager`, plain `git` CLI via async subprocess). Branch-per-mission (`mission/{task_id[:8]}`); lazy-init with a `README.md` on `main`; path validation (relative-only, no `..`, no symlink escape, no `.git`); limits of 30 files / 256KB / text-only per write (violations skipped + reported, never fail the mission); `diff()` truncates at `max_chars` and flags `truncated`. Read-only browsing (`tree`/`file`/`merges`) served from `workspace_manager/routes.py`; the per-mission diff is served from `tasks/routes.py` since only `TaskORM` knows `branch_name` (DECISIONS.md #94). | ✅ |
 
 ### Lifecycles
 
@@ -122,8 +123,9 @@ Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark Render.com-
 
 - **My Companies** `/` — founding invitation (name + optional "what should it build") that skips straight to a live Mission when filled in; `CompanyCard` per company (status word, "n/m Missions" milestone bar, live employee avatar stack, latest activity line, decision badge)
 - **Headquarters** `/company/[id]` — top to bottom: Decision strip hero (pending `DecisionCard`s, quiet "Nothing needs your decision." when empty) → Situation Report block (PM attribution + timestamp) → four Vitals linked to their source pages (Missions active, Employees working now, Risks open — proxied via FAILED-mission count, Payroll this month) → condensed live Timeline with an "Open full Timeline" link
-- **Missions** — kanban (Backlog / Developing / Needs your decision / Done); empty state offers a one-click starter Mission (from the template's `starters`, via `GET /projects/{id}/starters`) + create modal
-- **Mission detail / Meeting** — conversation-kind transcript with live streaming replies, CEO can message, Mission Budget spent, reuses `DecisionCard` for its pending Approval
+- **Missions** — kanban (Backlog / Developing / Needs your decision / Done); empty state offers a one-click starter Mission (from the template's `starters`, via `GET /projects/{id}/starters`) + create modal; create form includes a code/document deliverable toggle (defaults code)
+- **Mission detail / Meeting** — conversation-kind transcript with live streaming replies, CEO can message, Mission Budget spent, reuses `DecisionCard` for its pending Approval. Code missions render `ChangeSummaryCard` instead of raw deliverable text: Change Summary + aggregate stats (`N files +A -D`) + verdict chip, with the real diff lazily fetched and expandable per-file only on request — the diff is never the landing view
+- **Workspace** `/company/[id]/workspace` — the company's real git-backed codebase: file tree + file viewer (`GET /projects/{id}/workspace/tree`\|`/file`) and recent merge history (`GET /projects/{id}/workspace/merges`), all read-only
 - **Employees** — live state cards
 - **Decisions** `/company/[id]/decisions` — Pending / History tabs; `DecisionCard`'s full anatomy (Problem / Recommendation with reviewer attribution / Risk / Impact + Approve · Request changes · Reject), History adds the CEO's decision + outcome
 - **Timeline** `/company/[id]/timeline` — full-page live feed (cursor-paginated "load earlier"), filter tabs (All / Meetings / Decisions / System), CEO view ↔ Technical view toggle (hidden mechanism-event set defined as data in `lib/timelineVocabulary.ts`), 4+ consecutive minor system events collapse into an expandable digest row
@@ -148,9 +150,9 @@ Future extraction points if scaled: Agent Runtime Service, Workflow Service, Eve
 
 ## Not Built Yet (requires an explicit sprint brief)
 
-Execution sandbox · real code execution · Workspace Manager implementation · deployment/Launch · auth · cloud runner · additional providers (OpenAI/Google/OpenRouter/local) · plugin marketplace · multi-company orgs.
+Execution sandbox · real code execution · deployment/Launch · auth · cloud runner · additional providers (OpenAI/Google/OpenRouter/local) · plugin marketplace · multi-company orgs.
 
-**Sandbox gate:** no AI-generated code is ever executed until an isolation layer exists. Until then, Engineers produce plans/text/diff artifacts only.
+**Sandbox gate:** no AI-generated code is ever executed, installed, evaluated, or spawned until an isolation layer exists — this holds even after Sprint 5's real git workspace. Engineers produce real committed files reviewed by diff; nothing is ever run. The Reviewer audits statically only.
 
 ---
 
