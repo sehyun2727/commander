@@ -105,20 +105,26 @@ class AgentProfileUpdatedPayload(Payload):
     changed_fields: list[str]
 
 
-# --- Workspace -----------------------------------------------------------------
+# --- Workspace (Sprint 5) --------------------------------------------------------
 
-class WorkspaceFileChangedPayload(Payload):
-    path: str
-    change_kind: str  # "added" | "modified" | "deleted"
+class WorkspaceInitializedPayload(Payload):
+    pass
 
 
-class WorkspaceCommittedPayload(Payload):
+class CodeChangedPayload(Payload):
+    branch_name: str
     commit_sha: str
+    files_added: int
+    files_modified: int
+    files_deleted: int
+    additions: int
+    deletions: int
     summary: str
 
 
-class WorkspaceBranchCreatedPayload(Payload):
+class BranchMergedPayload(Payload):
     branch_name: str
+    commit_sha: str
 
 
 # --- Models / providers (Company Settings) --------------------------------------
@@ -226,9 +232,9 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.AGENT_STATE_CHANGED: AgentStateChangedPayload,
     EventType.AGENT_PROFILE_UPDATED: AgentProfileUpdatedPayload,
     EventType.CODING_STARTED: CodingStartedPayload,
-    EventType.WORKSPACE_FILE_CHANGED: WorkspaceFileChangedPayload,
-    EventType.WORKSPACE_COMMITTED: WorkspaceCommittedPayload,
-    EventType.WORKSPACE_BRANCH_CREATED: WorkspaceBranchCreatedPayload,
+    EventType.WORKSPACE_INITIALIZED: WorkspaceInitializedPayload,
+    EventType.CODE_CHANGED: CodeChangedPayload,
+    EventType.BRANCH_MERGED: BranchMergedPayload,
     EventType.MODEL_CHANGED: ModelChangedPayload,
     EventType.PROVIDER_CHANGED: ProviderChangedPayload,
     EventType.PROVIDER_RETRIED: ProviderRetriedPayload,

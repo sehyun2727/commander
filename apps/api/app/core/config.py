@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     provider_timeout_seconds: float = 60.0
     provider_max_retries: int = 2
+    commander_workspace_root: str = "./workspaces"
 
 
 settings = Settings()

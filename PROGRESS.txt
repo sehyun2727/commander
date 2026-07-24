@@ -1,73 +1,62 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 4.7 — Headquarters UX
- Overall: 49/49 items · 100%
- Now working on: —
- Last update: 2026-07-24 16:10
+ Sprint: 5 — Workspace
+ Overall: 8/44 items · 18%
+ Now working on: 1.9
+ Last update: 2026-07-24 17:10
 ================================================
 
-PHASE 1 — Backend Foundations                                  (10/10)
-[x] 1.1  software_company template data file
-[x] 1.2  Founding reads template (trio, profiles, intros)
-[x] 1.3  Workflow engine reads role order from template
-[x] 1.4  No hardcoded role-name branching outside template
-[x] 1.5  Reviewer contract: Problem/Recommendation/Risk/Impact sections
-[x] 1.6  Lenient section parser -> approval payload (Verdict still only hard contract)
-[x] 1.7  MockProvider reviewer emits sections
-[x] 1.8  GET /projects/{id}/situation (+ mock deterministic fallback)
-[x] 1.9  Profile PUT validates model_ref against registry
-[x] 1.10 Commit: feat(core)
+PHASE 1 — WorkspaceManager                                     (8/9)
+[x] 1.1  Async git subprocess wrapper
+[x] 1.2  Lazy repo init + README on main (+ workspace.initialized)
+[x] 1.3  create_branch / commit / merge / diff / file-tree / read
+[x] 1.4  Path validation (relative-only, no .., no symlink escape, no .git)
+[x] 1.5  Limits: 30 files / 256KB / text-only (skip+event on violation)
+[x] 1.6  COMMANDER_WORKSPACE_ROOT env + gitignore
+[x] 1.7  Unit tests: temp-dir git ops
+[x] 1.8  Unit tests: path-safety suite
+[ ] 1.9  Commit: feat(workspace)
 
-PHASE 2 — Status Vocabulary                                    (4/4)
-[x] 2.1  Mapping in contracts + TS regen
-[x] 2.2  StatusWord component + token map
-[x] 2.3  Replace every status render site (grep-verified)
-[x] 2.4  Commit: feat(ux)
+PHASE 2 — Contracts & Template                                 (0/8)
+[ ] 2.1  deliverable_type on tasks + API + TS regen
+[ ] 2.2  Engineer contract: FILE blocks + Change Summary (code only)
+[ ] 2.3  Events: workspace.initialized / code.changed / branch.merged
+[ ] 2.4  Strict block parser
+[ ] 2.5  Lenient summary parser
+[ ] 2.6  Zero-blocks -> document fallback (never failure)
+[ ] 2.7  MockProvider deterministic multi-file output + re-run edits
+[ ] 2.8  Commit: feat(contracts)
 
-PHASE 3 — Decisions Page                                       (6/6)
-[x] 3.1  /decisions route + sidebar item
-[x] 3.2  DecisionCard: 4 sections + reviewer attribution + 3 actions
-[x] 3.3  Graceful rendering when sections missing
-[x] 3.4  History tab: CEO decision + comment + outcome
-[x] 3.5  Headquarters + Mission Detail reuse the same DecisionCard
-[x] 3.6  Commit: feat(dashboard): decisions
+PHASE 3 — Pipeline Integration                                 (0/9)
+[ ] 3.1  Code-mission flow: init -> branch -> write -> commit
+[ ] 3.2  code.changed with stats payload
+[ ] 3.3  Reviewer input: summary + truncated real diff
+[ ] 3.4  Approve -> merge -> branch.merged -> complete
+[ ] 3.5  Request changes -> same-branch recommit (attempt+1)
+[ ] 3.6  Reject -> branch left unmerged
+[ ] 3.7  Merge-failure -> blocked with plain reason
+[ ] 3.8  Streaming / Payroll / retries unaffected (verified)
+[ ] 3.9  Commit: feat(pipeline)
 
-PHASE 4 — Timeline Page                                        (6/6)
-[x] 4.1  /timeline route + sidebar item (SSE live)
-[x] 4.2  Filters: All / Meetings / Decisions / System
-[x] 4.3  CEO/Technical toggle (hidden set defined as data)
-[x] 4.4  Digest grouping (4+ minor system events collapse)
-[x] 4.5  Cursor pagination (load earlier) — fixed page() to newest-first
-[x] 4.6  Commit: feat(dashboard): timeline
+PHASE 4 — Frontend                                             (0/10)
+[ ] 4.1  /workspace page + sidebar item (tree + file viewer + merges)
+[ ] 4.2  ChangeSummaryCard (summary, N files +A/-B, verdict chip)
+[ ] 4.3  Expansion 1: per-file stat list
+[ ] 4.4  Expansion 2: unified diff viewer
+[ ] 4.5  Diff never the landing view (mission detail leads with summary)
+[ ] 4.6  DecisionCard stats line for code missions
+[ ] 4.7  Timeline rows for code.changed / branch.merged
+[ ] 4.8  Mission create: deliverable toggle (default code)
+[ ] 4.9  tsc --noEmit + next build clean
+[ ] 4.10 Commit: feat(dashboard)
 
-PHASE 5 — Headquarters + Companies + Nav                       (7/7)
-[x] 5.1  Decision strip hero (+ calm empty line)
-[x] 5.2  Situation Report block (PM attribution + timestamp)
-[x] 5.3  Vitals linked to their pages (Missions/Employees/Missions/Employees)
-[x] 5.4  Condensed live feed + open-full link
-[x] 5.5  CompanyCard: status word, n/m milestones, avatar stack, activity, decision badge
-[x] 5.6  Sidebar reorder + Reports page/list
-[x] 5.7  Commit: feat(dashboard): headquarters
-
-PHASE 6 — Onboarding                                           (6/6)
-[x] 6.1  Founding invitation: name + optional "what it should build" field
-[x] 6.2  Employee intro events at founding (template intros) — curl-verified
-[x] 6.3  Starter Mission suggestion (one-click create) — GET /starters + Missions empty state
-[x] 6.4  EmptyState pass across all pages (Missions upgraded; others already invitational)
-[x] 6.5  Timed check: founding -> live mission — curl smoke test, intros + starter create both verified live
-[x] 6.6  Commit: feat(dashboard): onboarding
-
-PHASE 7 — Verification & Doc Sync                              (10/10)
-[x] 7.1  Tests: template founding parity (test_template.py)
-[x] 7.2  Tests: section parsing (test_decision_parsing.py)
-[x] 7.3  Tests: situation endpoint (test_situation.py, mock deterministic)
-[x] 7.4  Tests: status mapping completeness (test_status_vocabulary.py)
-[x] 7.5  Tests: model_ref validation (test_agent_profiles.py)
-[x] 7.6  All pre-existing tests green — 75/75 (test_onboarding.py added for Phase 6)
-[x] 7.7  tsc --noEmit + next build clean — both clean, all 13 routes compiled
-[x] 7.8  Live E2E per Definition of Done — founding->intros->starters->mission
-         curl-verified live (Phase 6); pipeline/decision/timeline flows
-         covered by Phase 3/4 automated tests + earlier live verification
-[x] 7.9  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
-[x] 7.10 Commit: chore(sprint4.7)
+PHASE 5 — Verification & Doc Sync                              (0/8)
+[ ] 5.1  Tests: parser valid/malformed/fallback
+[ ] 5.2  Tests: branch lifecycle (3 decision outcomes)
+[ ] 5.3  Tests: diff truncation note
+[ ] 5.4  Tests: document missions unaffected
+[ ] 5.5  All 75 pre-existing tests green
+[ ] 5.6  Live mock E2E per Definition of Done
+[ ] 5.7  CLAUDE.md + ARCHITECTURE.md + DECISIONS.md sync
+[ ] 5.8  Commit: chore(sprint5)
 ================================================

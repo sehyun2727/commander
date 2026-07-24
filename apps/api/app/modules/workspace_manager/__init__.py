@@ -1,16 +1,16 @@
 """Workspace Manager module.
 
-Will implement core.interfaces.workspace_manager.WorkspaceManager. Owns the
-git repository: branches, diffs, commits, file changes, patches, and
-human-readable summaries. The CEO never sees raw code by default.
+Implements `core.interfaces.workspace_manager.WorkspaceManager` against a
+real local git repository per company (`LocalGitWorkspaceManager`). Pure
+git I/O -- no EventBus dependency; `workflow_engine` publishes
+`workspace.initialized` / `code.changed` / `branch.merged` itself, since
+it has the mission context needed to write a good `reason`. See
+docs/DECISIONS.md ("Sprint 5", #87).
 
-Rule: every mutating operation this module performs MUST also publish a
-workspace.* event via event_bus — this is how Timeline and other consumers
-learn about workspace changes. (See docs/backend/DEPENDENCIES.md — this
-rule is currently convention-based, not structurally enforced; flagged as
-a risk for Sprint 2.)
-
-Allowed dependencies: event_bus (via interface).
-
-No implementation yet (Sprint 1 defines module boundaries only).
+⚑ No AI-generated code is ever executed here or anywhere downstream of
+this module -- write/read/diff/merge only.
 """
+
+from .local_git import LocalGitWorkspaceManager
+
+__all__ = ["LocalGitWorkspaceManager"]

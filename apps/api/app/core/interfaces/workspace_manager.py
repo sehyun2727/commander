@@ -1,83 +1,126 @@
 """Port: workspace/git operations available to the rest of the system.
 
-Sprint 1 shipped this as a pure ABC and flagged a gap: nothing stopped an
-implementation from mutating the workspace without publishing the required
-workspace.* event. Sprint 2 resolves that structurally (see
-docs/backend/workflow/WORKSPACE_CONTRACT.md): the public methods below are
-concrete and always publish after calling an abstract `_do_*` hook, so a
-concrete implementation only ever supplies the git logic — it cannot
-supply (or skip) the event publish, because it never touches that code
-path. Read-only methods (diff, summarize) stay simple pass-throughs; they
-don't mutate anything, so no event is owed for them.
+Sprint 2 wrapped every mutating method in a `@final` template method that
+always published a workspace.* event, so a concrete implementation could
+never forget to publish. Sprint 5 replaces that shape: the real git
+operations this sprint needs (validated multi-file writes with per-file
+skip semantics, lazy init, a merge that can legitimately fail, read-only
+tree/file access for the Workspace page) don't reduce to "one hook, one
+fixed event" — and the caller (`workflow_engine`) already has the mission
+context needed to write a good event `reason`, which the manager doesn't.
+So this is a plain ABC, matching `core/interfaces/workflow_engine.py`:
+concrete implementations are pure git I/O with no EventBus dependency;
+`workflow_engine` publishes `workspace.initialized` / `code.changed` /
+`branch.merged` itself. See docs/DECISIONS.md ("Sprint 5").
 
-`@final` marks the public methods as not-to-be-overridden. Python doesn't
-enforce this at runtime — a static type checker (mypy/pyright) in CI does.
-Wiring that check up is a Sprint 3 suggestion, not done here.
+⚑ No AI-generated code is ever executed through this port or its
+implementations — write/read/diff/merge only. Enforcing that is a caller
+responsibility (the Reviewer audits statically); this port doesn't run
+anything by construction, since none of its methods invoke workspace
+content.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import final
+from dataclasses import dataclass, field
 
-from ..events import Actor, EventType, build_event
-from .event_bus import EventBus
 
-_SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
+@dataclass(frozen=True)
+class WriteResult:
+    """Outcome of a validated multi-file write. Invalid files are skipped,
+    not fatal — the caller continues with whatever was valid."""
+
+    written: list[str] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)  # (path, reason)
+
+
+@dataclass(frozen=True)
+class CommitResult:
+    commit_sha: str
+    files_added: int
+    files_modified: int
+    files_deleted: int
+    additions: int
+    deletions: int
+
+
+@dataclass(frozen=True)
+class FileEntry:
+    path: str
+
+
+@dataclass(frozen=True)
+class MergeRecord:
+    commit_sha: str
+    subject: str
+    merged_at: str
 
 
 class WorkspaceManager(ABC):
-    """Out of scope for Sprint 3 (no execution sandbox / real git yet — see
-    docs/DECISIONS.md); kept as a port so a future sprint can implement it
-    without changing callers."""
+    """One real git repo per company. Implementations own only git I/O —
+    no EventBus, no knowledge of missions/tasks."""
 
-    def __init__(self, event_bus: EventBus) -> None:
-        self._event_bus = event_bus
+    @abstractmethod
+    async def ensure_initialized(self, project_id: str) -> bool:
+        """Lazily init the repo on first use (README committed to main).
+        Returns True if this call performed the init, False if it already
+        existed — so the caller knows whether to publish
+        workspace.initialized."""
+        ...
 
-    @final
+    @abstractmethod
     async def create_branch(self, project_id: str, branch_name: str) -> None:
-        """Create a branch, then always publish WorkspaceBranchCreated."""
-        self._do_create_branch(project_id, branch_name)
-        await self._event_bus.publish(
-            build_event(
-                type=EventType.WORKSPACE_BRANCH_CREATED,
-                project_id=project_id,
-                actor=_SYSTEM_ACTOR,
-                payload={"branch_name": branch_name},
-            )
-        )
-
-    @final
-    async def commit(self, project_id: str, message: str) -> str:
-        """Commit staged changes, then always publish WorkspaceCommitted."""
-        commit_sha = self._do_commit(project_id, message)
-        await self._event_bus.publish(
-            build_event(
-                type=EventType.WORKSPACE_COMMITTED,
-                project_id=project_id,
-                actor=_SYSTEM_ACTOR,
-                payload={"commit_sha": commit_sha, "summary": message},
-            )
-        )
-        return commit_sha
-
-    def diff(self, project_id: str, branch_name: str) -> str:
-        """Read-only: return the diff for a branch (Workspace advanced view)."""
-        return self._do_diff(project_id, branch_name)
-
-    def summarize(self, project_id: str, branch_name: str) -> str:
-        """Read-only: human-readable summary (Workspace default view) — the
-        CEO should never be forced to read source code."""
-        return self._do_summarize(project_id, branch_name)
-
-    # --- Hooks a concrete implementation must supply. No git logic here. ---
+        """Idempotent: no-op if the branch already exists."""
+        ...
 
     @abstractmethod
-    def _do_create_branch(self, project_id: str, branch_name: str) -> None: ...
+    async def write_files(
+        self, project_id: str, branch_name: str, files: dict[str, str]
+    ) -> WriteResult:
+        """Validate + write each path (relative-only, contained in the repo,
+        never under .git/, ≤256KB, text/no-NUL). Invalid entries are
+        skipped with a reason, not raised."""
+        ...
 
     @abstractmethod
-    def _do_commit(self, project_id: str, message: str) -> str: ...
+    async def commit(
+        self, project_id: str, branch_name: str, message: str
+    ) -> CommitResult:
+        """Commit whatever is staged on branch_name."""
+        ...
 
     @abstractmethod
-    def _do_diff(self, project_id: str, branch_name: str) -> str: ...
+    async def diff(
+        self, project_id: str, branch_name: str, *, max_chars: int = 12000
+    ) -> tuple[str, bool]:
+        """Unified diff of branch_name against main. Returns
+        (diff_text, was_truncated)."""
+        ...
 
     @abstractmethod
-    def _do_summarize(self, project_id: str, branch_name: str) -> str: ...
+    async def merge(self, project_id: str, branch_name: str) -> str:
+        """Fast-forward/merge branch_name into main. Returns the resulting
+        commit sha on main. Raises WorkspaceConflictError on failure — no
+        auto-resolution."""
+        ...
+
+    @abstractmethod
+    async def list_tree(
+        self, project_id: str, ref: str = "main"
+    ) -> list[FileEntry]:
+        """Flat file listing at ref (Workspace page builds any tree
+        grouping client-side)."""
+        ...
+
+    @abstractmethod
+    async def read_file(self, project_id: str, path: str, ref: str = "main") -> str:
+        """Read-only file content at ref, for the Workspace file viewer."""
+        ...
+
+    @abstractmethod
+    async def recent_merges(
+        self, project_id: str, limit: int = 10
+    ) -> list[MergeRecord]:
+        """Most recent merge commits on main, for the Workspace page."""
+        ...

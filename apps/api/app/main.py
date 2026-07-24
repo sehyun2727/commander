@@ -28,6 +28,7 @@ from .modules.situation import router as situation_router
 from .modules.tasks import router as tasks_router
 from .modules.timeline import router as timeline_router
 from .modules.workflow_engine import CommanderWorkflowEngine
+from .modules.workspace_manager import LocalGitWorkspaceManager
 
 
 @asynccontextmanager
@@ -38,12 +39,16 @@ async def lifespan(app: FastAPI):
     secrets = DBSecretsProvider(session_factory)
     event_bus = InProcessEventBus(session_factory)
     agent_runtime = DBAgentRuntime(session_factory, event_bus)
-    workflow_engine = CommanderWorkflowEngine(session_factory, event_bus, agent_runtime, secrets)
+    workspace_manager = LocalGitWorkspaceManager(settings.commander_workspace_root)
+    workflow_engine = CommanderWorkflowEngine(
+        session_factory, event_bus, agent_runtime, secrets, workspace_manager
+    )
 
     app.state.session_factory = session_factory
     app.state.secrets = secrets
     app.state.event_bus = event_bus
     app.state.agent_runtime = agent_runtime
+    app.state.workspace_manager = workspace_manager
     app.state.workflow_engine = workflow_engine
 
     yield

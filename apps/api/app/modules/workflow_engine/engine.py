@@ -27,6 +27,7 @@ from ...core.interfaces.agent_runtime import AgentRuntime
 from ...core.interfaces.event_bus import EventBus
 from ...core.interfaces.provider_gateway import ProviderGateway
 from ...core.interfaces.workflow_engine import WorkflowEngine
+from ...core.interfaces.workspace_manager import WorkspaceManager
 from ...core.lifecycle.agent_states import AgentState
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
@@ -69,11 +70,13 @@ class CommanderWorkflowEngine(WorkflowEngine):
         event_bus: EventBus,
         agent_runtime: AgentRuntime,
         secrets: SecretsProvider,
+        workspace_manager: WorkspaceManager,
     ) -> None:
         self._session_factory = session_factory
         self._event_bus = event_bus
         self._agent_runtime = agent_runtime
         self._secrets = secrets
+        self._workspace_manager = workspace_manager
 
     # --- public API -----------------------------------------------------
 

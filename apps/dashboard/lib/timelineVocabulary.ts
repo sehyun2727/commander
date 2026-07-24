@@ -11,7 +11,6 @@ export const MECHANISM_EVENT_TYPES: ReadonlySet<EventType> = new Set([
   EventType.AGENT_STATE_CHANGED,
   EventType.PROVIDER_RETRIED,
   EventType.SYSTEM_HEARTBEAT,
-  EventType.WORKSPACE_FILE_CHANGED,
 ]);
 
 export function isMechanismEvent(event: Event): boolean {

@@ -840,3 +840,50 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     already satisfied by `test_template.py`, `test_decision_parsing.py`,
     `test_situation.py`, `test_status_vocabulary.py`, and
     `test_agent_profiles.py` — no additional files needed for those.
+
+### Sprint 5 — Workspace
+
+Judgment calls made while giving Employees a real git workspace under the
+absolute no-execution gate: workspace_manager is git I/O only, the
+pipeline/contract layer is what turns that into CEO-legible summaries.
+
+87. **`WorkspaceManager` is redesigned from Sprint 2's `@final`-wrapped
+    template-method ABC into a plain ABC with no `EventBus` dependency,
+    matching `core/interfaces/workflow_engine.py`'s shape.** The Sprint 2
+    design existed to structurally guarantee an event got published after
+    every mutation, by making the public method concrete and routing
+    concrete implementations through an abstract `_do_*` hook they
+    couldn't bypass. Sprint 5's actual operations don't fit that
+    "one hook, one fixed event" template: `write_files` does a validated
+    multi-file write with per-file skip semantics (no single event
+    describes "12 written, 2 skipped" well), `ensure_initialized` is
+    conditional (event only on the branch that actually initialized),
+    and `merge` can legitimately fail (the caller needs the exception,
+    not a swallowed non-event). Worse, the caller (`workflow_engine`)
+    always has the mission context — task id, attempt number, why this
+    write is happening — needed to write a good event `reason`, and the
+    manager never does. So `workflow_engine` now publishes
+    `workspace.initialized` / `code.changed` / `branch.merged` itself,
+    right after calling the plain git methods, the same way it already
+    publishes `task.*` events around `agent_runtime` calls. Concrete
+    `WorkspaceManager` implementations are pure git I/O and are not
+    trusted (or able) to touch the event bus.
+88. **The old placeholder `EventType.WORKSPACE_FILE_CHANGED` /
+    `WORKSPACE_COMMITTED` / `WORKSPACE_BRANCH_CREATED` members (Sprint 1
+    stubs, never wired to any real emitter) are replaced outright by
+    `WORKSPACE_INITIALIZED` / `CODE_CHANGED` / `BRANCH_MERGED` rather than
+    kept alongside the new set.** Nothing published or subscribed to the
+    old three — grep confirmed only the enum, the payload-model mapping,
+    and one Timeline-vocabulary entry referenced them — so keeping both
+    sets would just be dead enum surface with no compatibility to
+    preserve. `code.changed` (not `workspace.committed`) is the payload
+    that actually carries the file/line stats the ChangeSummaryCard and
+    Timeline need, matching the brief's own event list verbatim.
+89. **`code.changed` and `branch.merged` are deliberately left out of
+    `MECHANISM_EVENT_TYPES` in `timelineVocabulary.ts`.** That set is the
+    CEO-view "hide as noise" list (provider retries, heartbeats, raw
+    state-changed rows). A code mission's Change Summary landing and its
+    merge to main are exactly the kind of CEO-legible milestones the
+    Timeline exists to surface, not mechanism to hide — consistent with
+    how `task.completed` and `approval.granted` are already left out of
+    that set.

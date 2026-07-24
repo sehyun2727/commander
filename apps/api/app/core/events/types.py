@@ -31,10 +31,10 @@ class EventType(str, Enum):
     AGENT_PROFILE_UPDATED = "agent.profile_updated"
     CODING_STARTED = "agent.coding_started"
 
-    # Workspace (Workspace/Repository)
-    WORKSPACE_FILE_CHANGED = "workspace.file_changed"
-    WORKSPACE_COMMITTED = "workspace.committed"
-    WORKSPACE_BRANCH_CREATED = "workspace.branch_created"
+    # Workspace (Workspace/Repository) — Sprint 5
+    WORKSPACE_INITIALIZED = "workspace.initialized"
+    CODE_CHANGED = "code.changed"
+    BRANCH_MERGED = "branch.merged"
 
     # Models / providers (Company Settings)
     MODEL_CHANGED = "model.changed"
