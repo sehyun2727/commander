@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 4.5 — Employee Profiles
- Overall: 39/53 items · 74%
- Now working on: 6.1
- Last update: 2026-07-24 11:00
+ Overall: 52/53 items · 98%
+ Now working on: 6.8
+ Last update: 2026-07-24 11:25
 ================================================
 
 PHASE 0 — Repo Docs Sync                                       (6/6)
@@ -63,13 +63,13 @@ PHASE 5 — Frontend                                             (10/10)
 [x] 5.9  tsc --noEmit + next build clean, zero console errors (verified in real browser) @10:55
 [x] 5.10 Commit: feat(dashboard): employee profile editing @11:02
 
-PHASE 6 — Verification & Doc Sync                               (0/8)
-[ ] 6.1  Tests: layering + adversarial Verdict survival
-[ ] 6.2  Tests: profile CRUD + event emission
-[ ] 6.3  Tests: three-tier model resolution
-[ ] 6.4  Tests: founding default profiles
-[ ] 6.5  All 42 pre-existing tests green
-[ ] 6.6  Mock-mode live E2E (per Definition of Done)
-[ ] 6.7  CLAUDE.md status + ARCHITECTURE.md table + DECISIONS.md
+PHASE 6 — Verification & Doc Sync                               (7/8)
+[x] 6.1  Tests: layering + adversarial Verdict survival (test_prompt_builder.py) @11:05
+[x] 6.2  Tests: profile CRUD + event emission (test_agent_profiles.py) @11:08
+[x] 6.3  Tests: three-tier model resolution (test_model_resolution.py) @11:10
+[x] 6.4  Tests: founding default profiles (test_founding_profiles.py) @11:11
+[x] 6.5  All 56 tests green (42 pre-existing + 14 new) @11:13
+[x] 6.6  Mock-mode live E2E (per Definition of Done) — live PM->Engineer->Reviewer run via curl: personality flavor ("direct" -> "Bottom line: this is done.") present, Reviewer's trailing Verdict line intact and unflavored @11:20
+[x] 6.7  CLAUDE.md status + ARCHITECTURE.md table + DECISIONS.md @11:25
 [ ] 6.8  Commit: chore(sprint4.5): tests + doc sync
 ================================================

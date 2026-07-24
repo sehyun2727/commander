@@ -1,7 +1,7 @@
 # Commander Architecture
 
-Version: v2.1 (As-Built)
-Status: Synced with Sprint 4 ("Real Intelligence") implementation — 2026-07
+Version: v2.2 (As-Built)
+Status: Synced with Sprint 4.5 ("Employee Profiles") implementation — 2026-07
 Supersedes: v1.0 Draft (pre-implementation vision)
 
 ---
@@ -80,11 +80,13 @@ Event envelope: `id, project_id, kind, type, actor {role, id, name}, payload, re
 | Module | Responsibility | Status |
 |---|---|---|
 | `event_bus` | Persist → fan out → SSE push. Dependency floor: depends only on core. | ✅ In-process |
-| `projects` | Company CRUD. Founding a company auto-creates a Department with 3 Employees (PM / Engineer / Reviewer personas). | ✅ |
+| `projects` | Company CRUD. Founding a company auto-creates a Department with 3 Employees (PM / Engineer / Reviewer), each founded with default `AgentProfile` field values. | ✅ |
 | `tasks` | Mission CRUD, assignment, Meeting messages. Assignment triggers the workflow. | ✅ |
-| `workflow_engine` | The brain. PM → Engineer → Reviewer pipeline as background asyncio tasks; publishes every beat; creates CEO Decisions. | ✅ Single fixed pipeline |
-| `agent_runtime` | Employee state + validated transitions (state machine in `core/lifecycle`). | ✅ DB-backed |
-| `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (httpx, streaming, retry-with-backoff). Verdicts parsed from a trailing `**Verdict:**` line — provider-agnostic. | ✅ |
+| `workflow_engine` | The brain. PM → Engineer → Reviewer pipeline as background asyncio tasks; publishes every beat; creates CEO Decisions. System prompts built per call via `prompt_builder.build(profile, role)`. | ✅ Single fixed pipeline |
+| `agent_runtime` | Employee state + validated transitions (state machine in `core/lifecycle`). Founds Employees with role-keyed default `AgentProfile`s. | ✅ DB-backed |
+| `agent_profiles` | CEO-editable Employee configuration: `AgentProfile` (personality / working style / decision style / custom instructions / per-Employee model override), persisted as JSON on `AgentORM.profile`. `GET`/`PUT /api/agents/{agent_id}/profile`; `PUT` emits `agent.profile_updated` (changed fields only) via EventBus. | ✅ |
+| `prompt_builder` | Pure function: `AgentProfile` + role → system prompt. Layers personality/working/decision trait text, then optional custom instructions, then the immutable per-role contract appended LAST — no profile configuration (including adversarial custom instructions) can suppress the Reviewer's trailing `**Verdict:**` requirement. No DB/provider deps. | ✅ |
+| `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (httpx, streaming, retry-with-backoff). Verdicts parsed from a trailing `**Verdict:**` line — provider-agnostic. Resolves models via three-tier precedence: Employee `profile.model_ref` override > CEO per-role override > registry default. | ✅ |
 | `model_registry` | Logical refs (`planner-default`, `builder-default`, `reviewer-default`, `reporter-default`) → (provider, model). `COMMANDER_PROVIDER=mock\|anthropic`. CEO can reassign the model behind planner/builder/reviewer per company (override stored in `settings_kv`, Anthropic only — mock roles are template-locked). | ✅ |
 | `costs` | Per-call token usage → USD via `PRICE_PER_MILLION_TOKENS`. Payroll (calendar-month, per company + per Employee) and Mission Budget (all-time, per mission) summaries. | ✅ |
 | `approvals` | CEO Decisions: approve → completed · request_changes → Engineer re-run (attempt+1) · reject → cancelled. | ✅ |
