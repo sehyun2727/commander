@@ -46,6 +46,8 @@ apps/dashboard/    Next.js App Router + TS + Tailwind + TanStack Query (dark Ren
 packages/event-schemas/ts/   generated TS event types — DO NOT hand-edit; regenerate
 scripts/           generate_ts_schemas.py, seed.py
 docs/              ARCHITECTURE.md (as-built), DECISIONS.md (judgment log), backend/ specs
+docs/design/UX_SPEC.md   product experience source of truth — ALL frontend work follows it
+docs/prompts/      sprint briefs
 ```
 
 ## Commands
@@ -83,3 +85,4 @@ Known accepted MVP tradeoffs: plaintext secrets in local SQLite, in-process even
 - Prefer boring, reliable choices. If a library fights you for >10 minutes, replace it.
 - Self-verify before finishing: `make test`, `pnpm build` (dashboard), and boot the slice when behavior changed.
 - Keep this file in sync: any architecture change must update CLAUDE.md and ARCHITECTURE.md in the same PR/commit. Desync is an architecture violation.
+- Maintain PROGRESS.txt per the live progress discipline (see docs/prompts/) — update per item, never batched.

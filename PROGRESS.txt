@@ -1,0 +1,75 @@
+================================================
+ COMMANDER — SPRINT PROGRESS
+ Sprint: 4.5 — Employee Profiles
+ Overall: 5/53 items · 9%
+ Now working on: 0.6
+ Last update: 2026-07-24 00:30
+================================================
+
+PHASE 0 — Repo Docs Sync                                       (5/6)
+[x] 0.1  make seed (clear verification cruft) @00:10
+[x] 0.2  Rename Claude.md -> CLAUDE.md (two-step git mv) @00:05
+[x] 0.3  Create docs/design/UX_SPEC.md (verbatim from brief) @00:20
+[x] 0.4  CLAUDE.md pointer lines (UX_SPEC, prompts, PROGRESS discipline) @00:25
+[x] 0.5  Save brief to docs/prompts/sprint-4.5-employee-profiles.md @00:28
+[~] 0.6  Commit: chore: repo docs sync
+
+PHASE 1 — Contracts & Model                                    (0/9)
+[ ] 1.1  AgentProfile Pydantic model (incl. model_ref nullable)
+[ ] 1.2  Enums: Personality / WorkingStyle / DecisionStyle
+[ ] 1.3  Event agent.profile_updated + payload model
+[ ] 1.4  Regenerate TS types
+[ ] 1.5  AgentORM: persona Text -> profile JSON
+[ ] 1.6  Default role profiles as data (PM/Engineer/Reviewer)
+[ ] 1.7  Founding uses default profiles
+[ ] 1.8  seed.py updated
+[ ] 1.9  Commit: feat(profiles): contracts + model
+
+PHASE 2 — PromptBuilder                                        (0/7)
+[ ] 2.1  modules/prompt_builder/ (pure, no DB/provider deps)
+[ ] 2.2  Trait mapping data file
+[ ] 2.3  build(profile, role): traits + custom instructions
+[ ] 2.4  Role contract layer appended LAST (immutable)
+[ ] 2.5  Reviewer contract includes Verdict requirement
+[ ] 2.6  500-char custom instruction cap
+[ ] 2.7  Commit: feat(prompt-builder): layered prompt construction
+
+PHASE 3 — Profiles API                                         (0/6)
+[ ] 3.1  GET /agents/{id}/profile
+[ ] 3.2  PUT with validation
+[ ] 3.3  Emit agent.profile_updated (changed fields only)
+[ ] 3.4  Timeline copy for profile changes
+[ ] 3.5  Error cases (bad enum, over-cap, unknown agent)
+[ ] 3.6  Commit: feat(profiles): CRUD API + events
+
+PHASE 4 — Runtime Integration                                  (0/7)
+[ ] 4.1  workflow_engine: system prompt via PromptBuilder
+[ ] 4.2  Three-tier model resolution (agent > role > default)
+[ ] 4.3  MockProvider personality flavor
+[ ] 4.4  Streaming path still works with built prompts
+[ ] 4.5  Payroll/cost attribution unaffected (verified)
+[ ] 4.6  Retry/backoff path unaffected (verified)
+[ ] 4.7  Commit: feat(runtime): profile-driven prompts
+
+PHASE 5 — Frontend                                             (0/10)
+[ ] 5.1  Employee profile page/drawer + data hooks
+[ ] 5.2  Display: role, model plain name, style summary
+[ ] 5.3  Three style selects
+[ ] 5.4  Custom instructions textarea + 500 counter
+[ ] 5.5  Save flow + toast
+[ ] 5.6  Profile change live in Timeline (SSE)
+[ ] 5.7  Employee cards: one-line style summary
+[ ] 5.8  Commander terminology check on new strings
+[ ] 5.9  tsc --noEmit + next build clean, zero console errors
+[ ] 5.10 Commit: feat(dashboard): employee profile editing
+
+PHASE 6 — Verification & Doc Sync                               (0/8)
+[ ] 6.1  Tests: layering + adversarial Verdict survival
+[ ] 6.2  Tests: profile CRUD + event emission
+[ ] 6.3  Tests: three-tier model resolution
+[ ] 6.4  Tests: founding default profiles
+[ ] 6.5  All 42 pre-existing tests green
+[ ] 6.6  Mock-mode live E2E (per Definition of Done)
+[ ] 6.7  CLAUDE.md status + ARCHITECTURE.md table + DECISIONS.md
+[ ] 6.8  Commit: chore(sprint4.5): tests + doc sync
+================================================
