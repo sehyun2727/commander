@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCompanies, useCreateCompany } from "@/lib/hooks";
+import { CompanyCard } from "@/components/CompanyCard";
 import { EmptyState } from "@/components/EmptyState";
 
 export default function CompanyListPage() {
@@ -59,14 +59,7 @@ export default function CompanyListPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {active.map((company) => (
-            <Link
-              key={company.id}
-              href={`/company/${company.id}`}
-              className="rounded-xl border border-base-border bg-base-card p-5 shadow-panel transition-colors hover:border-accent/50 hover:bg-base-hover"
-            >
-              <p className="text-base font-semibold text-text">{company.name}</p>
-              <p className="mt-1 text-xs uppercase tracking-wide text-text-faint">Provider: {company.provider}</p>
-            </Link>
+            <CompanyCard key={company.id} company={company} />
           ))}
         </div>
       )}

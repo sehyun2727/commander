@@ -101,3 +101,8 @@ export interface Report {
   summary_markdown: string;
   generated_at: string;
 }
+
+export interface Situation {
+  text: string;
+  generated_at: string;
+}

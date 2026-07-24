@@ -20,8 +20,11 @@ export function ReportDetail({ companyId, reportId }: { companyId: string; repor
 
   return (
     <main className="mx-auto max-w-3xl px-8 py-10">
-      <Link href={`/company/${companyId}`} className="text-xs font-medium text-text-faint hover:text-text-muted">
-        ← Headquarters
+      <Link
+        href={`/company/${companyId}/reports`}
+        className="text-xs font-medium text-text-faint hover:text-text-muted"
+      >
+        ← Reports
       </Link>
 
       <header className="mt-3 mb-6">

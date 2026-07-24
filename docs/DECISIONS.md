@@ -721,3 +721,57 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     was preferred over forking a page-only variant, and CEO view as the
     default matches Headquarters' "condensed" framing (§3.2) better than
     the previous unfiltered dump of every internal state-change event.
+76. **`companyStatusWord()` (`components/StatusWord.tsx`) reduces a
+    company's Mission states to one token via a fixed most-urgent-first
+    priority list** (`NEEDS_DECISION > BLOCKED > REVIEWING > DEVELOPING >
+    PLANNING`, falling back to `IDLE` for an all-terminal/no-Missions
+    company). A company card can't show every Mission's status, and
+    silently picking "whatever the last Mission happens to be" would let
+    a stuck or CEO-waiting Mission hide behind an unrelated one that's
+    quietly `PLANNING`. Priority-by-urgency means the card can never
+    under-report how much the CEO's attention is needed.
+77. **"Risks open" (Headquarters Vitals) is implemented as a count of
+    Missions in the `FAILED` StatusWord state, not a dedicated Risk/Issue
+    entity.** Grep-confirmed: no `risks`/`issues` module exists anywhere
+    under `apps/api/app/modules`, and `EventType.BUG_FOUND` is defined in
+    the event schema but never emitted by any workflow. CLAUDE.md's
+    terminology table maps internal "Issue" to UI "Risk" but nothing in
+    the codebase currently tracks that entity. Building a full Risk
+    module is out of scope for a UX-focused sprint brief, so FAILED
+    Missions — the closest existing signal that something needs the
+    CEO's attention — stand in as the proxy. Revisit if/when a real
+    Risk/Issue module ships; this is a placeholder, not a permanent
+    modeling decision.
+78. **Headquarters' four Vitals cards are wrapped in `Link`s that reuse
+    existing pages** (Missions active -> `/missions`, Employees working
+    now -> `/employees`, Risks open -> `/missions`, Payroll this month ->
+    `/employees`) **rather than each getting a bespoke destination.**
+    `/missions` already supports filtering by Mission state visually via
+    its kanban columns, and `/employees` already renders per-Employee
+    spend (`spendByAgent` from `useCompanyCosts`), so both Payroll and
+    Risks land on a page that already answers the "why" behind the
+    number without new routes. "Employees working now" also changed from
+    a raw headcount to `agentStatusWord(state) !== IDLE` count, matching
+    what the linked `/employees` page actually highlights (who's active
+    right now, not company size).
+79. **`CompanyCard` is a self-fetching component** (its own
+    `useEmployees`/`useMissions`/`useApprovals`/`useTimeline` calls per
+    company, same N+1 pattern as `DecisionCard`/`EmployeeCard`) **rather
+    than My Companies fetching everything up front and passing props
+    down.** TanStack Query dedupes/caches per company ID regardless of
+    which component issues the call, and keeping each card
+    self-contained means the My Companies page itself stays a thin list
+    — consistent with the precedent already set by every other
+    "card that needs its own related data" component in this codebase.
+    Accepted as an MVP-scale tradeoff (a CEO with dozens of companies
+    would need a dedicated summary endpoint instead).
+80. **`DailyReportCard` was deleted and replaced by a dedicated
+    `/company/[id]/reports` list page** (mirroring the Decisions page's
+    header + list + empty-state shape), with `ReportDetail`'s back-link
+    changed from "-> Headquarters" to "-> Reports" and a "Reports" entry
+    added to the sidebar between Timeline and Company Settings. The
+    brief calls for promoting Reports once it's "only a card" on
+    Headquarters — Headquarters now only links out to `/reports` rather
+    than embedding report generation/preview inline, keeping the
+    Headquarters page focused on the CEO's Decision strip, Situation
+    Report, Vitals, and condensed Timeline per UX_SPEC §3.2.

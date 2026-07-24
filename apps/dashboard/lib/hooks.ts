@@ -21,6 +21,7 @@ export const keys = {
   models: (companyId: string) => ["models", companyId] as const,
   reports: (companyId: string) => ["reports", companyId] as const,
   report: (reportId: string) => ["report", reportId] as const,
+  situation: (companyId: string) => ["situation", companyId] as const,
 };
 
 export function useCompanies() {
@@ -121,6 +122,14 @@ export function useReports(companyId: string) {
 
 export function useReport(reportId: string) {
   return useQuery({ queryKey: keys.report(reportId), queryFn: () => api.getReport(reportId) });
+}
+
+export function useSituation(companyId: string) {
+  return useQuery({
+    queryKey: keys.situation(companyId),
+    queryFn: () => api.getSituation(companyId),
+    refetchInterval: 60_000,
+  });
 }
 
 export function useGenerateReport(companyId: string) {

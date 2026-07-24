@@ -8,6 +8,7 @@ import type {
   Project,
   ProjectCostSummary,
   Report,
+  Situation,
   Task,
   TaskCostSummary,
   TimelinePage,
@@ -109,4 +110,7 @@ export const api = {
   getReport: (reportId: string) => request<Report>(`/api/reports/${reportId}`),
   generateReport: (companyId: string) =>
     request<Report>(`/api/projects/${companyId}/reports/generate`, { method: "POST" }),
+
+  // Situation Report
+  getSituation: (companyId: string) => request<Situation>(`/api/projects/${companyId}/situation`),
 };

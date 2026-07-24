@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 4.7 — Headquarters UX
- Overall: 26/49 items · 53%
- Now working on: 5.1
- Last update: 2026-07-24 13:20
+ Overall: 33/49 items · 67%
+ Now working on: 6.1
+ Last update: 2026-07-24 14:10
 ================================================
 
 PHASE 1 — Backend Foundations                                  (10/10)
@@ -40,14 +40,14 @@ PHASE 4 — Timeline Page                                        (6/6)
 [x] 4.5  Cursor pagination (load earlier) — fixed page() to newest-first
 [x] 4.6  Commit: feat(dashboard): timeline
 
-PHASE 5 — Headquarters + Companies + Nav                       (0/7)
-[ ] 5.1  Decision strip hero (+ calm empty line)
-[ ] 5.2  Situation Report block (PM attribution + timestamp)
-[ ] 5.3  Vitals linked to their pages
-[ ] 5.4  Condensed live feed + open-full link
-[ ] 5.5  CompanyCard: status word, n/m milestones, avatar stack, activity, decision badge
-[ ] 5.6  Sidebar reorder + Reports page/list
-[ ] 5.7  Commit: feat(dashboard): headquarters
+PHASE 5 — Headquarters + Companies + Nav                       (7/7)
+[x] 5.1  Decision strip hero (+ calm empty line)
+[x] 5.2  Situation Report block (PM attribution + timestamp)
+[x] 5.3  Vitals linked to their pages (Missions/Employees/Missions/Employees)
+[x] 5.4  Condensed live feed + open-full link
+[x] 5.5  CompanyCard: status word, n/m milestones, avatar stack, activity, decision badge
+[x] 5.6  Sidebar reorder + Reports page/list
+[x] 5.7  Commit: feat(dashboard): headquarters
 
 PHASE 6 — Onboarding                                           (0/6)
 [ ] 6.1  Founding invitation empty state on /

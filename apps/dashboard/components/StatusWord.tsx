@@ -38,6 +38,23 @@ export function agentStatusWord(state: string): StatusWordToken {
   return AGENT_STATE_STATUS_WORD[state as AgentState] ?? StatusWordToken.IDLE;
 }
 
+// A company has many Missions but the My Companies card (UX_SPEC §3.1)
+// needs one status word. Priority order is most-urgent-first: a Mission
+// waiting on the CEO always wins, then anything actively stuck or
+// in flight; an all-idle/no-Missions company reads as Idle.
+const COMPANY_STATUS_PRIORITY: StatusWordToken[] = [
+  StatusWordToken.NEEDS_DECISION,
+  StatusWordToken.BLOCKED,
+  StatusWordToken.REVIEWING,
+  StatusWordToken.DEVELOPING,
+  StatusWordToken.PLANNING,
+];
+
+export function companyStatusWord(missionStates: string[]): StatusWordToken {
+  const tokens = new Set(missionStates.map(taskStatusWord));
+  return COMPANY_STATUS_PRIORITY.find((token) => tokens.has(token)) ?? StatusWordToken.IDLE;
+}
+
 export function statusWordLabel(token: StatusWordToken): string {
   return STATUS_WORD_LABEL[token];
 }
