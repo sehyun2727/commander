@@ -434,3 +434,61 @@ working with zero API keys throughout — see the brief's out-of-scope list.
     Decision 16) against the live seeded company: generate → card updates
     → view full report → past-reports list on a second generate, zero
     console/page errors.
+
+### Sprint 4.5 — Employee Profiles
+
+49. **`AgentProfile.model_config` sets `protected_namespaces=()`.** Pydantic
+    v2 warns on any field prefixed `model_` (it reserves that namespace for
+    its own `model_*` methods). `model_ref` is the correct, spec-mandated
+    field name (mirrors `RoutedProviderGateway.resolve_model`'s
+    `model_ref` parameter throughout the provider path) — silencing the
+    warning was the right call over renaming the field to dodge it.
+50. **Default founding profiles use `AgentProfile`'s own field defaults
+    per role, not per-role trait variation.** The old `DEPARTMENT_ROSTER`
+    persona strings gave PM/Engineer/Reviewer distinct baked-in voices;
+    the brief's model replaces that with a CEO-editable `AgentProfile`
+    instead. Rather than pre-seed three different personality/working/
+    decision-style combinations (an arbitrary design choice with no spec
+    backing), founding profiles start at the schema defaults
+    (`professional` / `balanced` / `balanced`) for every role, and the
+    role's distinct voice now comes entirely from `ROLE_CONTRACTS` in
+    `prompt_builder`, not the profile. CEOs differentiate Employees by
+    editing profiles after founding, which is the point of the sprint.
+51. **`/api/agents/{agent_id}/profile` has no `project_id` prefix.**
+    Mirrors the existing direct-resource convention (`/api/tasks/{task_id}`,
+    `/api/approvals/{approval_id}`) rather than nesting under
+    `/api/projects/{project_id}/agents/{agent_id}/profile` — `agent_id` is
+    already globally unique (UUID PK) and the route handler doesn't need
+    `project_id` for anything but the event payload, which it reads off
+    the loaded `AgentORM` row instead.
+52. **`agent_override` is an explicit keyword-only parameter on
+    `resolve_model`/`complete`/`stream`, never smuggled through `**opts`.**
+    `**opts` already carries provider-specific/mock-flavor context
+    (`task_title`, `context`, etc.) that flows through to the underlying
+    provider; `agent_override` is consumed entirely by
+    `RoutedProviderGateway` for model resolution and must never reach
+    `MockProvider`/`AnthropicProvider`, which only ever see an
+    already-resolved concrete model id. An explicit parameter makes that
+    boundary a type signature, not a convention callers have to remember.
+53. **Phases 1, 2, and the runtime-wiring half of Phase 4 were implemented
+    in one continuous pass before running any tests**, rather than testing
+    after each phase as the PROGRESS checklist's phase boundaries might
+    imply. Renaming `AgentORM.persona` -> `profile` (Phase 1) transiently
+    breaks every runtime call site (`workflow_engine.py`,
+    `tasks/service.py`) until Phase 4 rewires them to build prompts via
+    `prompt_builder` — there is no good intermediate state to pause and
+    test at. Accepted because the CEO explicitly asked for continuous
+    autonomous work through to the Phase 6 Definition of Done rather than
+    phase-by-phase verification; the full suite (42/42) was run once all
+    four phases' code was in place and passed clean on the first attempt.
+54. **`MockProvider`'s personality flavor (item 4.3) is never appended to
+    Reviewer output.** The Reviewer's trailing `**Verdict:** ...` line is a
+    hard parsing contract (`workflow_engine` reads it verbatim, and
+    `test_mock_provider.py` asserts the *last line* is exactly one of the
+    two allowed strings) — appending flavor text after it would silently
+    break mock-mode approvals. Planner and Builder output get a
+    one-sentence suffix sniffed from trait keywords in the system prompt
+    (e.g. `"risk-aware"` -> a precaution note); Reviewer output is left
+    untouched. This is also the only visible sign, in mock mode, that a
+    CEO's profile edit changed anything, since MockProvider doesn't
+    actually read the system prompt for content.

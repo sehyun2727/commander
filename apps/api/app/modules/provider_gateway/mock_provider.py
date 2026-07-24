@@ -116,7 +116,21 @@ def _report_text(opts: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _text_for(model_ref: str, opts: dict[str, Any]) -> str:
+def _flavor_suffix(system: str) -> str:
+    """Light personality flavor sniffed from the system prompt's trait text
+    (see prompt_builder.traits) — mock provider has no real model to steer
+    with a system prompt, so this is the only visible sign a CEO's profile
+    edit changed anything in mock mode."""
+    if "risk-aware" in system or "risk-avoiding" in system:
+        return " (Flagging as a precaution: worth a second look before this ships.)"
+    if "friendly and warm" in system:
+        return " Thanks for trusting me with this one!"
+    if "direct and blunt" in system:
+        return " Bottom line: this is done."
+    return ""
+
+
+def _text_for(model_ref: str, system: str, opts: dict[str, Any]) -> str:
     role = _role_from_ref(model_ref)
     if role == "reporter":
         return _report_text(opts)
@@ -125,9 +139,11 @@ def _text_for(model_ref: str, opts: dict[str, Any]) -> str:
     context = opts.get("context", "")
 
     if role == "planner":
-        return _plan_text(title, description)
+        return _plan_text(title, description) + _flavor_suffix(system)
     if role == "builder":
-        return _deliverable_text(title, description, context)
+        return _deliverable_text(title, description, context) + _flavor_suffix(system)
+    # Reviewer output must end in the trailing "**Verdict:** ..." line
+    # (workflow_engine parses it verbatim) — never append flavor text after it.
     return _audit_text(title, context)
 
 
@@ -147,7 +163,7 @@ class MockProvider(ProviderGateway):
         messages: list[dict[str, str]],
         **opts: Any,
     ) -> CompletionResult:
-        text = _text_for(model_ref, opts)
+        text = _text_for(model_ref, system, opts)
         usage = _fabricate_usage(system, messages, text)
         return CompletionResult(
             text=text,
@@ -165,7 +181,7 @@ class MockProvider(ProviderGateway):
         usage: dict[str, int] | None = None,
         **opts: Any,
     ) -> AsyncIterator[str]:
-        text = _text_for(model_ref, opts)
+        text = _text_for(model_ref, system, opts)
         fabricated = _fabricate_usage(system, messages, text)
         if usage is not None:
             usage.update(fabricated)

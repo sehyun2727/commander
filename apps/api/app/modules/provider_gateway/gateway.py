@@ -61,11 +61,18 @@ class RoutedProviderGateway(ProviderGateway):
             max_retries = settings.provider_max_retries
         self._max_retries = max_retries
 
-    async def resolve_model(self, model_ref: str) -> str:
-        """Resolve a logical ref to a concrete model, honoring any CEO
-        override for the role. Falls back to the registry default when no
-        session/project context is available (e.g. tests constructing a
-        bare gateway) or no override has been set."""
+    async def resolve_model(self, model_ref: str, agent_override: str | None = None) -> str:
+        """Resolve a logical ref to a concrete model.
+
+        Three-tier precedence (Sprint 4.5): an Employee's own
+        `profile.model_ref` override wins outright; otherwise fall back to
+        the per-role CEO override for the role (Sprint 4, `settings_kv`);
+        otherwise the registry default. Falls back to the registry default
+        when no session/project context is available (e.g. tests
+        constructing a bare gateway) or no override has been set at either
+        tier."""
+        if agent_override:
+            return agent_override
         if self._session_factory and self._project_id and model_ref.endswith("-default"):
             role = model_ref.removesuffix("-default")
             override = await get_override(self._session_factory, self._project_id, role)
@@ -97,9 +104,11 @@ class RoutedProviderGateway(ProviderGateway):
         model_ref: str,
         system: str,
         messages: list[dict[str, str]],
+        *,
+        agent_override: str | None = None,
         **opts: Any,
     ) -> CompletionResult:
-        concrete_model = await self.resolve_model(model_ref)
+        concrete_model = await self.resolve_model(model_ref, agent_override)
         attempt = 0
         while True:
             try:
@@ -116,9 +125,11 @@ class RoutedProviderGateway(ProviderGateway):
         system: str,
         messages: list[dict[str, str]],
         usage: dict[str, int] | None = None,
+        *,
+        agent_override: str | None = None,
         **opts: Any,
     ) -> AsyncIterator[str]:
-        concrete_model = await self.resolve_model(model_ref)
+        concrete_model = await self.resolve_model(model_ref, agent_override)
         attempt = 0
         while True:
             yielded_any = False

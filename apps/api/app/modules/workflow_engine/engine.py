@@ -20,6 +20,7 @@ import random
 
 from sqlalchemy import select
 
+from ...core.contracts import AgentProfile
 from ...core.db_models import AgentORM, ApprovalORM, TaskORM
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
@@ -30,6 +31,7 @@ from ...core.lifecycle.agent_states import AgentState
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
+from .. import prompt_builder
 from ..costs import record_usage
 from ..model_registry import RECOMMENDED_PROVIDER
 from ..provider_gateway import build_gateway
@@ -42,6 +44,14 @@ CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
 
 def _pause() -> "asyncio.Future[None]":
     return asyncio.sleep(random.uniform(0.5, 1.5))
+
+
+def _agent_model_override(agent: AgentORM) -> str | None:
+    """The Employee's own model override (three-tier resolution's top
+    tier), read straight from the persisted profile JSON rather than
+    round-tripping through a full `AgentProfile.model_validate` when only
+    this one field is needed."""
+    return agent.profile.get("model_ref")
 
 
 class CommanderWorkflowEngine(WorkflowEngine):
@@ -183,7 +193,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
             agent_id=agent.id,
             role=agent.role,
             provider=gateway.provider_name,
-            model=await gateway.resolve_model(model_ref),
+            model=await gateway.resolve_model(model_ref, _agent_model_override(agent)),
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
         )
@@ -205,7 +215,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
         usage: dict[str, int] = {}
         buffer: list[str] = []
         actor = Actor(role="employee", id=agent.id, name=agent.name)
-        async for chunk in gateway.stream(model_ref, usage=usage, **opts):
+        async for chunk in gateway.stream(model_ref, usage=usage, agent_override=_agent_model_override(agent), **opts):
             buffer.append(chunk)
             await self._event_bus.publish_transient(
                 build_event(
@@ -253,7 +263,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
             task.id,
             gateway,
             model_ref,
-            system=agent.persona,
+            system=prompt_builder.build(AgentProfile.model_validate(agent.profile), agent.role),
             messages=[{"role": "user", "content": f"Mission: {task.title}\n{task.description}{extra}"}],
             task_title=task.title,
             task_description=task.description,

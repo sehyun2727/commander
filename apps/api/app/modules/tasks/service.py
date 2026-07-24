@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
+from ...core.contracts import AgentProfile
 from ...core.db_models import AgentORM, ProjectORM, TaskORM
 from ...core.events import Actor, EventType, build_event
 from ...core.events.base import Event
@@ -11,6 +12,7 @@ from ...core.interfaces.workflow_engine import WorkflowEngine
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
+from .. import prompt_builder
 from ..costs import record_usage
 from ..provider_gateway import build_gateway
 
@@ -148,13 +150,15 @@ async def post_message(
     )
     model_ref = _MODEL_REF_FOR_ROLE.get(agent.role, "planner-default")
     actor = Actor(role="employee", id=agent.id, name=agent.name)
+    profile = AgentProfile.model_validate(agent.profile)
     buffer: list[str] = []
     usage: dict[str, int] = {}
     async for chunk in gateway.stream(
         model_ref,
-        system=agent.persona,
+        system=prompt_builder.build(profile, agent.role),
         messages=[{"role": "user", "content": text}],
         usage=usage,
+        agent_override=profile.model_ref,
         task_title=task.title,
         task_description=task.description,
         context=f"The CEO just asked: {text}",
@@ -185,7 +189,7 @@ async def post_message(
             agent_id=agent.id,
             role=agent.role,
             provider=gateway.provider_name,
-            model=await gateway.resolve_model(model_ref),
+            model=await gateway.resolve_model(model_ref, profile.model_ref),
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
         )
