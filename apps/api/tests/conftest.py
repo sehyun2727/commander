@@ -8,18 +8,27 @@ from app.core.db_models import Base
 from app.core.secrets import DBSecretsProvider
 from app.modules.agent_runtime import DBAgentRuntime
 from app.modules.event_bus import InProcessEventBus
+from app.modules.sandbox import FakeSandbox
 from app.modules.workflow_engine import CommanderWorkflowEngine
 from app.modules.workspace_manager import LocalGitWorkspaceManager
 
 
 class Harness:
     """A fully-wired backend stack (DB + EventBus + AgentRuntime +
-    WorkflowEngine + WorkspaceManager + Secrets) against an isolated
-    temp-file sqlite DB and temp-dir git workspaces, so tests never touch
-    the dev database/workspaces and never need a running server."""
+    WorkflowEngine + WorkspaceManager + SandboxRunner + Secrets) against an
+    isolated temp-file sqlite DB and temp-dir git workspaces, so tests
+    never touch the dev database/workspaces and never need a running
+    server or Docker."""
 
     def __init__(
-        self, session_factory, event_bus, agent_runtime, workflow_engine, secrets, workspace_manager
+        self,
+        session_factory,
+        event_bus,
+        agent_runtime,
+        workflow_engine,
+        secrets,
+        workspace_manager,
+        sandbox_runner,
     ) -> None:
         self.session_factory = session_factory
         self.event_bus = event_bus
@@ -27,6 +36,7 @@ class Harness:
         self.workflow_engine = workflow_engine
         self.secrets = secrets
         self.workspace_manager = workspace_manager
+        self.sandbox_runner = sandbox_runner
 
 
 @pytest_asyncio.fixture
@@ -42,10 +52,13 @@ async def harness(tmp_path):
     event_bus = InProcessEventBus(session_factory)
     agent_runtime = DBAgentRuntime(session_factory, event_bus)
     workspace_manager = LocalGitWorkspaceManager(str(tmp_path / "workspaces"))
+    sandbox_runner = FakeSandbox()
     workflow_engine = CommanderWorkflowEngine(
-        session_factory, event_bus, agent_runtime, secrets, workspace_manager
+        session_factory, event_bus, agent_runtime, secrets, workspace_manager, sandbox_runner
     )
 
-    yield Harness(session_factory, event_bus, agent_runtime, workflow_engine, secrets, workspace_manager)
+    yield Harness(
+        session_factory, event_bus, agent_runtime, workflow_engine, secrets, workspace_manager, sandbox_runner
+    )
 
     await engine.dispose()

@@ -34,7 +34,7 @@ from app.core.contracts import (  # noqa: E402
     WorkingStyle,
 )
 from app.core.events.base import Actor, Event  # noqa: E402
-from app.core.events.contracts import PAYLOAD_MODELS  # noqa: E402
+from app.core.events.contracts import PAYLOAD_MODELS, CheckOutcome  # noqa: E402
 from app.core.events.types import EventType  # noqa: E402
 from app.core.lifecycle.agent_states import AgentState  # noqa: E402
 from app.core.lifecycle.task_states import TaskState  # noqa: E402
@@ -43,7 +43,7 @@ OUT_DIR = REPO_ROOT / "packages" / "event-schemas" / "ts"
 
 # Models to emit, in dependency order (referenced-before-referencing).
 ENUMS: list[type[enum.Enum]] = [EventType, AgentState, TaskState, Personality, WorkingStyle, DecisionStyle, StatusWord]
-MODELS: list[type[BaseModel]] = [Actor, AgentProfile, *PAYLOAD_MODELS.values(), Event]
+MODELS: list[type[BaseModel]] = [Actor, AgentProfile, CheckOutcome, *PAYLOAD_MODELS.values(), Event]
 
 # Internal-state -> StatusWord token maps (UX_SPEC §1) — emitted as TS
 # consts so the frontend never re-derives this mapping by hand.

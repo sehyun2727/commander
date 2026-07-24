@@ -943,3 +943,66 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     `service.py` (mirroring `reports`/`situation`), rather than importing
     each other's service functions, per the "modules never import each
     other's internals" rule.
+
+## Sprint 6 — "Execution Sandbox"
+
+95. **`CheckSpec` (the trusted, template-defined "name + detect_globs +
+    command" tuple) lives in `core/interfaces/sandbox.py`, next to
+    `CheckResult`/`SandboxRunner`, not in `templates/software_company.py`.**
+    It's genuinely the sandbox port's input shape — the same category as
+    `CheckResult` — not template-specific data; `software_company` just
+    supplies a value of that shape (`TEMPLATE.checks`). Putting it in
+    `core/interfaces` keeps the dependency direction unchanged
+    (`templates/` -> `core/` only, matching the existing `AgentProfile`
+    import) instead of making `templates/` reach into `modules/`.
+96. **Execution-enabled is a per-project `settings_kv` toggle
+    (`execution_enabled:{project_id}`), defaulting to `True` when the row
+    has never been set.** Mirrors the existing generic `SettingORM`
+    key-value pattern (no new table/migration). Default-true means a
+    freshly founded company gets sandboxed checks for free, consistent
+    with "the product works out of the box"; a CEO who wants to opt out
+    (e.g. to save sandbox minutes, or because Docker isn't installed and
+    they don't want the `could_not_run` noise) flips it off explicitly via
+    the Phase 3 Settings toggle.
+97. **Detection (`detect_checks`) is pure and synchronous, walking the
+    full set of files on the landed branch (`list_tree` + `read_file` per
+    path) rather than a git diff of changed files.** A check like
+    `pytest` needs to know the whole test file exists and is runnable in
+    the checked-out tree, not just that this particular commit touched a
+    `.py` file — running against the diff would miss the common case
+    where the Engineer edits `add.py` but the pre-existing `test_add.py`
+    (unchanged this commit) is what actually needs to pass.
+98. **`_glob_to_regex`'s `**` handling special-cases a trailing `/` (`**/`
+    translates to `(?:.*/)?`, an optional group) instead of naively
+    expanding `**` to `.*` and leaving the following `/` as a literal
+    required character.** The naive version made `**/*.py` require at
+    least one path segment before the filename, so a root-level
+    `test_add.py` (no directory) would never match its own check — caught
+    by `test_detect_checks_matches_pytest_and_python_syntax_for_root_test_file`
+    failing after the first implementation. Fixed by treating the `**/`
+    token as a unit matching zero-or-more leading segments, which is what
+    every real glob implementation (`fnmatch`, shell globstar) does.
+99. **No new abstract method was added to `WorkspaceManager` to hand
+    `_run_checks` a bulk `{path: content}` map.** It's built inline via
+    the existing `list_tree` + per-path `read_file` calls, since
+    `_run_checks` is presently the map's only caller — adding a new ABC
+    method for one call site would be premature abstraction ahead of a
+    second, unproven need.
+100. **`_run_checks` returns a short plain-language summary (pass/total
+    count + each failed check's output truncated to 500 chars), appended
+    to `reviewer_context` after the diff text, rather than the raw
+    per-check `CheckResult` payloads.** The Reviewer's prompt already
+    carries the Change Summary + truncated diff; dumping full sandbox
+    stdout/stderr on top would make the prompt harder to reason about for
+    little benefit — the Reviewer needs to know *what* failed and roughly
+    why, not debug it byte-for-byte. Full per-check results (name,
+    status, duration, untruncated output) are still persisted verbatim to
+    `TaskORM.check_results` for the CEO-facing UI (Phase 3).
+101. **No checks matched or execution disabled both short-circuit
+    `_run_checks` to `("", None)` with zero events published** — not even
+    a "skipped" `execution.completed`. A document mission or a
+    checks-disabled company should look, in the Timeline, exactly like
+    execution never existed as a concept for that mission; an
+    always-fires-but-sometimes-empty event would force every consumer
+    (Timeline rows, Payroll, tests) to special-case a no-op event instead
+    of just checking whether the pair of events exists at all.

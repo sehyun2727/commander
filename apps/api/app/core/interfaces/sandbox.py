@@ -48,6 +48,20 @@ class CheckResult:
     output: str
 
 
+@dataclass(frozen=True)
+class CheckSpec:
+    """One template-defined check (Sprint 6 Phase 2): trusted, fixed
+    `command` argv plus the glob(s) that decide whether it applies to a
+    given mission's files. Lives next to `CheckResult`/`SandboxRunner`
+    rather than in `templates/` because it's the sandbox port's input
+    shape, not template-specific — `software_company` just supplies data
+    of this shape."""
+
+    name: str
+    detect_globs: tuple[str, ...]
+    command: tuple[str, ...]
+
+
 class SandboxRunner(ABC):
     """Isolated, no-network command execution. Implementations own no
     knowledge of missions/checks -- the caller (workflow_engine, Sprint 6

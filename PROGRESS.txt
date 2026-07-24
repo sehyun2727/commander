@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 6 — Execution Sandbox
- Overall: 14/40 items · 35%
- Now working on: 2.1
- Last update: 2026-07-24 20:55
+ Overall: 23/40 items · 57%
+ Now working on: 3.1
+ Last update: 2026-07-24 21:40
 ================================================
 
 PHASE 0 — Hygiene                                              (4/4)
@@ -24,16 +24,16 @@ PHASE 1 — Sandbox Core                                         (10/10)
 [x] 1.9  Unit tests (Fake) + skipif real-Docker tests (18 tests, 4 skip w/o Docker daemon)
 [x] 1.10 Commit+push: feat(sandbox)
 
-PHASE 2 — Checks & Pipeline                                    (0/9)
-[ ] 2.1  Template checks data (pytest / node-test / python-syntax)
-[ ] 2.2  Detection on mission branch files
-[ ] 2.3  Pipeline step: after commit, before Reviewer
-[ ] 2.4  Events: execution.started / execution.completed (payloads)
-[ ] 2.5  Degradation: no docker / no image / timeout -> events, never crash
-[ ] 2.6  Reviewer input includes results
-[ ] 2.7  Execution toggle (settings_kv) honored
-[ ] 2.8  Streaming / Payroll / retries unaffected (verified)
-[ ] 2.9  Commit+push: feat(pipeline)
+PHASE 2 — Checks & Pipeline                                    (9/9)
+[x] 2.1  Template checks data (pytest / node-test / python-syntax)
+[x] 2.2  Detection on mission branch files
+[x] 2.3  Pipeline step: after commit, before Reviewer
+[x] 2.4  Events: execution.started / execution.completed (payloads)
+[x] 2.5  Degradation: no docker / no image / timeout -> events, never crash
+[x] 2.6  Reviewer input includes results
+[x] 2.7  Execution toggle (settings_kv) honored
+[x] 2.8  Streaming / Payroll / retries unaffected (verified)
+[x] 2.9  Commit+push: feat(pipeline)
 
 PHASE 3 — Frontend                                             (0/9)
 [ ] 3.1  ExecutionResults section (chips + duration)
@@ -42,7 +42,7 @@ PHASE 3 — Frontend                                             (0/9)
 [ ] 3.4  Timeline rows (CEO verdict row / Technical per-check)
 [ ] 3.5  Settings: capability status + toggle
 [ ] 3.6  Graceful hiding when Docker absent
-[ ] 3.7  Engineer contract line: stdlib/built-ins only (v1)
+[x] 3.7  Engineer contract line: stdlib/built-ins only (v1) (done early, Phase 2)
 [ ] 3.8  tsc --noEmit + next build clean
 [ ] 3.9  Commit+push: feat(dashboard)
 

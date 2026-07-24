@@ -39,5 +39,6 @@ class TaskResponse(BaseModel):
     deliverable_type: str
     branch_name: str | None
     code_stats: dict | None
+    check_results: list | None
     created_at: datetime
     updated_at: datetime

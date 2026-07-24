@@ -49,6 +49,10 @@ class EventType(str, Enum):
     DEPLOYMENT_COMPLETED = "workflow.deployment_completed"
     DEPLOYMENT_FAILED = "workflow.deployment_failed"
 
+    # Execution (Sandbox) — Sprint 6
+    EXECUTION_STARTED = "execution.started"
+    EXECUTION_COMPLETED = "execution.completed"
+
     # Approvals (CEO Decisions)
     APPROVAL_REQUESTED = "approval.requested"
     APPROVAL_GRANTED = "approval.granted"

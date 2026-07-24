@@ -5,10 +5,12 @@ import shutil
 
 import pytest
 
-from app.core.interfaces.sandbox import CheckResult
+from app.core.interfaces.sandbox import CheckResult, CheckSpec
+from app.modules.sandbox.detection import detect_checks
 from app.modules.sandbox.docker_sandbox import DockerSandbox
 from app.modules.sandbox.docker_process import DockerResult, DockerTimedOutError, DockerUnavailableError
 from app.modules.sandbox.fake_sandbox import FakeSandbox
+from app.templates import TEMPLATE
 
 
 def _docker_available() -> bool:
@@ -326,3 +328,64 @@ async def test_real_docker_run_check_has_no_network_access():
     )
 
     assert result.status == "passed"
+
+
+# ---------------------------------------------------------------------------
+# detect_checks -- detection matrix (Sprint 6 Phase 2 / 4.1)
+# ---------------------------------------------------------------------------
+
+_CHECKS = (
+    CheckSpec(name="python-syntax", detect_globs=("**/*.py",), command=("python", "-m", "compileall", "-q", ".")),
+    CheckSpec(name="pytest", detect_globs=("**/test_*.py",), command=("python", "-m", "pytest", "-q")),
+    CheckSpec(name="node-test", detect_globs=("**/*.test.js", "**/*.test.mjs"), command=("node", "--test")),
+)
+
+
+def test_detect_checks_matches_pytest_and_python_syntax_for_root_test_file():
+    matched = detect_checks(["test_app.py"], _CHECKS)
+
+    assert {c.name for c in matched} == {"python-syntax", "pytest"}
+
+
+def test_detect_checks_matches_pytest_for_nested_test_file():
+    matched = detect_checks(["src/tests/test_app.py"], _CHECKS)
+
+    assert {c.name for c in matched} == {"python-syntax", "pytest"}
+
+
+def test_detect_checks_python_syntax_only_for_non_test_py_file():
+    matched = detect_checks(["app.py"], _CHECKS)
+
+    assert {c.name for c in matched} == {"python-syntax"}
+
+
+def test_detect_checks_matches_node_test_for_js_and_mjs():
+    matched_js = detect_checks(["src/app.test.js"], _CHECKS)
+    matched_mjs = detect_checks(["src/app.test.mjs"], _CHECKS)
+
+    assert {c.name for c in matched_js} == {"node-test"}
+    assert {c.name for c in matched_mjs} == {"node-test"}
+
+
+def test_detect_checks_ignores_plain_js_file():
+    matched = detect_checks(["src/app.js"], _CHECKS)
+
+    assert matched == []
+
+
+def test_detect_checks_returns_empty_for_no_matching_files():
+    matched = detect_checks(["README.md", "index.html", "style.css"], _CHECKS)
+
+    assert matched == []
+
+
+def test_detect_checks_matches_multiple_checks_at_once():
+    matched = detect_checks(["test_app.py", "src/app.test.js"], _CHECKS)
+
+    assert {c.name for c in matched} == {"python-syntax", "pytest", "node-test"}
+
+
+def test_detect_checks_preserves_template_order():
+    matched = detect_checks(["test_app.py", "src/app.test.js"], TEMPLATE.checks)
+
+    assert [c.name for c in matched] == ["python-syntax", "pytest", "node-test"]

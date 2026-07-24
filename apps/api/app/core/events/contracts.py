@@ -8,6 +8,8 @@ truth to walk.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 from ..lifecycle.agent_states import AgentState
@@ -174,6 +176,34 @@ class DeploymentFailedPayload(Payload):
     deployment_id: str
 
 
+# --- Execution (Sandbox) — Sprint 6 -----------------------------------------------
+
+class CheckOutcome(BaseModel):
+    """One check's result, nested inside `ExecutionCompletedPayload` --
+    not itself a top-level event payload, so it isn't in `PAYLOAD_MODELS`
+    (but IS in `scripts/generate_ts_schemas.py`'s MODELS list so its TS
+    interface still gets emitted)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    status: Literal["passed", "failed", "could_not_run"]
+    duration_seconds: float
+    output: str
+
+
+class ExecutionStartedPayload(Payload):
+    task_id: str
+    check_names: list[str]
+
+
+class ExecutionCompletedPayload(Payload):
+    task_id: str
+    results: list[CheckOutcome]
+    passed_count: int
+    total_count: int
+
+
 # --- Approvals (CEO Decisions) ---------------------------------------------------
 
 class ApprovalRequestedPayload(Payload):
@@ -244,6 +274,8 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.DEPLOYMENT_STARTED: DeploymentStartedPayload,
     EventType.DEPLOYMENT_COMPLETED: DeploymentCompletedPayload,
     EventType.DEPLOYMENT_FAILED: DeploymentFailedPayload,
+    EventType.EXECUTION_STARTED: ExecutionStartedPayload,
+    EventType.EXECUTION_COMPLETED: ExecutionCompletedPayload,
     EventType.APPROVAL_REQUESTED: ApprovalRequestedPayload,
     EventType.APPROVAL_GRANTED: ApprovalGrantedPayload,
     EventType.APPROVAL_REJECTED: ApprovalRejectedPayload,

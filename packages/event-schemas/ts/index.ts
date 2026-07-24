@@ -31,6 +31,8 @@ export enum EventType {
   DEPLOYMENT_STARTED = "workflow.deployment_started",
   DEPLOYMENT_COMPLETED = "workflow.deployment_completed",
   DEPLOYMENT_FAILED = "workflow.deployment_failed",
+  EXECUTION_STARTED = "execution.started",
+  EXECUTION_COMPLETED = "execution.completed",
   APPROVAL_REQUESTED = "approval.requested",
   APPROVAL_GRANTED = "approval.granted",
   APPROVAL_REJECTED = "approval.rejected",
@@ -109,6 +111,13 @@ export interface AgentProfile {
   decision_style: DecisionStyle;
   custom_instructions: string;
   model_ref?: string | null;
+}
+
+export interface CheckOutcome {
+  name: string;
+  status: "passed" | "failed" | "could_not_run";
+  duration_seconds: number;
+  output: string;
 }
 
 export interface ProjectCreatedPayload {
@@ -251,6 +260,18 @@ export interface DeploymentFailedPayload {
   deployment_id: string;
 }
 
+export interface ExecutionStartedPayload {
+  task_id: string;
+  check_names: string[];
+}
+
+export interface ExecutionCompletedPayload {
+  task_id: string;
+  results: CheckOutcome[];
+  passed_count: number;
+  total_count: number;
+}
+
 export interface ApprovalRequestedPayload {
   approval_id: string;
   task_id: string;
@@ -325,6 +346,8 @@ export interface EventPayloadMap {
   "workflow.deployment_started": DeploymentStartedPayload;
   "workflow.deployment_completed": DeploymentCompletedPayload;
   "workflow.deployment_failed": DeploymentFailedPayload;
+  "execution.started": ExecutionStartedPayload;
+  "execution.completed": ExecutionCompletedPayload;
   "approval.requested": ApprovalRequestedPayload;
   "approval.granted": ApprovalGrantedPayload;
   "approval.rejected": ApprovalRejectedPayload;

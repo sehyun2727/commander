@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..core.contracts import AgentProfile
+from ..core.interfaces.sandbox import CheckSpec
 
 _PM_CONTRACT = (
     "You are the PM (planner) for this company. You turn a mission "
@@ -47,7 +48,10 @@ _ENGINEER_CONTRACT_CODE = (
     "drive letter), must never contain '..', and must never target "
     "anything under '.git/'. Each block holds the file's complete "
     "content, never a diff or excerpt. Prefer a small, focused set of "
-    "files over a sprawling scaffold."
+    "files over a sprawling scaffold. Your checks run with no network and "
+    "no dependency installation: generated code must run against the "
+    "Python standard library or Node built-ins only (pytest is also "
+    "preinstalled and may be used for tests)."
 )
 
 _REVIEWER_CONTRACT = (
@@ -144,6 +148,29 @@ DEFAULT_PROFILES: dict[str, AgentProfile] = {
 
 DELIVERABLE_TYPE = "code"
 
+# Checks are trusted, template-owned data (Sprint 6 §"Design decisions") --
+# the AI never chooses a command, only ever supplies the files a command
+# runs against. `detect_globs` decides whether a check applies to a given
+# mission's landed files (see modules/sandbox/detection.py); `command` is
+# preinstalled-runtime-only since sandbox containers run with no network.
+CHECKS: tuple[CheckSpec, ...] = (
+    CheckSpec(
+        name="python-syntax",
+        detect_globs=("**/*.py",),
+        command=("python", "-m", "compileall", "-q", "."),
+    ),
+    CheckSpec(
+        name="pytest",
+        detect_globs=("**/test_*.py",),
+        command=("python", "-m", "pytest", "-q"),
+    ),
+    CheckSpec(
+        name="node-test",
+        detect_globs=("**/*.test.js", "**/*.test.mjs"),
+        command=("node", "--test"),
+    ),
+)
+
 # Per-template vocabulary overrides layered onto UX_SPEC §1's base status
 # word table. Empty: software_company uses the base vocabulary verbatim.
 VOCABULARY_OVERRIDES: dict[str, str] = {}
@@ -182,6 +209,7 @@ class CompanyTemplate:
     deliverable_type: str
     vocabulary_overrides: dict[str, str]
     starters: list[dict[str, str]]
+    checks: tuple[CheckSpec, ...]
 
 
 TEMPLATE = CompanyTemplate(
@@ -195,4 +223,5 @@ TEMPLATE = CompanyTemplate(
     deliverable_type=DELIVERABLE_TYPE,
     vocabulary_overrides=VOCABULARY_OVERRIDES,
     starters=STARTERS,
+    checks=CHECKS,
 )

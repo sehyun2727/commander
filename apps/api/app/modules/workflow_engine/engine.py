@@ -27,6 +27,7 @@ from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
 from ...core.interfaces.event_bus import EventBus
 from ...core.interfaces.provider_gateway import ProviderGateway
+from ...core.interfaces.sandbox import SandboxRunner
 from ...core.interfaces.workflow_engine import WorkflowEngine
 from ...core.interfaces.workspace_manager import WorkspaceManager
 from ...core.lifecycle.agent_states import AgentState
@@ -38,6 +39,7 @@ from .. import prompt_builder
 from ..costs import record_usage
 from ..model_registry import RECOMMENDED_PROVIDER
 from ..provider_gateway import build_gateway
+from ..sandbox import detect_checks, get_execution_enabled
 from . import parsing
 
 logger = logging.getLogger("commander.workflow_engine")
@@ -72,12 +74,14 @@ class CommanderWorkflowEngine(WorkflowEngine):
         agent_runtime: AgentRuntime,
         secrets: SecretsProvider,
         workspace_manager: WorkspaceManager,
+        sandbox_runner: SandboxRunner,
     ) -> None:
         self._session_factory = session_factory
         self._event_bus = event_bus
         self._agent_runtime = agent_runtime
         self._secrets = secrets
         self._workspace_manager = workspace_manager
+        self._sandbox_runner = sandbox_runner
 
     # --- public API -----------------------------------------------------
 
@@ -363,6 +367,77 @@ class CommanderWorkflowEngine(WorkflowEngine):
         )
         return change_summary, {**stats, "diff_text": diff_text}
 
+    async def _run_checks(
+        self, task: TaskORM, branch_name: str
+    ) -> tuple[str, list[dict] | None]:
+        """Run every template-detected check (Sprint 6) against the
+        mission branch's files, between the Engineer's commit and the
+        Reviewer's turn. Returns (summary_for_reviewer, results); results
+        is None when execution is disabled for this company or no check's
+        `detect_globs` matched anything -- in both cases nothing runs and
+        no execution.* events are published, keeping the Timeline quiet
+        for missions execution never applies to. Sandbox trouble (no
+        Docker, no image, timeout) never raises here -- `run_check`
+        always returns a `could_not_run` CheckResult (see
+        core/interfaces/sandbox.py), so a flaky/absent sandbox can only
+        ever show up as a check result, never crash the pipeline."""
+        project_id = task.project_id
+        if not await get_execution_enabled(self._session_factory, project_id):
+            return "", None
+
+        tree = await self._workspace_manager.list_tree(project_id, ref=branch_name)
+        paths = [entry.path for entry in tree]
+        matched = detect_checks(paths, TEMPLATE.checks)
+        if not matched:
+            return "", None
+
+        files = {
+            path: await self._workspace_manager.read_file(project_id, path, ref=branch_name)
+            for path in paths
+        }
+
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.EXECUTION_STARTED,
+                project_id=project_id,
+                actor=SYSTEM_ACTOR,
+                payload={"task_id": task.id, "check_names": [c.name for c in matched]},
+                reason="Running automated checks before Reviewer audit",
+            )
+        )
+
+        results = [
+            await self._sandbox_runner.run_check(check.name, files, list(check.command))
+            for check in matched
+        ]
+        passed_count = sum(1 for r in results if r.status == "passed")
+        total_count = len(results)
+        result_dicts = [
+            {"name": r.name, "status": r.status, "duration_seconds": r.duration_seconds, "output": r.output}
+            for r in results
+        ]
+
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.EXECUTION_COMPLETED,
+                project_id=project_id,
+                actor=SYSTEM_ACTOR,
+                payload={
+                    "task_id": task.id,
+                    "results": result_dicts,
+                    "passed_count": passed_count,
+                    "total_count": total_count,
+                },
+                reason=f"{passed_count}/{total_count} checks passed",
+            )
+        )
+
+        summary_lines = [f"Automated checks: {passed_count}/{total_count} passed."]
+        for r in results:
+            if r.status != "passed":
+                summary_lines.append(f"- {r.name} ({r.status}): {r.output[:500]}")
+        return "\n".join(summary_lines), result_dicts
+
     async def _run_pipeline(
         self, task_id: str, resume_from: str, ceo_comment: str | None = None
     ) -> None:
@@ -421,6 +496,15 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 if code_stats is not None:
                     reviewer_context = f"{change_summary}\n\n{code_stats['diff_text']}"
                     code_stats = {k: v for k, v in code_stats.items() if k != "diff_text"}
+
+                    branch_name = task.branch_name or self._branch_name_for(task.id)
+                    check_summary, check_results = await self._run_checks(task, branch_name)
+                    if check_results is not None:
+                        reviewer_context = f"{reviewer_context}\n\n{check_summary}"
+                        async with self._session_factory() as session:
+                            row = await session.get(TaskORM, task_id)
+                            row.check_results = check_results
+                            await session.commit()
 
             await self._set_task_state(
                 task_id, TaskState.IN_REVIEW, "Engineer finished; handing to Reviewer", SYSTEM_ACTOR
