@@ -28,9 +28,13 @@ export function Sidebar({ companyId }: { companyId: string }) {
           ← All Companies
         </Link>
         <p className="mt-2 truncate text-sm font-semibold text-text">{company?.name ?? "Loading…"}</p>
-        {company && (
-          <span className="mt-1 inline-block rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-            {company.provider}
+        {company?.provider === "mock" && (
+          <span
+            title="This company runs on a simulated AI provider — deliverables are deterministic placeholders, not real generation. Connect a real provider in Company Settings for genuine output."
+            className="mt-1 inline-flex items-center gap-1.5 rounded bg-status-amber-soft px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-status-amber"
+          >
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+            Simulation mode
           </span>
         )}
         {connectionStatus === "reconnecting" && (

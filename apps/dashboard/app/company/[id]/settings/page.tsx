@@ -99,12 +99,13 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
             onChange={(e) => setProvider(e.target.value as "mock" | "anthropic")}
             className="w-full rounded-lg border border-base-border bg-base-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
           >
-            <option value="mock">Mock (no API key required)</option>
-            <option value="anthropic">Anthropic</option>
+            <option value="mock">Simulation — free, no API key required</option>
+            <option value="anthropic">Anthropic — real AI, real cost</option>
           </select>
           <p className="mt-1.5 text-xs text-text-faint">
-            Mock produces deterministic, templated Employee output — useful for demos and testing without spending
-            API credits.
+            {provider === "mock"
+              ? "Simulation mode produces deterministic, templated Employee output — useful for demos and testing. No real API calls happen; Payroll figures are simulated numbers for demo purposes, not real spend."
+              : "Anthropic mode calls a real model for every Employee action. Usage is billed to your key and shows up in Payroll as real spend."}
           </p>
         </div>
 

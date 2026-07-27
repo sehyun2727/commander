@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 8 — V1 Release
- Overall: 4/28 items · 14%
- Now working on: Phase 1 — Experience Coherence
- Last update: 2026-07-27 14:20
+ Overall: 10/28 items · 36%
+ Now working on: Phase 2 — Demo Honesty
+ Last update: 2026-07-27 15:10
 ================================================
 
 PHASE 0 — Fresh-Machine Audit                                  (4/4)
@@ -12,7 +12,7 @@ PHASE 0 — Fresh-Machine Audit                                  (4/4)
 [x] 0.3  Fold findings into Phases 1-4 as + items + DECISIONS.md -- DECISIONS #123, findings folded into Phase 1 below
 [x] 0.4  Create PROGRESS.txt; commit+push phase 0
 
-PHASE 1 — Experience Coherence                                 (5/6)
+PHASE 1 — Experience Coherence                                 (6/6)
 [x] 1.1  Empty states on all 10 routes (invitation to act)
 [x] +    Employees grid has no empty state at all -- add EmptyState
 [x] +    Kanban empty columns all say generic "Nothing here." -- contextualize per column
@@ -22,13 +22,13 @@ PHASE 1 — Experience Coherence                                 (5/6)
 [x] +    No route anywhere handles TanStack Query isError -- add Commander-voiced error state across all 10 routes
 [x] 1.4  Terminology sweep (no internal-term leaks; StatusWord everywhere) -- zero leaks beyond confirmed false positive
 [x] 1.5  Copy voice consistency (interface vs company voice) -- DECISIONS #124
-[ ] 1.6  Commit+push: feat(polish) coherence
+[x] 1.6  Commit+push: feat(polish) coherence -- 005ac36, pushed
 
-PHASE 2 — Demo Honesty                                         (0/5)
-[ ] 2.1  "Simulation mode" indicator in mock (hidden in real)
-[ ] 2.2  Strengthen mock deliverable/audit honesty signal
-[ ] 2.3  Settings: legible mock<->real switch + consequences
-[ ] 2.4  Confirm zero fabricated checks/costs/activity anywhere
+PHASE 2 — Demo Honesty                                         (4/5)
+[x] 2.1  "Simulation mode" indicator in mock (hidden in real) -- Sidebar + CompanyCard, amber pill
+[x] 2.2  Strengthen mock deliverable/audit honesty signal -- mock_provider.py revision summary + audit text
+[x] 2.3  Settings: legible mock<->real switch + consequences -- reworded options + helper copy
+[x] 2.4  Confirm zero fabricated checks/costs/activity anywhere -- audited; found pre-existing mock Payroll $ figures (Sprint 4, tested), resolved via labeling not removal (DECISIONS #125)
 [ ] 2.5  Commit+push: feat(polish) simulation labeling
 
 PHASE 3 — Packaging & One-Command Run                          (0/7)

@@ -29,10 +29,16 @@ export function CompanyCard({ company }: { company: Project }) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-text">{company.name}</p>
-          <p className="mt-0.5 text-xs text-text-faint">Provider: {company.provider}</p>
         </div>
         <StatusWord token={status} />
       </div>
+
+      {company.provider === "mock" && (
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded bg-status-amber-soft px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-status-amber">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+          Simulation mode
+        </div>
+      )}
 
       {!!pendingDecisions && (
         <div className="mt-3 rounded-lg bg-status-amber-soft px-2.5 py-1.5 text-xs font-medium text-status-amber">

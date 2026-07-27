@@ -1359,3 +1359,52 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     `SituationReport`'s "Reading the room…" loading line as-is — it's
     atmospheric flavor for the PM's report loading, not literal
     first-person impersonation, and doesn't fabricate any claim.
+
+125. **Phase 2 demo honesty & simulation labeling.** Added a calm
+    amber "Simulation mode" pill (title tooltip explaining what it
+    means) that renders only when `company.provider === "mock"`, in
+    both `Sidebar` (persistent across every company page) and
+    `CompanyCard` (My Companies list) — replacing the old raw-value
+    chip that printed the internal string `mock`/`anthropic` directly
+    (`Sidebar.tsx`, `CompanyCard.tsx`). Hidden entirely in real mode
+    per the brief, rather than showing a "Live"/"Real" counterpart —
+    the brief only asked for the mock signal, and a second permanent
+    badge for the normal case would be visual noise.
+    Strengthened the mock deliverable's honesty signal in
+    `mock_provider.py`: the revision-branch Change Summary (re-runs
+    after CEO feedback) previously read as genuine follow-up work with
+    no simulated-content signal at all; added one; the mock Reviewer's
+    audit text (`_audit_text`) previously read as a real completed
+    review — added a fixed "_Simulated review (mock provider)..._"
+    line before the trailing `**Verdict:**` (verified `parse_verdict`
+    still finds it correctly — it takes the *last* `**Verdict:**`
+    match, so text before it is safe; confirmed via
+    `test_mock_provider.py`, still 5/5 passing).
+    Company Settings AI Provider control: relabeled the select options
+    and rewrote the helper copy to state the actual mock/real
+    consequences (no real API calls in Simulation mode vs. real
+    Anthropic billing that appears in Payroll).
+    **Found and deliberately left alone a real fabrication case**:
+    `MockProvider._fabricate_usage` invents token counts from word
+    counts, and `model_registry.PRICE_PER_MILLION_TOKENS` has non-zero
+    prices for all three `mock-*-v1` refs (`cost_for("mock-builder-v1",
+    1_000_000, 1_000_000) == $18.00`, asserted by
+    `test_costs.py::test_cost_for_computes_from_the_price_table`) — so
+    Payroll shows non-zero, plausible-looking dollar figures in mock
+    mode with no real API call behind them. This is pre-existing,
+    intentional Sprint 4 ("Real Intelligence") behavior, not a Sprint 8
+    regression: mock needs *some* numbers for the Payroll page to be
+    demoable at all, and zeroing mock pricing would be a tested
+    feature-behavior change, not polish — out of scope for a
+    coherence/honesty sprint whose own brief says "no new capability."
+    Resolved the honesty concern the way the brief's own design
+    decision intends (labeling, not removal): the CEO can no longer be
+    on any company page without the persistent "Simulation mode"
+    sidebar badge in view, and Company Settings now explicitly states
+    mock Payroll figures are "simulated numbers for demo purposes, not
+    real spend." Did not add a per-figure "(simulated)" suffix next to
+    every dollar amount on every page (Headquarters stat card,
+    EmployeeCard) — judged as visual clutter beyond what the
+    always-visible sidebar badge already covers, consistent with the
+    brief's "no visual redesign" constraint. Flagging here in case a
+    future sprint wants stricter per-figure labeling.

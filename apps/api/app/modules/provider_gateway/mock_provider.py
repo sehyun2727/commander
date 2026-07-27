@@ -113,7 +113,8 @@ def _code_deliverable_text(title: str, description: str, context: str) -> str:
         summary = (
             f"Updated the {heading} page to address the CEO's feedback ({feedback}). "
             "Refreshed the accent color and tightened the hero copy; the page "
-            "structure is unchanged, so this should be a low-risk follow-up."
+            "structure is unchanged, so this should be a low-risk follow-up. "
+            "Note: this is still simulated, placeholder output, not a real second pass."
         )
     else:
         summary = (
@@ -175,7 +176,9 @@ def _audit_text(title: str, context: str) -> str:
         f"**Recommendation:** {recommendation}\n\n"
         f"**Risk:** {risk}\n\n"
         f"**Impact:** {impact}\n\n"
-        f"{checks}{concern}\n\n**Verdict:** {verdict}"
+        f"{checks}{concern}\n\n"
+        f"_Simulated review (mock provider) — a scripted placeholder pass, not a verified real audit._"
+        f"\n\n**Verdict:** {verdict}"
     )
 
 
