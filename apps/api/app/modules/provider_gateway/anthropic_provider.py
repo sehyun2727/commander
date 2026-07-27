@@ -20,6 +20,22 @@ ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 
 
+def _legible_error(exc: httpx.HTTPStatusError) -> Exception:
+    """Auth failures (401/403) are never transient — surface them as a
+    plain-language RuntimeError a CEO can act on instead of the raw httpx
+    message, which quotes the request URL and reads like an internal
+    error. Everything else (429/5xx, which the gateway retries, and other
+    4xx) is left as the original httpx error so `_is_retryable` and
+    logging keep seeing the real exception."""
+    status = exc.response.status_code
+    if status in (401, 403):
+        return RuntimeError(
+            f"Anthropic rejected the configured API key (HTTP {status}). "
+            "Check the key in Company Settings."
+        )
+    return exc
+
+
 class AnthropicProvider(ProviderGateway):
     def __init__(self, secrets: SecretsProvider) -> None:
         self._secrets = secrets
@@ -57,7 +73,10 @@ class AnthropicProvider(ProviderGateway):
                     "max_tokens": max_tokens,
                 },
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise _legible_error(exc) from None
             data = response.json()
 
         text = "".join(block.get("text", "") for block in data.get("content", []))
@@ -93,7 +112,10 @@ class AnthropicProvider(ProviderGateway):
                     "stream": True,
                 },
             ) as response:
-                response.raise_for_status()
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    raise _legible_error(exc) from None
                 async for line in response.aiter_lines():
                     if not line.startswith("data:"):
                         continue

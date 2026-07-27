@@ -1073,3 +1073,107 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     `@pytest.mark.skipif` tests in `test_sandbox.py` (and ideally one real
     code mission through a running `make dev`) to close this out; nothing
     in Sprint 6's design assumes that verification already happened.
+
+## Sprint 7 — "V1 Hardening & Dockerized Postgres"
+
+108. **Postgres becomes the documented default `database_url`, not an
+    additive option** — `docker-compose.yml` (postgres:16, named volume,
+    healthcheck) at the repo root, `settings.database_url` defaulting to
+    `postgresql+asyncpg://commander:commander@localhost:5432/commander`.
+    SQLite (`sqlite+aiosqlite`) stays wired as the zero-dependency
+    fallback used only by the test harness (`conftest.py`'s isolated
+    temp-file engine, which never reads `settings.database_url`) and any
+    quick local script that wants to skip Docker entirely. One seam
+    (`Settings.database_url`) drives both `db.py`'s engine and Alembic's
+    `env.py` — no second hardcoded connection string anywhere.
+109. **Alembic uses the async template (`alembic init -t async`), and its
+    generated `env.py` is deliberately never awaited directly.** Alembic's
+    async `run_migrations_online()` drives its own internal
+    `asyncio.run(...)`, which raises if called from a thread that already
+    has a running loop (the FastAPI lifespan, `seed.py`). `db.py` exposes
+    a synchronous `upgrade_to_head()` wrapping `alembic.command.upgrade`,
+    and every caller on an existing event loop reaches it through
+    `asyncio.to_thread(upgrade_to_head)` instead of importing/awaiting
+    `env.py`'s coroutine. SQLite still skips Alembic entirely
+    (`Base.metadata.create_all`) — it's never a persistent target that
+    needs migration history, only ever recreated from scratch.
+110. **`make seed`'s Postgres reset is drop-all-tables + re-migrate, not
+    `TRUNCATE`.** Keeps the seed script exercising the exact same
+    migration path a real deploy would take (`upgrade_to_head()` from an
+    empty schema), rather than a second, seed-only schema route that
+    could silently drift from the baseline migration. `scripts/seed.py`
+    now branches the same way `db.py.init_db()` does: SQLite deletes the
+    db file and `create_all`s; Postgres drops every table (+ Alembic's
+    own `alembic_version` bookkeeping table) and calls the same
+    `upgrade_to_head()` used at boot.
+111. **`Settings.model_config`'s `env_file` is anchored to an absolute
+    repo-root path (`Path(__file__).resolve().parents[4] / ".env"`),
+    not the bare `".env"` pydantic-settings default.** The bare relative
+    path is resolved against the process's current working directory,
+    which differs between `make dev` (uvicorn launched with cwd=
+    `apps/api`, per the working assumption `scripts/seed.py` already
+    documented for its own SQLite path) and docker-compose's own `.env`
+    auto-discovery (cwd=repo root, where `docker-compose.yml` lives). A
+    single `.env` at the repo root is now the one file both the FastAPI
+    app and `docker compose` read, regardless of which directory a
+    command is launched from — this was caught by a real boot failure
+    (Postgres credentials silently falling back to code defaults) during
+    Phase 1 verification, not by inspection.
+112. **`AnthropicProvider._legible_error` only special-cases 401/403.**
+    Every other HTTP error (429/5xx, which `RoutedProviderGateway`
+    retries; other 4xx) is left as the original `httpx.HTTPStatusError`
+    so `_is_retryable` and server-side logging keep seeing the real
+    exception shape. Only auth failures get rewritten into a
+    plain-language `RuntimeError` ("Anthropic rejected the configured
+    API key... Check the key in Company Settings") — they're never
+    transient, so a CEO acting on the message (going to Company Settings)
+    is always the right next step, unlike a 5xx where the existing retry
+    already handles it silently. Verified against the real Anthropic API
+    end-to-end with a deliberately invalid key (`scripts/verify_real_llm.py`
+    run with `ANTHROPIC_API_KEY=sk-ant-invalid-test-key-000`): the PM's
+    first call failed with a real HTTP 401, `_legible_error` converted it,
+    `workflow_engine._run_pipeline`'s existing catch-all turned it into a
+    `TASK_FAILED` event carrying only the plain-language string (full
+    traceback stayed server-side via `logger.exception`), and the mission
+    ended in the `failed` state exactly as designed — no stack trace ever
+    reached the CEO-facing surface.
+113. **`parse_verdict` was reading the FIRST `**Verdict:**` match
+    (`re.search`), not the last, contradicting its own docstring's claim
+    of reading "the trailing" line.** Harmless against mock output (which
+    only ever emits one such line) but a real risk against real Reviewer
+    output, which can ramble and mention "verdict" conversationally
+    before its actual sign-off (or, worse, second-guess itself with two
+    genuine `**Verdict:**` lines). Fixed to `re.findall(...)` +
+    `matches[-1]`, matching the pre-existing docstring's intent exactly.
+    Locked in with two new tests in `test_decision_parsing.py`: one
+    rambly-but-single-verdict case, and one where an earlier and later
+    `**Verdict:**` line actively disagree (`Approved` then, after "on
+    reflection", `Changes requested`) — the trailing line must win.
+114. **No real Anthropic E2E *mission that reaches a genuine model reply*
+    was possible in this environment — no `ANTHROPIC_API_KEY` is
+    available here.** This is the one explicit Sprint 7 carryover,
+    mirroring Sprint 6 decision #107's precedent: whoever next has a key
+    should run `make verify-llm` (`scripts/verify_real_llm.py`, written
+    this sprint) once, which drives a full PM -> Engineer -> Reviewer
+    mission through the real Anthropic provider in a throwaway SQLite DB
+    and workspace dir, prints the parsed verdict + sections + real USD
+    cost, and exits non-zero on any failure. What *was* verified for real
+    against the live Anthropic API in this environment: the 401
+    error-legibility path end-to-end (entry #112) — confirming the
+    request genuinely leaves the process, hits `api.anthropic.com`, and
+    a real rejection response is turned into the CEO-legible message
+    rather than a synthetic/mocked one. The retryable-5xx path (item
+    3.4) and the actual "verdict parses from rambly real prose" path
+    (item 3.2) remain covered by the unit/integration tests above
+    (entries #112, #113) plus the pre-existing `test_provider_retry.py`
+    suite, not by a live 429/5xx from Anthropic itself, since that
+    can't be triggered on demand without a working key.
+115. **`scripts/verify_real_llm.py` runs against a throwaway temp-file
+    SQLite database and temp workspace directory, never the project's
+    own dev database.** Mirrors `seed.py`'s existing service-layer
+    approach (real `projects_service`/`tasks_service`/`workflow_engine`
+    calls, not raw SQL) but is safe to run repeatedly and in CI-like
+    contexts without disturbing `make seed`'s demo company or requiring
+    Postgres/Docker to be up — the point of this script is isolating the
+    provider path, not re-verifying the datastore (Phase 1/2 already
+    did that) or the sandbox (Sprint 6 already did that).

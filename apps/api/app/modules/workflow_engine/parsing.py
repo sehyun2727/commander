@@ -45,11 +45,14 @@ def parse_verdict(text: str) -> str:
     """"approved" or "changes_requested", read from the trailing
     **Verdict:** line. Defaults to "changes_requested" if the line is
     missing or unrecognized -- never silently treat unparseable output as
-    an approval."""
-    match = re.search(r"\*\*Verdict:\*\*\s*(.+)", text, flags=re.IGNORECASE)
-    if not match:
+    an approval. Uses the LAST match, not the first: real (non-mock)
+    Reviewer output can ramble and mention "verdict" conversationally
+    before the actual sign-off line, so taking the first match risked
+    reading a stray earlier mention instead of the real one."""
+    matches = re.findall(r"\*\*Verdict:\*\*\s*(.+)", text, flags=re.IGNORECASE)
+    if not matches:
         return "changes_requested"
-    verdict = match.group(1).strip().lower()
+    verdict = matches[-1].strip().lower()
     return "approved" if verdict.startswith("approved") else "changes_requested"
 
 

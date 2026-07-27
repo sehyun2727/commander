@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 7 — V1 Hardening & Dockerized Postgres
- Overall: 17/34 items · 50%
- Now working on: Phase 2 — Alembic Migrations (committing)
- Last update: 2026-07-27 10:20
+ Overall: 23/34 items · 68%
+ Now working on: Phase 3 — Real LLM Verification (committing)
+ Last update: 2026-07-27 11:40
 ================================================
 
 PHASE 0 — Hygiene & Audit                                      (4/4)
@@ -29,14 +29,14 @@ PHASE 2 — Alembic Migrations                                   (6/6)
 [x] 2.5  make seed works on Postgres (drop+re-migrate; fresh volume -> upgrade -> seed -> API serves it, verified)
 [x] 2.6  Commit+push: feat(db) alembic baseline
 
-PHASE 3 — Real LLM Verification                                (0/6)
-[ ] 3.1  Real Anthropic E2E mission (or flagged carryover if no key)
-[ ] 3.2  Verdict + P/R/R/I parsing survives real rambly output
-[ ] 3.3  Missing/invalid key -> CEO-legible error, no traceback
-[ ] 3.4  429/5xx retry still holds through full pipeline
-[ ] 3.5  scripts/verify_real_llm.py + make verify-llm
-[ ] 3.6  Commit+push: feat(providers) real-LLM verification
-[ ] +    Record real-run cost/outcome in DECISIONS.md
+PHASE 3 — Real LLM Verification                                (6/6)
+[x] 3.1  Real Anthropic E2E mission (or flagged carryover if no key) -- carryover flagged (DECISIONS #114); real 401 path verified live against api.anthropic.com
+[x] 3.2  Verdict + P/R/R/I parsing survives real rambly output -- fixed parse_verdict last-match bug (DECISIONS #113) + 2 new tests
+[x] 3.3  Missing/invalid key -> CEO-legible error, no traceback -- _legible_error() in anthropic_provider.py, verified live + 4 new tests
+[x] 3.4  429/5xx retry still holds through full pipeline -- unchanged, re-verified via test_provider_retry.py (still green)
+[x] 3.5  scripts/verify_real_llm.py + make verify-llm -- written, runs against throwaway SQLite DB, tested (no-key fail-fast + live 401 path)
+[x] 3.6  Commit+push: feat(providers) real-LLM verification
+[x] +    Record real-run cost/outcome in DECISIONS.md -- entries #108-115
 
 PHASE 4 — Operational Hardening                                (0/5)
 [ ] 4.1  /api/health + /api/health/db
