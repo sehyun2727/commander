@@ -6,9 +6,10 @@ import { api } from "@/lib/api";
 import { useCompanies, useCreateCompany } from "@/lib/hooks";
 import { CompanyCard } from "@/components/CompanyCard";
 import { EmptyState } from "@/components/EmptyState";
+import { ErrorState } from "@/components/ErrorState";
 
 export default function CompanyListPage() {
-  const { data: companies, isLoading } = useCompanies();
+  const { data: companies, isLoading, isError } = useCompanies();
   const createCompany = useCreateCompany();
   const router = useRouter();
   const [name, setName] = useState("");
@@ -73,6 +74,8 @@ export default function CompanyListPage() {
 
       {isLoading ? (
         <p className="text-sm text-text-muted">Loading companies…</p>
+      ) : isError ? (
+        <ErrorState description="Couldn't load your companies. Try refreshing in a moment." />
       ) : active.length === 0 ? (
         <EmptyState
           title="No companies yet"

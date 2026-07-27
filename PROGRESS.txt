@@ -12,16 +12,16 @@ PHASE 0 — Fresh-Machine Audit                                  (4/4)
 [x] 0.3  Fold findings into Phases 1-4 as + items + DECISIONS.md -- DECISIONS #123, findings folded into Phase 1 below
 [x] 0.4  Create PROGRESS.txt; commit+push phase 0
 
-PHASE 1 — Experience Coherence                                 (0/6)
-[ ] 1.1  Empty states on all 10 routes (invitation to act)
-[ ] +    Employees grid has no empty state at all -- add EmptyState
-[ ] +    Kanban empty columns all say generic "Nothing here." -- contextualize per column
-[ ] 1.2  Loading states (no layout jump) on all data views
-[ ] +    Mission detail / Employee profile / Report detail conflate "loading" with "not found" -- add not-found state
-[ ] 1.3  Error states (Commander-voiced, no raw errors)
-[ ] +    No route anywhere handles TanStack Query isError -- add Commander-voiced error state across all 10 routes
-[ ] 1.4  Terminology sweep (no internal-term leaks; StatusWord everywhere)
-[ ] 1.5  Copy voice consistency (interface vs company voice)
+PHASE 1 — Experience Coherence                                 (5/6)
+[x] 1.1  Empty states on all 10 routes (invitation to act)
+[x] +    Employees grid has no empty state at all -- add EmptyState
+[x] +    Kanban empty columns all say generic "Nothing here." -- contextualize per column
+[x] 1.2  Loading states (no layout jump) on all data views
+[x] +    Mission detail / Employee profile / Report detail conflate "loading" with "not found" -- add not-found state
+[x] 1.3  Error states (Commander-voiced, no raw errors)
+[x] +    No route anywhere handles TanStack Query isError -- add Commander-voiced error state across all 10 routes
+[x] 1.4  Terminology sweep (no internal-term leaks; StatusWord everywhere) -- zero leaks beyond confirmed false positive
+[x] 1.5  Copy voice consistency (interface vs company voice) -- DECISIONS #124
 [ ] 1.6  Commit+push: feat(polish) coherence
 
 PHASE 2 — Demo Honesty                                         (0/5)

@@ -1317,3 +1317,45 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       audit").
     These are folded into PROGRESS.txt Phase 1 as concrete items
     rather than re-listed here.
+
+124. **Phase 1 experience-coherence implementation.** Added a shared
+    `ErrorState` component (`components/ErrorState.tsx`, modeled on
+    the existing `EmptyState`) and wired `isError` from every
+    `useQuery`/`useInfiniteQuery` call site into it across all 11
+    routes (My Companies, Headquarters, Missions kanban, Mission
+    detail, Employees grid, Employee profile, Decisions pending+
+    history, Timeline, Reports list, Report detail, Company Settings,
+    Workspace). Headquarters aggregates five independent queries with
+    no single fetch to key off, so it ORs their `isError` flags and
+    renders one page-level `ErrorState` rather than five partial ones
+    — simpler and matches how the page already reads as one unified
+    view. Workspace's three panels (file tree, file viewer, merge
+    history) use small inline `text-status-red` messages instead of
+    the full padded `ErrorState` card, since each panel is small and a
+    fetch failure in one (e.g. merge history) shouldn't visually
+    dominate a still-working file tree next to it — precedent: the
+    panel already used inline text for its own empty states.
+    Fixed the three loading/not-found conflations (`MissionDetail`,
+    `EmployeeProfile`, `ReportDetail`) by splitting the guard into an
+    `isLoading` branch and a separate `isError || !data` branch, the
+    latter distinguishing "couldn't fetch" from "doesn't exist" in the
+    description text. Added the missing Employees-grid `EmptyState`
+    and replaced the kanban's one shared "Nothing here." with a
+    per-column `emptyText` (backlog/developing/needs-decision/done),
+    each grounded in what that column's StatusWord actually means.
+    Terminology sweep (item 1.4): grepped rendered JSX text across
+    `app/` and `components/` for the internal→UI term pairs in
+    CLAUDE.md; zero leaks beyond the already-confirmed-false-positive
+    "Reviewer" role title. Copy-voice pass (item 1.5): per UX_SPEC §8
+    item 6 (company-voice vs. interface-voice), had an Explore-agent
+    audit flag candidate mismatches. Most flagged items ("Say hello to
+    the Department.", "Found your first AI company above…") were
+    judged consistent on review — they're all instances of the same
+    intentional "invitation to act" empty-state pattern the sprint
+    brief itself asks for (item 1.1), not voice mixing. Genuine fix:
+    tightened kanban empty-column copy to a consistent "Nothing/
+    Nobody…" opener across all four columns (was "No Missions queued."
+    breaking the pattern the other three already used). Left
+    `SituationReport`'s "Reading the room…" loading line as-is — it's
+    atmospheric flavor for the PM's report loading, not literal
+    first-person impersonation, and doesn't fabricate any claim.

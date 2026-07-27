@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { DecisionCard } from "@/components/DecisionCard";
+import { ErrorState } from "@/components/ErrorState";
 import { taskStatusWord } from "@/components/StatusWord";
 import { useApprovalHistory, useApprovals, useEmployees, useMissions } from "@/lib/hooks";
 import type { Approval } from "@/lib/types";
@@ -29,8 +30,8 @@ function outcomeForTask(state: string | undefined): string {
 export default function DecisionsPage({ params }: { params: { id: string } }) {
   const companyId = params.id;
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("pending");
-  const { data: pending, isLoading: pendingLoading } = useApprovals(companyId);
-  const { data: history, isLoading: historyLoading } = useApprovalHistory(companyId);
+  const { data: pending, isLoading: pendingLoading, isError: pendingError } = useApprovals(companyId);
+  const { data: history, isLoading: historyLoading, isError: historyError } = useApprovalHistory(companyId);
   const { data: missions } = useMissions(companyId);
   const { data: employees } = useEmployees(companyId);
 
@@ -40,6 +41,7 @@ export default function DecisionsPage({ params }: { params: { id: string } }) {
   const decided = (history ?? []).filter((a) => a.status !== "pending");
   const items: Approval[] = tab === "pending" ? pending ?? [] : decided;
   const isLoading = tab === "pending" ? pendingLoading : historyLoading;
+  const isError = tab === "pending" ? pendingError : historyError;
 
   return (
     <main className="mx-auto max-w-3xl px-8 py-10">
@@ -64,6 +66,8 @@ export default function DecisionsPage({ params }: { params: { id: string } }) {
 
       {isLoading ? (
         <p className="text-sm text-text-muted">Loading decisions…</p>
+      ) : isError ? (
+        <ErrorState description="Couldn't load Decisions. Try refreshing in a moment." />
       ) : items.length === 0 ? (
         <p className="text-sm text-text-faint">
           {tab === "pending" ? "Nothing needs your decision." : "No decisions yet."}

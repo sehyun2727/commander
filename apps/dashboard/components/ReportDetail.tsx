@@ -1,17 +1,37 @@
 "use client";
 
 import Link from "next/link";
+import { ErrorState } from "@/components/ErrorState";
 import { useReport, useReports } from "@/lib/hooks";
 import { relativeTime } from "@/lib/utils";
 
 export function ReportDetail({ companyId, reportId }: { companyId: string; reportId: string }) {
-  const { data: report, isLoading } = useReport(reportId);
+  const { data: report, isLoading, isError } = useReport(reportId);
   const { data: reports } = useReports(companyId);
 
-  if (isLoading || !report) {
+  if (isLoading) {
     return (
       <main className="mx-auto max-w-3xl px-8 py-10">
         <p className="text-sm text-text-muted">Loading report…</p>
+      </main>
+    );
+  }
+
+  if (isError || !report) {
+    return (
+      <main className="mx-auto max-w-3xl px-8 py-10">
+        <Link href={`/company/${companyId}/reports`} className="text-xs font-medium text-text-faint hover:text-text-muted">
+          ← Reports
+        </Link>
+        <div className="mt-4">
+          <ErrorState
+            description={
+              isError
+                ? "Couldn't load this Report. Try refreshing in a moment."
+                : "This Report doesn't exist, or has been removed."
+            }
+          />
+        </div>
       </main>
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { EmptyState } from "@/components/EmptyState";
+import { ErrorState } from "@/components/ErrorState";
 import { MissionCard } from "@/components/MissionCard";
 import { NewMissionForm } from "@/components/NewMissionForm";
 import { taskStatusWord } from "@/components/StatusWord";
@@ -10,20 +11,31 @@ import type { Task } from "@/lib/types";
 
 // Kanban lanes per UX_SPEC §3.3, derived from the same StatusWord token
 // every other status render site uses — no second internal-state list.
-const COLUMNS: { key: string; label: string; tokens: StatusWordToken[] }[] = [
-  { key: "backlog", label: "Backlog", tokens: [StatusWordToken.PLANNING] },
-  { key: "developing", label: "Developing", tokens: [StatusWordToken.DEVELOPING, StatusWordToken.REVIEWING] },
-  { key: "needs_decision", label: "Needs your decision", tokens: [StatusWordToken.NEEDS_DECISION] },
+const COLUMNS: { key: string; label: string; tokens: StatusWordToken[]; emptyText: string }[] = [
+  { key: "backlog", label: "Backlog", tokens: [StatusWordToken.PLANNING], emptyText: "Nothing queued yet." },
+  {
+    key: "developing",
+    label: "Developing",
+    tokens: [StatusWordToken.DEVELOPING, StatusWordToken.REVIEWING],
+    emptyText: "Nobody's building right now.",
+  },
+  {
+    key: "needs_decision",
+    label: "Needs your decision",
+    tokens: [StatusWordToken.NEEDS_DECISION],
+    emptyText: "Nothing waiting on you.",
+  },
   {
     key: "done",
     label: "Done",
     tokens: [StatusWordToken.COMPLETED, StatusWordToken.FAILED, StatusWordToken.CANCELLED],
+    emptyText: "Nothing finished yet.",
   },
 ];
 
 export default function MissionsPage({ params }: { params: { id: string } }) {
   const companyId = params.id;
-  const { data: missions, isLoading } = useMissions(companyId);
+  const { data: missions, isLoading, isError } = useMissions(companyId);
   const { data: starters } = useStarters(companyId);
   const createMission = useCreateMission(companyId);
   const starter = starters?.[0];
@@ -48,6 +60,8 @@ export default function MissionsPage({ params }: { params: { id: string } }) {
 
       {isLoading ? (
         <p className="text-sm text-text-muted">Loading missions…</p>
+      ) : isError ? (
+        <ErrorState description="Couldn't load Missions. Try refreshing in a moment." />
       ) : missions?.length === 0 ? (
         <EmptyState
           title="No Missions yet"
@@ -82,7 +96,7 @@ export default function MissionsPage({ params }: { params: { id: string } }) {
                   <MissionCard key={mission.id} mission={mission} companyId={companyId} />
                 ))}
                 {(grouped[column.key]?.length ?? 0) === 0 && (
-                  <p className="px-1 py-4 text-center text-xs text-text-faint">Nothing here.</p>
+                  <p className="px-1 py-4 text-center text-xs text-text-faint">{column.emptyText}</p>
                 )}
               </div>
             </div>

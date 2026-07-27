@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { DecisionCard } from "@/components/DecisionCard";
+import { ErrorState } from "@/components/ErrorState";
 import { useRealtimeEvents } from "@/components/RealtimeProvider";
 import { SituationReport } from "@/components/SituationReport";
 import { agentStatusWord, taskStatusWord } from "@/components/StatusWord";
@@ -27,12 +28,13 @@ function StatCard({ label, value, href }: { label: string; value: string | numbe
 
 export default function HeadquartersPage({ params }: { params: { id: string } }) {
   const companyId = params.id;
-  const { data: missions } = useMissions(companyId);
-  const { data: employees } = useEmployees(companyId);
-  const { data: approvals } = useApprovals(companyId);
-  const { data: timelinePage } = useTimeline(companyId);
+  const { data: missions, isError: missionsError } = useMissions(companyId);
+  const { data: employees, isError: employeesError } = useEmployees(companyId);
+  const { data: approvals, isError: approvalsError } = useApprovals(companyId);
+  const { data: timelinePage, isError: timelineError } = useTimeline(companyId);
   const { data: costs } = useCompanyCosts(companyId);
   const liveEvents = useRealtimeEvents();
+  const isError = missionsError || employeesError || approvalsError || timelineError;
 
   const activeMissions = missions?.filter((t) => !TERMINAL_TOKENS.includes(taskStatusWord(t.state))).length ?? 0;
   const risksOpen = missions?.filter((t) => taskStatusWord(t.state) === StatusWordToken.FAILED).length ?? 0;
@@ -43,6 +45,17 @@ export default function HeadquartersPage({ params }: { params: { id: string } })
   const employeeById = useMemo(() => new Map((employees ?? []).map((e) => [e.id, e])), [employees]);
 
   const feedEvents = liveEvents.length > 0 ? liveEvents : timelinePage?.items ?? [];
+
+  if (isError) {
+    return (
+      <main className="mx-auto max-w-5xl px-8 py-10">
+        <header className="mb-8">
+          <h1 className="text-2xl font-semibold text-text">Headquarters</h1>
+        </header>
+        <ErrorState description="Couldn't load Headquarters. Try refreshing in a moment." />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-8 py-10">

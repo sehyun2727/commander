@@ -5,10 +5,10 @@ import { useWorkspaceFile, useWorkspaceMerges, useWorkspaceTree } from "@/lib/ho
 
 export default function WorkspacePage({ params }: { params: { id: string } }) {
   const companyId = params.id;
-  const { data: tree, isLoading: treeLoading } = useWorkspaceTree(companyId);
-  const { data: merges } = useWorkspaceMerges(companyId);
+  const { data: tree, isLoading: treeLoading, isError: treeError } = useWorkspaceTree(companyId);
+  const { data: merges, isError: mergesError } = useWorkspaceMerges(companyId);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const { data: file, isLoading: fileLoading } = useWorkspaceFile(companyId, selectedPath);
+  const { data: file, isLoading: fileLoading, isError: fileError } = useWorkspaceFile(companyId, selectedPath);
 
   return (
     <main className="mx-auto max-w-5xl px-8 py-10">
@@ -24,6 +24,8 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-faint">Files</h2>
           {treeLoading ? (
             <p className="text-xs text-text-faint">Loading…</p>
+          ) : treeError ? (
+            <p className="text-xs text-status-red">Couldn&apos;t load files.</p>
           ) : !tree?.length ? (
             <p className="text-xs text-text-faint">No committed code yet.</p>
           ) : (
@@ -53,6 +55,8 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
               <p className="text-sm text-text-faint">Select a file from the tree to view its contents.</p>
             ) : fileLoading ? (
               <p className="text-sm text-text-faint">Loading {selectedPath}…</p>
+            ) : fileError ? (
+              <p className="text-sm text-status-red">Couldn&apos;t load {selectedPath}. Try refreshing in a moment.</p>
             ) : (
               <pre className="max-h-[32rem] overflow-auto rounded-lg bg-base-raised p-3 text-xs text-text-muted">
                 {file?.content}
@@ -62,7 +66,9 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
 
           <div className="rounded-xl border border-base-border bg-base-card p-4 shadow-panel">
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-faint">Recent Merges</h2>
-            {!merges?.length ? (
+            {mergesError ? (
+              <p className="text-sm text-status-red">Couldn&apos;t load merge history.</p>
+            ) : !merges?.length ? (
               <p className="text-sm text-text-faint">No merges yet.</p>
             ) : (
               <ul className="space-y-1.5">

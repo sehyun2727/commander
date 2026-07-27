@@ -4,13 +4,14 @@ import Link from "next/link";
 import { ChangeSummaryCard } from "@/components/ChangeSummaryCard";
 import { ChatThread } from "@/components/ChatThread";
 import { DecisionCard } from "@/components/DecisionCard";
+import { ErrorState } from "@/components/ErrorState";
 import { ExecutionResults } from "@/components/ExecutionResults";
 import { StatusWord, taskStatusWord } from "@/components/StatusWord";
 import { useApprovals, useAssignMission, useEmployees, useMission, useMissionCosts } from "@/lib/hooks";
 import { formatUsd } from "@/lib/utils";
 
 export function MissionDetail({ companyId, taskId }: { companyId: string; taskId: string }) {
-  const { data: mission, isLoading } = useMission(taskId);
+  const { data: mission, isLoading, isError } = useMission(taskId);
   const { data: approvals } = useApprovals(companyId);
   const { data: costs } = useMissionCosts(taskId);
   const { data: employees } = useEmployees(companyId);
@@ -21,10 +22,29 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
     ? employees?.find((e) => e.id === pendingApproval.reviewer_agent_id)
     : undefined;
 
-  if (isLoading || !mission) {
+  if (isLoading) {
     return (
       <main className="mx-auto max-w-3xl px-8 py-10">
         <p className="text-sm text-text-muted">Loading mission…</p>
+      </main>
+    );
+  }
+
+  if (isError || !mission) {
+    return (
+      <main className="mx-auto max-w-3xl px-8 py-10">
+        <Link href={`/company/${companyId}/missions`} className="text-xs font-medium text-text-faint hover:text-text-muted">
+          ← Missions
+        </Link>
+        <div className="mt-4">
+          <ErrorState
+            description={
+              isError
+                ? "Couldn't load this Mission. Try refreshing in a moment."
+                : "This Mission doesn't exist, or has been removed."
+            }
+          />
+        </div>
       </main>
     );
   }

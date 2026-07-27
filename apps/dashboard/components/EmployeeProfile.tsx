@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { ErrorState } from "@/components/ErrorState";
 import { useEmployeeProfile, useEmployees, useModels, useUpdateEmployeeProfile } from "@/lib/hooks";
 import { DecisionStyle, Personality, WorkingStyle } from "@/lib/types";
 import { decisionStyleLabel, personalityLabel, roleLabel, workingStyleLabel } from "@/lib/utils";
@@ -16,8 +17,8 @@ const MODEL_ROLE_FOR_AGENT_ROLE: Record<string, string> = {
 };
 
 export function EmployeeProfile({ companyId, agentId }: { companyId: string; agentId: string }) {
-  const { data: employees } = useEmployees(companyId);
-  const { data: profile, isLoading } = useEmployeeProfile(agentId);
+  const { data: employees, isError: employeesError } = useEmployees(companyId);
+  const { data: profile, isLoading, isError: profileError } = useEmployeeProfile(agentId);
   const { data: models } = useModels(companyId);
   const updateProfile = useUpdateEmployeeProfile(companyId, agentId);
 
@@ -39,10 +40,29 @@ export function EmployeeProfile({ companyId, agentId }: { companyId: string; age
     setModelRef(profile.model_ref ?? "");
   }, [profile]);
 
-  if (isLoading || !profile || !employee) {
+  if (isLoading) {
     return (
       <main className="mx-auto max-w-2xl px-8 py-10">
         <p className="text-sm text-text-muted">Loading employee…</p>
+      </main>
+    );
+  }
+
+  if (profileError || employeesError || !profile || !employee) {
+    return (
+      <main className="mx-auto max-w-2xl px-8 py-10">
+        <Link href={`/company/${companyId}/employees`} className="text-xs font-medium text-text-faint hover:text-text-muted">
+          ← Employees
+        </Link>
+        <div className="mt-4">
+          <ErrorState
+            description={
+              profileError || employeesError
+                ? "Couldn't load this Employee. Try refreshing in a moment."
+                : "This Employee doesn't exist, or has been removed."
+            }
+          />
+        </div>
       </main>
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ErrorState } from "@/components/ErrorState";
 import { TimelineFeed } from "@/components/TimelineFeed";
 import { useEmployees, useTimelineFeed } from "@/lib/hooks";
 import { matchesTimelineFilter, TIMELINE_FILTERS } from "@/lib/timelineVocabulary";
@@ -11,7 +12,7 @@ export default function TimelinePage({ params }: { params: { id: string } }) {
   const [filter, setFilter] = useState<TimelineFilterKey>("all");
   const [technical, setTechnical] = useState(false);
   const { data: employees } = useEmployees(companyId);
-  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useTimelineFeed(companyId);
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useTimelineFeed(companyId);
 
   const employeeById = useMemo(() => new Map((employees ?? []).map((e) => [e.id, e])), [employees]);
   const events = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
@@ -52,6 +53,8 @@ export default function TimelinePage({ params }: { params: { id: string } }) {
 
       {isLoading ? (
         <p className="text-sm text-text-muted">Loading Timeline…</p>
+      ) : isError ? (
+        <ErrorState description="Couldn't load the Timeline. Try refreshing in a moment." />
       ) : (
         <>
           <div className="rounded-xl border border-base-border bg-base-card px-4 shadow-panel">

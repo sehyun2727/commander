@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ErrorState } from "@/components/ErrorState";
 import {
   useArchiveCompany,
   useCompany,
@@ -17,7 +18,7 @@ const ROLE_LABEL: Record<string, string> = { planner: "PM", builder: "Engineer",
 export default function SettingsPage({ params }: { params: { id: string } }) {
   const companyId = params.id;
   const router = useRouter();
-  const { data: company } = useCompany(companyId);
+  const { data: company, isLoading, isError } = useCompany(companyId);
   const updateSettings = useUpdateCompanySettings(companyId);
   const archive = useArchiveCompany(companyId);
   const { data: models } = useModels(companyId);
@@ -53,6 +54,25 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
     if (!window.confirm(`Archive "${company?.name}"? This company will be hidden from the company list.`)) return;
     await archive.mutateAsync();
     router.push("/");
+  }
+
+  if (isLoading) {
+    return (
+      <main className="mx-auto max-w-2xl px-8 py-10">
+        <p className="text-sm text-text-muted">Loading Company Settings…</p>
+      </main>
+    );
+  }
+
+  if (isError) {
+    return (
+      <main className="mx-auto max-w-2xl px-8 py-10">
+        <header className="mb-8">
+          <h1 className="text-2xl font-semibold text-text">Company Settings</h1>
+        </header>
+        <ErrorState description="Couldn't load Company Settings. Try refreshing in a moment." />
+      </main>
+    );
   }
 
   return (
@@ -159,7 +179,7 @@ export default function SettingsPage({ params }: { params: { id: string } }) {
               <p className="text-sm font-semibold text-text">Execution Sandbox</p>
               <p className="mt-1 text-xs text-text-muted">
                 {execSettings.execution_available
-                  ? "Automated checks (syntax, tests) run in an isolated sandbox after the Engineer commits code, before Reviewer audit."
+                  ? "Automated checks (syntax, tests) run in an isolated sandbox after the Engineer commits code, before the Reviewer's audit."
                   : `Requires Docker Desktop — ${execSettings.reason ?? "sandbox unavailable"}.`}
               </p>
             </div>

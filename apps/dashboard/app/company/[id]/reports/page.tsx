@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { ErrorState } from "@/components/ErrorState";
 import { useGenerateReport, useReports } from "@/lib/hooks";
 import { relativeTime } from "@/lib/utils";
 
 export default function ReportsPage({ params }: { params: { id: string } }) {
   const companyId = params.id;
-  const { data: reports, isLoading } = useReports(companyId);
+  const { data: reports, isLoading, isError } = useReports(companyId);
   const generate = useGenerateReport(companyId);
 
   return (
@@ -27,6 +28,8 @@ export default function ReportsPage({ params }: { params: { id: string } }) {
 
       {isLoading ? (
         <p className="text-sm text-text-muted">Loading reports…</p>
+      ) : isError ? (
+        <ErrorState description="Couldn't load Reports. Try refreshing in a moment." />
       ) : !reports?.length ? (
         <p className="text-sm text-text-faint">No reports yet. Generate one to get started.</p>
       ) : (
