@@ -1,0 +1,23 @@
+name: commander
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-commander}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-commander}
+      POSTGRES_DB: ${POSTGRES_DB:-commander}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - commander-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-commander} -d ${POSTGRES_DB:-commander}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  commander-postgres-data:
+    name: commander-postgres-data

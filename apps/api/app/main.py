@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     event_bus = InProcessEventBus(session_factory)
     agent_runtime = DBAgentRuntime(session_factory, event_bus)
     workspace_manager = LocalGitWorkspaceManager(settings.commander_workspace_root)
-    sandbox_runner = DockerSandbox()
+    sandbox_runner = DockerSandbox(settings.commander_sandbox_image)
     workflow_engine = CommanderWorkflowEngine(
         session_factory, event_bus, agent_runtime, secrets, workspace_manager, sandbox_runner
     )

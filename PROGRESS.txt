@@ -1,24 +1,24 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 7 — V1 Hardening & Dockerized Postgres
- Overall: 3/34 items · 9%
- Now working on: Phase 0 — Hygiene & Audit (committing)
- Last update: 2026-07-27 09:16
+ Overall: 10/34 items · 29%
+ Now working on: Phase 1 — Dockerized Postgres (committing)
+ Last update: 2026-07-27 09:35
 ================================================
 
-PHASE 0 — Hygiene & Audit                                      (3/4)
+PHASE 0 — Hygiene & Audit                                      (4/4)
 [x] 0.1  Read Makefile / config.py / db.py / docker_sandbox.py
 [x] 0.2  Confirm/add CLAUDE.md push rule (already present)
 [x] 0.3  Create PROGRESS.txt
-[ ] 0.4  Commit+push: chore(sprint7) phase 0
+[x] 0.4  Commit+push: chore(sprint7) phase 0
 
-PHASE 1 — Dockerized Postgres                                  (0/7)
-[ ] 1.1  docker-compose.yml (postgres:16, volume, healthcheck)
-[ ] 1.2  .env + .env.example (all vars documented)
-[ ] 1.3  config.py: env-driven database_url, Postgres default for make dev
-[ ] 1.4  Add asyncpg + alembic deps
-[ ] 1.5  db.py works with postgresql+asyncpg
-[ ] 1.6  Makefile: db-up / db-down / dev ensures postgres
+PHASE 1 — Dockerized Postgres                                  (6/7)
+[x] 1.1  docker-compose.yml (postgres:16, volume, healthcheck)
+[x] 1.2  .env + .env.example (all vars documented)
+[x] 1.3  config.py: env-driven database_url, Postgres default for make dev
+[x] 1.4  Add asyncpg + alembic deps
+[x] 1.5  db.py works with postgresql+asyncpg (verified round-trip insert/read)
+[x] 1.6  Makefile: db-up / db-down / dev ensures postgres
 [ ] 1.7  Commit+push: feat(db) dockerized postgres
 
 PHASE 2 — Alembic Migrations                                   (0/6)
