@@ -27,9 +27,11 @@ API_DIR = REPO_ROOT / "apps" / "api"
 os.chdir(API_DIR)
 sys.path.insert(0, str(API_DIR))
 
+from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
+from app.core.db import upgrade_to_head  # noqa: E402
 from app.core.db_models import Base  # noqa: E402
 from app.core.lifecycle.task_states import TaskState  # noqa: E402
 from app.core.secrets import DBSecretsProvider  # noqa: E402
@@ -64,21 +66,33 @@ async def run_to_decision(
 
 
 async def main() -> None:
-    db_path = API_DIR / "commander.db"
-    if db_path.exists():
-        db_path.unlink()
-        print(f"Removed existing dev database at {db_path}")
-
     engine = create_async_engine(settings.database_url, echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+
+    if settings.database_url.startswith("sqlite"):
+        db_path = API_DIR / "commander.db"
+        if db_path.exists():
+            db_path.unlink()
+            print(f"Removed existing dev database at {db_path}")
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    else:
+        # Reset = drop every known table (+ alembic's own bookkeeping
+        # table) and re-migrate from scratch, rather than truncating —
+        # keeps "make seed" exercising the same migration path a real
+        # deploy would, instead of a second, seed-only schema route.
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+        print("Dropped existing Postgres schema")
+        await asyncio.to_thread(upgrade_to_head)
+        print("Re-applied Alembic migrations")
 
     secrets = DBSecretsProvider(session_factory)
     event_bus = InProcessEventBus(session_factory)
     agent_runtime = DBAgentRuntime(session_factory, event_bus)
     workspace_manager = LocalGitWorkspaceManager(settings.commander_workspace_root)
-    sandbox_runner = DockerSandbox()
+    sandbox_runner = DockerSandbox(settings.commander_sandbox_image)
     workflow_engine = CommanderWorkflowEngine(
         session_factory, event_bus, agent_runtime, secrets, workspace_manager, sandbox_runner
     )

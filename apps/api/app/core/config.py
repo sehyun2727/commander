@@ -7,13 +7,19 @@ can be overridden at runtime from Company Settings without an env change.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Anchored to the repo root (not the process cwd) so the single .env file
+# next to docker-compose.yml is found the same way whether the API is
+# launched from the repo root or from apps/api (as `make dev` does).
+_REPO_ROOT_ENV = Path(__file__).resolve().parents[4] / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_REPO_ROOT_ENV, env_prefix="", extra="ignore")
 
     commander_provider: Literal["mock", "anthropic"] = "mock"
     anthropic_api_key: str | None = None

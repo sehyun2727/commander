@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 7 — V1 Hardening & Dockerized Postgres
- Overall: 10/34 items · 29%
- Now working on: Phase 1 — Dockerized Postgres (committing)
- Last update: 2026-07-27 09:35
+ Overall: 17/34 items · 50%
+ Now working on: Phase 2 — Alembic Migrations (committing)
+ Last update: 2026-07-27 10:20
 ================================================
 
 PHASE 0 — Hygiene & Audit                                      (4/4)
@@ -19,15 +19,15 @@ PHASE 1 — Dockerized Postgres                                  (6/7)
 [x] 1.4  Add asyncpg + alembic deps
 [x] 1.5  db.py works with postgresql+asyncpg (verified round-trip insert/read)
 [x] 1.6  Makefile: db-up / db-down / dev ensures postgres
-[ ] 1.7  Commit+push: feat(db) dockerized postgres
+[x] 1.7  Commit+push: feat(db) dockerized postgres
 
-PHASE 2 — Alembic Migrations                                   (0/6)
-[ ] 2.1  Alembic init (async env.py)
-[ ] 2.2  Baseline migration (audit ALL models incl. Sprint 5-6 cols)
-[ ] 2.3  make db-upgrade / db-downgrade
-[ ] 2.4  Startup: migrate on PG, create_all only for SQLite tests
-[ ] 2.5  make seed works on Postgres (fresh volume -> upgrade -> seed)
-[ ] 2.6  Commit+push: feat(db) alembic baseline
+PHASE 2 — Alembic Migrations                                   (6/6)
+[x] 2.1  Alembic init (async env.py, target_metadata + url from settings)
+[x] 2.2  Baseline migration (all 8 tables incl. Sprint 5-6 cols, verified via `alembic check`)
+[x] 2.3  make db-upgrade / db-downgrade (round-tripped)
+[x] 2.4  Startup: migrate on PG (db.py init_db), create_all only for SQLite
+[x] 2.5  make seed works on Postgres (drop+re-migrate; fresh volume -> upgrade -> seed -> API serves it, verified)
+[x] 2.6  Commit+push: feat(db) alembic baseline
 
 PHASE 3 — Real LLM Verification                                (0/6)
 [ ] 3.1  Real Anthropic E2E mission (or flagged carryover if no key)
