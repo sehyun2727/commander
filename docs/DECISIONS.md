@@ -1177,3 +1177,62 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     Postgres/Docker to be up — the point of this script is isolating the
     provider path, not re-verifying the datastore (Phase 1/2 already
     did that) or the sandbox (Sprint 6 already did that).
+116. **`/api/health` (liveness) and `/api/health/db` (readiness) are two
+    separate endpoints, not one.** Liveness must stay a zero-dependency
+    "the process is up" check so it can never itself be the thing that's
+    down; DB reachability is a distinct, slower question that deploy
+    tooling / the dashboard's API-down banner needs to ask separately.
+    Verified live: with Postgres stopped (`docker compose stop
+    postgres`), `/api/health` kept returning 200 while `/api/health/db`
+    returned 503 with `{"status": "error", "detail": "database
+    unreachable: ..."}`; restarting Postgres flipped it back to 200
+    within one poll, with no server restart needed.
+117. **Boot config validation (`core/boot_checks.py`) runs once at the
+    top of `main.py`'s lifespan, before `init_db()`, and turns a bad
+    config into `print(..., file=sys.stderr); raise SystemExit(1)`
+    rather than an uncaught pydantic/DB exception.** Two checks only:
+    `COMMANDER_PROVIDER=anthropic` with no `ANTHROPIC_API_KEY` (would
+    otherwise fail confusingly on the first mission's first provider
+    call instead of at boot), and a `DATABASE_URL` that isn't
+    sqlite/postgresql. `init_db()` failures (e.g. Postgres unreachable)
+    are caught the same way, with the DSN redacted
+    (`redact_database_url`) before it ever reaches a log line. Verified
+    live: booting with `COMMANDER_PROVIDER=anthropic` and an empty
+    `ANTHROPIC_API_KEY` printed the plain-language message and exited
+    1, without ever reaching `init_db()`.
+118. **Frontend resilience is two independent signals, not one.** (a) An
+    app-wide `ApiStatusBanner` polls `GET /api/health` every 5s
+    (`useApiHealth`, `retry: false` so one failed poll shows the banner
+    within 5s rather than waiting out React Query's default retry
+    backoff) and renders a sticky top banner only while `isError` — this
+    catches the whole API being unreachable, independent of which page
+    or query happened to be active. (b) `useEventStream` now surfaces a
+    `ConnectionStatus` ("connecting" | "open" | "reconnecting") threaded
+    through `RealtimeProvider` -> `useRealtimeConnectionStatus`, and
+    `Sidebar` shows a small "Reconnecting…" pill when the SSE connection
+    drops. No bounded-retry logic was added on top of the browser's
+    native `EventSource`, which already retries indefinitely on its own
+    after any drop (confirmed by reading its spec'd behavior — Commander
+    never calls `.close()` outside the effect's own cleanup) — the gap
+    being closed here is visibility, not retry behavior, since an
+    indefinitely-retrying-but-silent connection already met the "never
+    lose events forever" bar but not the "CEO can tell something's
+    wrong" one. Verified via `tsc --noEmit` + `next build` (both clean)
+    and curl-level smoke tests (dashboard shell still returns 200 with
+    the API process killed, confirming client-side data fetching is
+    what fails, not SSR) — no rendered-pixel/browser verification was
+    possible in this environment, per the same caveat as entry #106.
+119. **Data-safety audit (item 4.4) found nothing to fix.** Every
+    mutating route across `apps/api/app/modules/*/routes.py` was
+    enumerated: zero `router.delete(...)` routes exist anywhere: the
+    only company-level removal is `POST /api/projects/{id}/archive`
+    (`projects/service.archive_project`), which sets `archived = True`
+    and is fully reversible, never a hard delete. No mission-delete
+    route exists at all. The only real schema/row deletions in the
+    codebase (`Base.metadata.drop_all` in `scripts/seed.py`, and
+    `op.drop_table(...)` in the baseline migration's `downgrade()`) are
+    both CLI-only — neither is imported by `main.py` or reachable from
+    any mounted router. No raw `DELETE FROM`/`TRUNCATE`/`session.delete`
+    exists anywhere in `apps/api/app`. Dashboard-side, `archiveCompany`
+    is the only delete-adjacent action exposed in the UI, and it calls
+    the same soft-archive endpoint.

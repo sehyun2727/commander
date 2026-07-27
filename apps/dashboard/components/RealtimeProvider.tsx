@@ -5,9 +5,11 @@ import { createContext, useContext, useState } from "react";
 import { invalidateForEvent } from "@/lib/hooks";
 import { EventType } from "@/lib/types";
 import type { Event } from "@/lib/types";
+import type { ConnectionStatus } from "@/lib/useEventStream";
 import { useEventStream } from "@/lib/useEventStream";
 
 const RealtimeEventsContext = createContext<Event[]>([]);
+const ConnectionStatusContext = createContext<ConnectionStatus>("connecting");
 
 interface StreamingReply {
   agentId: string;
@@ -26,12 +28,17 @@ export function useStreamingReply(taskId: string): StreamingReply | null {
   return useContext(StreamingRepliesContext)[taskId] ?? null;
 }
 
+/** Live status of this company's SSE connection, for a small "Reconnecting..." indicator. */
+export function useRealtimeConnectionStatus(): ConnectionStatus {
+  return useContext(ConnectionStatusContext);
+}
+
 export function RealtimeProvider({ companyId, children }: { companyId: string; children: React.ReactNode }) {
   const qc = useQueryClient();
   const [events, setEvents] = useState<Event[]>([]);
   const [streaming, setStreaming] = useState<Record<string, StreamingReply>>({});
 
-  useEventStream(companyId, (event) => {
+  const connectionStatus = useEventStream(companyId, (event) => {
     if (event.type === EventType.CONVERSATION_MESSAGE_DELTA) {
       const payload = event.payload as { text: string; agent_id?: string; task_id?: string; done?: boolean };
       const taskId = payload.task_id;
@@ -68,8 +75,10 @@ export function RealtimeProvider({ companyId, children }: { companyId: string; c
   });
 
   return (
-    <RealtimeEventsContext.Provider value={events}>
-      <StreamingRepliesContext.Provider value={streaming}>{children}</StreamingRepliesContext.Provider>
-    </RealtimeEventsContext.Provider>
+    <ConnectionStatusContext.Provider value={connectionStatus}>
+      <RealtimeEventsContext.Provider value={events}>
+        <StreamingRepliesContext.Provider value={streaming}>{children}</StreamingRepliesContext.Provider>
+      </RealtimeEventsContext.Provider>
+    </ConnectionStatusContext.Provider>
   );
 }

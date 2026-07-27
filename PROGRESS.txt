@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 7 — V1 Hardening & Dockerized Postgres
- Overall: 23/34 items · 68%
- Now working on: Phase 3 — Real LLM Verification (committing)
- Last update: 2026-07-27 11:40
+ Overall: 28/34 items · 82%
+ Now working on: Phase 4 — Operational Hardening (committing)
+ Last update: 2026-07-27 12:15
 ================================================
 
 PHASE 0 — Hygiene & Audit                                      (4/4)
@@ -38,12 +38,12 @@ PHASE 3 — Real LLM Verification                                (6/6)
 [x] 3.6  Commit+push: feat(providers) real-LLM verification
 [x] +    Record real-run cost/outcome in DECISIONS.md -- entries #108-115
 
-PHASE 4 — Operational Hardening                                (0/5)
-[ ] 4.1  /api/health + /api/health/db
-[ ] 4.2  Boot config validation (fail fast, plain language)
-[ ] 4.3  Frontend API-down + SSE-drop graceful states
-[ ] 4.4  Data-safety: no destructive op from UI/normal API
-[ ] 4.5  Commit+push: feat(ops) hardening
+PHASE 4 — Operational Hardening                                (5/5)
+[x] 4.1  /api/health + /api/health/db -- verified live (Postgres stop/start toggled 503<->200)
+[x] 4.2  Boot config validation (fail fast, plain language) -- core/boot_checks.py, verified live
+[x] 4.3  Frontend API-down + SSE-drop graceful states -- ApiStatusBanner + Reconnecting pill, tsc/build clean
+[x] 4.4  Data-safety: no destructive op from UI/normal API -- audited, nothing to fix (DECISIONS #119)
+[x] 4.5  Commit+push: feat(ops) hardening
 
 PHASE 5 — Docs & Release Readiness                             (0/6)
 [ ] 5.1  README rewrite (real V1 surface, full quickstart, walkthrough)

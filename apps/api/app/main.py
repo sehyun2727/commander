@@ -6,11 +6,15 @@ docs/ARCHITECTURE.md § API Server."""
 
 from __future__ import annotations
 
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
+from .core.boot_checks import BootConfigError, redact_database_url, validate_boot_config
 from .core.config import settings
 from .core.db import async_session_factory, init_db
 from .core.secrets import DBSecretsProvider
@@ -36,7 +40,22 @@ from .modules.workspace_manager import router as workspace_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    try:
+        validate_boot_config()
+    except BootConfigError as exc:
+        print(f"Commander cannot start: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
+
+    try:
+        await init_db()
+    except Exception as exc:
+        print(
+            f"Commander cannot start: could not reach the database "
+            f"({redact_database_url(settings.database_url)}): {exc}. "
+            "Is Postgres running? Try `make db-up`.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from None
 
     session_factory = async_session_factory
     secrets = DBSecretsProvider(session_factory)
@@ -86,4 +105,22 @@ app.include_router(sandbox_router)
 
 @app.get("/api/health")
 async def health() -> dict[str, str]:
+    """Liveness only -- no dependencies, always 200 once the process is up."""
     return {"status": "ok"}
+
+
+@app.get("/api/health/db")
+async def health_db() -> JSONResponse:
+    """Readiness: does a real round-trip against the configured database.
+    Never raises past this handler -- a down Postgres should read as a
+    clear 503 to whatever's polling this (deploy tooling, the dashboard's
+    API-down banner), not a bare connection-refused traceback."""
+    try:
+        async with async_session_factory() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "detail": f"database unreachable: {exc}"},
+        )
+    return JSONResponse(status_code=200, content={"status": "ok"})

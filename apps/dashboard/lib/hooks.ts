@@ -30,10 +30,25 @@ export const keys = {
   missionDiff: (taskId: string) => ["missionDiff", taskId] as const,
   capabilities: ["capabilities"] as const,
   executionSettings: (companyId: string) => ["executionSettings", companyId] as const,
+  apiHealth: ["apiHealth"] as const,
 };
 
 export function useCompanies() {
   return useQuery({ queryKey: keys.companies, queryFn: api.listCompanies, refetchInterval: 15_000 });
+}
+
+/** Cheap liveness poll so the whole app can show a single "API unreachable"
+ * banner instead of every page's queries failing independently. Polls even
+ * while the tab is backgrounded so the banner clears itself the moment the
+ * API comes back, without the CEO having to refocus the tab. */
+export function useApiHealth() {
+  return useQuery({
+    queryKey: keys.apiHealth,
+    queryFn: api.getHealth,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    retry: false,
+  });
 }
 
 export function useCompany(id: string) {

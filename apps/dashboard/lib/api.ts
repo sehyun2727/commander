@@ -52,6 +52,9 @@ export const api = {
     return `${API_URL}/api/events/stream?project_id=${encodeURIComponent(projectId)}`;
   },
 
+  // Ops
+  getHealth: () => request<{ status: string }>("/api/health"),
+
   // Companies
   listCompanies: () => request<Project[]>("/api/projects"),
   getCompany: (id: string) => request<Project>(`/api/projects/${id}`),

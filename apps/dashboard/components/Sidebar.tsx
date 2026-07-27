@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useRealtimeConnectionStatus } from "@/components/RealtimeProvider";
 import { useCompany } from "@/lib/hooks";
 
 export function Sidebar({ companyId }: { companyId: string }) {
   const pathname = usePathname();
   const { data: company } = useCompany(companyId);
+  const connectionStatus = useRealtimeConnectionStatus();
 
   const links = [
     { href: `/company/${companyId}`, label: "Headquarters", exact: true },
@@ -29,6 +31,12 @@ export function Sidebar({ companyId }: { companyId: string }) {
         {company && (
           <span className="mt-1 inline-block rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
             {company.provider}
+          </span>
+        )}
+        {connectionStatus === "reconnecting" && (
+          <span className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-status-amber">
+            <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-current" />
+            Reconnecting…
           </span>
         )}
       </div>
