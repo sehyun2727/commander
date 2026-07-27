@@ -1,55 +1,50 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 7 — V1 Hardening & Dockerized Postgres
- Overall: 34/34 items · 100%
- Now working on: Sprint complete — final commit+push
- Last update: 2026-07-27 13:40
+ Sprint: 8 — V1 Release
+ Overall: 4/28 items · 14%
+ Now working on: Phase 1 — Experience Coherence
+ Last update: 2026-07-27 14:20
 ================================================
 
-PHASE 0 — Hygiene & Audit                                      (4/4)
-[x] 0.1  Read Makefile / config.py / db.py / docker_sandbox.py
-[x] 0.2  Confirm/add CLAUDE.md push rule (already present)
-[x] 0.3  Create PROGRESS.txt
-[x] 0.4  Commit+push: chore(sprint7) phase 0
+PHASE 0 — Fresh-Machine Audit                                  (4/4)
+[x] 0.1  Fresh-clone README dry run; record friction -- no browser tool available (as in Sprint 6/7); re-verified every README command runs against current repo state instead of literal fresh clone (DECISIONS #123)
+[x] 0.2  Click through all 10 pages (mock; real if key) -> rough-edge list -- code-based audit via Explore agent (DECISIONS #123)
+[x] 0.3  Fold findings into Phases 1-4 as + items + DECISIONS.md -- DECISIONS #123, findings folded into Phase 1 below
+[x] 0.4  Create PROGRESS.txt; commit+push phase 0
 
-PHASE 1 — Dockerized Postgres                                  (6/7)
-[x] 1.1  docker-compose.yml (postgres:16, volume, healthcheck)
-[x] 1.2  .env + .env.example (all vars documented)
-[x] 1.3  config.py: env-driven database_url, Postgres default for make dev
-[x] 1.4  Add asyncpg + alembic deps
-[x] 1.5  db.py works with postgresql+asyncpg (verified round-trip insert/read)
-[x] 1.6  Makefile: db-up / db-down / dev ensures postgres
-[x] 1.7  Commit+push: feat(db) dockerized postgres
+PHASE 1 — Experience Coherence                                 (0/6)
+[ ] 1.1  Empty states on all 10 routes (invitation to act)
+[ ] +    Employees grid has no empty state at all -- add EmptyState
+[ ] +    Kanban empty columns all say generic "Nothing here." -- contextualize per column
+[ ] 1.2  Loading states (no layout jump) on all data views
+[ ] +    Mission detail / Employee profile / Report detail conflate "loading" with "not found" -- add not-found state
+[ ] 1.3  Error states (Commander-voiced, no raw errors)
+[ ] +    No route anywhere handles TanStack Query isError -- add Commander-voiced error state across all 10 routes
+[ ] 1.4  Terminology sweep (no internal-term leaks; StatusWord everywhere)
+[ ] 1.5  Copy voice consistency (interface vs company voice)
+[ ] 1.6  Commit+push: feat(polish) coherence
 
-PHASE 2 — Alembic Migrations                                   (6/6)
-[x] 2.1  Alembic init (async env.py, target_metadata + url from settings)
-[x] 2.2  Baseline migration (all 8 tables incl. Sprint 5-6 cols, verified via `alembic check`)
-[x] 2.3  make db-upgrade / db-downgrade (round-tripped)
-[x] 2.4  Startup: migrate on PG (db.py init_db), create_all only for SQLite
-[x] 2.5  make seed works on Postgres (drop+re-migrate; fresh volume -> upgrade -> seed -> API serves it, verified)
-[x] 2.6  Commit+push: feat(db) alembic baseline
+PHASE 2 — Demo Honesty                                         (0/5)
+[ ] 2.1  "Simulation mode" indicator in mock (hidden in real)
+[ ] 2.2  Strengthen mock deliverable/audit honesty signal
+[ ] 2.3  Settings: legible mock<->real switch + consequences
+[ ] 2.4  Confirm zero fabricated checks/costs/activity anywhere
+[ ] 2.5  Commit+push: feat(polish) simulation labeling
 
-PHASE 3 — Real LLM Verification                                (6/6)
-[x] 3.1  Real Anthropic E2E mission (or flagged carryover if no key) -- carryover flagged (DECISIONS #114); real 401 path verified live against api.anthropic.com
-[x] 3.2  Verdict + P/R/R/I parsing survives real rambly output -- fixed parse_verdict last-match bug (DECISIONS #113) + 2 new tests
-[x] 3.3  Missing/invalid key -> CEO-legible error, no traceback -- _legible_error() in anthropic_provider.py, verified live + 4 new tests
-[x] 3.4  429/5xx retry still holds through full pipeline -- unchanged, re-verified via test_provider_retry.py (still green)
-[x] 3.5  scripts/verify_real_llm.py + make verify-llm -- written, runs against throwaway SQLite DB, tested (no-key fail-fast + live 401 path)
-[x] 3.6  Commit+push: feat(providers) real-LLM verification
-[x] +    Record real-run cost/outcome in DECISIONS.md -- entries #108-115
+PHASE 3 — Packaging & One-Command Run                          (0/7)
+[ ] 3.1  README front door (portfolio-facing, verbatim-correct commands)
+[ ] 3.2  make ergonomics (+ make help; optional make demo)
+[ ] 3.3  .env.example complete with comments + real-key path
+[ ] 3.4  Sandbox optionality documented clearly
+[ ] 3.5  Remove .claude/scheduled_tasks.lock (gitignore it)
+[ ] 3.6  Dedupe docs/prompts/sprint-4.5 file; verify .gitignore coverage
+[ ] 3.7  Commit+push: chore(release) packaging
 
-PHASE 4 — Operational Hardening                                (5/5)
-[x] 4.1  /api/health + /api/health/db -- verified live (Postgres stop/start toggled 503<->200)
-[x] 4.2  Boot config validation (fail fast, plain language) -- core/boot_checks.py, verified live
-[x] 4.3  Frontend API-down + SSE-drop graceful states -- ApiStatusBanner + Reconnecting pill, tsc/build clean
-[x] 4.4  Data-safety: no destructive op from UI/normal API -- audited, nothing to fix (DECISIONS #119)
-[x] 4.5  Commit+push: feat(ops) hardening
-
-PHASE 5 — Docs & Release Readiness                             (6/6)
-[x] 5.1  README rewrite (real V1 surface, full quickstart, walkthrough) -- full rewrite, DECISIONS #120
-[x] 5.2  CLAUDE.md status + layout + V1/V1.5 boundary note -- "Current Status (post-Sprint 7, V1)" + explicit V1/V1.5 boundary paragraph
-[x] 5.3  ARCHITECTURE.md datastore/health/tradeoffs update -- diagram/modules/tradeoffs updated, obsolete "no migrations" line removed, DECISIONS #121
-[x] 5.4  DECISIONS.md Sprint 7 section -- entries #108-122, closing entry #122 marks sprint complete
-[x] 5.5  make test green + next build clean + real-DB boot verified -- 157 passed/4 skipped, tsc clean, next build clean, live Postgres boot: both /api/health and /api/health/db returned 200
-[x] 5.6  Commit+push: chore(sprint7) docs; confirm remote HEAD
+PHASE 4 — Release Verification & Tag                           (0/6)
+[ ] 4.1  make test + tsc --noEmit + next build all clean
+[ ] 4.2  E2E run #1: mock, fresh PG volume (recorded)
+[ ] 4.3  E2E run #2: real Anthropic (or verify-llm + flagged carryover)
+[ ] 4.4  Docs final sync (no overclaiming Engineer capability)
+[ ] 4.5  git tag v1.0.0 (annotated) + push tag
+[ ] 4.6  Commit+push: chore(release) v1.0.0; confirm remote HEAD + tag
 ================================================

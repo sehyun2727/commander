@@ -1278,3 +1278,42 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     boundary. Final verification (`pytest`, `tsc`, `next build`, a
     real-DB boot check) and the closing `chore(sprint7)` commit+push
     follow immediately after this entry.
+
+## Sprint 8 — "V1 Release"
+
+123. **Phase 0 fresh-machine audit was code-based, not a literal fresh
+    clone/browser click-through.** No browser tool is available in
+    this environment (confirmed absent in Sprint 7 too, DECISIONS
+    #106/#118), and this environment already has a populated venv/
+    node_modules/Postgres volume, so a truly isolated fresh-clone
+    simulation wasn't possible. Substituted: (a) re-verified every
+    README-documented command still runs correctly against the current
+    repo state (same substance as a dry run — catches broken
+    instructions, just not first-install friction like slow `pip`/
+    `pnpm install`), and (b) an Explore-agent audit read all 10 routes'
+    actual source (page components + their TanStack Query hook usage)
+    to determine, per route, whether empty/loading/error states are
+    handled, and grepped for internal-terminology leaks in rendered
+    JSX text. Findings:
+    - **No route anywhere handles TanStack Query's `isError`** — a
+      failed fetch either shows the loading state forever or renders
+      with `undefined` data. This is the single biggest real gap and
+      drives Phase 1 item 1.3.
+    - Three detail pages (Mission detail, Employee profile, Report
+      detail) conflate "loading" with "not found": if the id doesn't
+      resolve, they show "Loading…" indefinitely instead of a
+      not-found message.
+    - Employees grid (`/company/[id]/employees`) has no empty state at
+      all — an empty roster silently renders a blank grid.
+    - Missions kanban empty columns show a generic "Nothing here." for
+      every column regardless of which column it is.
+    - The audited "Reviewer audit" phrase in Company Settings
+      (`settings/page.tsx:162`) is NOT a terminology leak — "Reviewer"
+      is the Employee's actual role title (`templates/software_company.py`
+      role `title="Reviewer"`), already used elsewhere in the UI for
+      that Employee's card/profile. Flagged by the audit as a
+      precaution but confirmed a false positive on inspection; left
+      as-is except for a small grammar tighten ("before the Reviewer's
+      audit").
+    These are folded into PROGRESS.txt Phase 1 as concrete items
+    rather than re-listed here.
