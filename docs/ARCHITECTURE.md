@@ -1,7 +1,7 @@
 # Commander Architecture
 
-Version: v2.5 (As-Built)
-Status: Synced with Sprint 6 ("Execution Sandbox") implementation — 2026-07
+Version: v2.6 (As-Built)
+Status: Synced with Sprint 7 ("V1 Hardening & Dockerized Postgres") implementation — 2026-07
 Supersedes: v1.0 Draft (pre-implementation vision)
 
 ---
@@ -43,18 +43,21 @@ Every action performed by AI must be **visible, explainable, reviewable, and rep
       │          │          SSE push)        ▼
       │          │              │       Model Registry
       │          │              ▼            │
-      │          │          SQLite      ┌────┴─────┐
-      │          │        (events,      ▼          ▼
-      │          │         projects,   Mock     Anthropic
-      │          │         tasks,     Provider   Provider
-      │          │         agents,   (default)  (httpx)
-      │          │         approvals,
-      │          │         settings_kv,
-      │          │         cost_entries,
-      │          │         reports)
+      │          │         PostgreSQL   ┌────┴─────┐
+      │          │        (default,     ▼          ▼
+      │          │        via Docker;  Mock     Anthropic
+      │          │        SQLite for   Provider   Provider
+      │          │        tests only) (default)  (httpx)
+      │          │        events, projects,
+      │          │        tasks, agents,
+      │          │        approvals, settings_kv,
+      │          │        cost_entries, reports —
+      │          │        schema owned by Alembic
 ```
 
 Realtime is **SSE** (not WebSocket): one endpoint per company, replays last 50 events on connect, heartbeat every 15s, client dedups by `event.id`.
+
+`GET /api/health` (liveness, zero dependencies) and `GET /api/health/db` (readiness, real DB round-trip, `503` on failure) sit beside the API server for deploy tooling and the dashboard's own API-down banner to poll.
 
 ---
 
@@ -100,6 +103,8 @@ Event envelope: `id, project_id, kind, type, actor {role, id, name}, payload, re
 | `auth` | Single hardcoded local CEO. | 🔲 Placeholder |
 | `workspace_manager` | One real git repo per company at `${COMMANDER_WORKSPACE_ROOT}/{project_id}` (`LocalGitWorkspaceManager`, plain `git` CLI via async subprocess). Branch-per-mission (`mission/{task_id[:8]}`); lazy-init with a `README.md` on `main`; path validation (relative-only, no `..`, no symlink escape, no `.git`); limits of 30 files / 256KB / text-only per write (violations skipped + reported, never fail the mission); `diff()` truncates at `max_chars` and flags `truncated`. Read-only browsing (`tree`/`file`/`merges`) served from `workspace_manager/routes.py`; the per-mission diff is served from `tasks/routes.py` since only `TaskORM` knows `branch_name` (DECISIONS.md #94). | ✅ |
 | `sandbox` | The one controlled place AI-generated code is ever executed. `SandboxRunner` port (`core/interfaces/sandbox.py`) + `DockerSandbox` (`docker create` → tar-copy the landed branch files in → run a template-defined `CheckSpec` command → capture stdout/stderr tail (10k chars) → always destroy the container) and `FakeSandbox` for tests. Constraints: no network, memory/cpu/pids caps, non-root, 120s hard kill, auto-remove. `CheckSpec`s (name / `detect_globs` / command) are trusted data from `templates/software_company.py` — never AI-authored or AI-chosen; `detection.py` glob-matches the landed file tree to decide which checks apply. `GET /api/system/capabilities` probes Docker + the sandbox image at runtime; `execution-settings` (`settings_kv`, default enabled) lets the CEO turn checks off per company. Degrades silently to a no-op (zero events, `check_results: null`) when Docker/the image is absent or the toggle is off — the rest of the pipeline is unaffected either way. | ✅ Docker (graceful no-op without Docker Desktop) |
+| `core/db` + Alembic | PostgreSQL (via `docker-compose`, Phase 1) is the default datastore; SQLite (`aiosqlite`) remains a zero-dependency fallback for tests and CI. Schema is owned by Alembic (`apps/api/alembic/`, async env) — `create_all` now only fires for the SQLite test path; a Postgres boot runs `alembic upgrade head` instead (`db.py: init_db`). `make db-up` / `db-upgrade` / `db-downgrade` wrap the compose lifecycle + migrations. | ✅ |
+| `core/boot_checks` | Fail-fast startup validation, run before `init_db()` in `main.py`'s lifespan: `COMMANDER_PROVIDER=anthropic` with no key anywhere, or a `DATABASE_URL` that isn't `sqlite`/`postgresql`, raises `BootConfigError` and exits cleanly (`SystemExit(1)`, plain-language stderr message, no traceback) instead of failing confusingly on the first Mission or with a raw connection error. | ✅ |
 
 ### Lifecycles
 
@@ -134,16 +139,18 @@ Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark Render.com-
 - **Company Settings** — provider select, write-only API key field, per-role model reassignment, Execution Sandbox toggle (always interactive — a durable preference, not a live control — with an explanatory note when Docker Desktop/the sandbox image is unavailable)
 - **Status vocabulary** — one external-facing status word table (`components/StatusWord.tsx`) shared by every card/badge/kanban column/filter; `companyStatusWord()` reduces a company's Missions to a single priority-ranked token for `CompanyCard`
 - Realtime: one SSE connection per company (`RealtimeProvider`), events dedup by id, query invalidation per event, transient streaming-delta bubble for in-flight replies
+- **Resilience (Sprint 7)** — `ApiStatusBanner` polls `GET /api/health` every 5s (`retry: false`) and shows a sticky top banner when the API is unreachable; `useEventStream` surfaces a `ConnectionStatus` ("connecting" \| "open" \| "reconnecting") through `RealtimeProvider`/`useRealtimeConnectionStatus`, rendered as a small "Reconnecting…" pill in the Sidebar. The browser's native `EventSource` already retries indefinitely on its own — this only adds visibility, not retry logic.
 
 ---
 
 ## Accepted MVP Tradeoffs (deliberate — see docs/DECISIONS.md)
 
 - In-process EventBus → single API worker only; subscribers run inline in `publish` (a slow subscriber delays publish)
-- Secrets stored plaintext in local SQLite
+- Secrets stored plaintext (in Postgres/SQLite, whichever backs the deployment)
 - Conversation filtering for Meetings done in Python (small per-company volume)
 - Failure handling minimal: provider error → Mission `failed` + event (full retry/escalation policy in `docs/backend/workflow/FAILURE_HANDLING.md` deferred)
-- `create_all` on startup, no migrations
+- No connection pooling tuning, no read replicas, no backup/restore tooling — a single Postgres container is assumed local-dev scale
+- `/api/health/db` is a synchronous round-trip check, not a background-polled health cache — fine at V1's request volume, would need revisiting under real load
 
 Future extraction points if scaled: Agent Runtime Service, Workflow Service, Event Service (broker-backed bus), Cloud Runner (Sprint 6's local `DockerSandbox` is the first materialization of this — same `SandboxRunner` port a hosted/remote runner would implement).
 

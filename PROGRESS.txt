@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 7 — V1 Hardening & Dockerized Postgres
- Overall: 28/34 items · 82%
- Now working on: Phase 4 — Operational Hardening (committing)
- Last update: 2026-07-27 12:15
+ Overall: 34/34 items · 100%
+ Now working on: Sprint complete — final commit+push
+ Last update: 2026-07-27 13:40
 ================================================
 
 PHASE 0 — Hygiene & Audit                                      (4/4)
@@ -45,11 +45,11 @@ PHASE 4 — Operational Hardening                                (5/5)
 [x] 4.4  Data-safety: no destructive op from UI/normal API -- audited, nothing to fix (DECISIONS #119)
 [x] 4.5  Commit+push: feat(ops) hardening
 
-PHASE 5 — Docs & Release Readiness                             (0/6)
-[ ] 5.1  README rewrite (real V1 surface, full quickstart, walkthrough)
-[ ] 5.2  CLAUDE.md status + layout + V1/V1.5 boundary note
-[ ] 5.3  ARCHITECTURE.md datastore/health/tradeoffs update
-[ ] 5.4  DECISIONS.md Sprint 7 section
-[ ] 5.5  make test green + next build clean + real-DB boot verified
-[ ] 5.6  Commit+push: chore(sprint7) docs; confirm remote HEAD
+PHASE 5 — Docs & Release Readiness                             (6/6)
+[x] 5.1  README rewrite (real V1 surface, full quickstart, walkthrough) -- full rewrite, DECISIONS #120
+[x] 5.2  CLAUDE.md status + layout + V1/V1.5 boundary note -- "Current Status (post-Sprint 7, V1)" + explicit V1/V1.5 boundary paragraph
+[x] 5.3  ARCHITECTURE.md datastore/health/tradeoffs update -- diagram/modules/tradeoffs updated, obsolete "no migrations" line removed, DECISIONS #121
+[x] 5.4  DECISIONS.md Sprint 7 section -- entries #108-122, closing entry #122 marks sprint complete
+[x] 5.5  make test green + next build clean + real-DB boot verified -- 157 passed/4 skipped, tsc clean, next build clean, live Postgres boot: both /api/health and /api/health/db returned 200
+[x] 5.6  Commit+push: chore(sprint7) docs; confirm remote HEAD
 ================================================

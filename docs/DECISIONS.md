@@ -1236,3 +1236,45 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     exists anywhere in `apps/api/app`. Dashboard-side, `archiveCompany`
     is the only delete-adjacent action exposed in the UI, and it calls
     the same soft-archive endpoint.
+
+120. **README got a full rewrite, not an incremental edit.** The
+    existing `README.md` was pure Sprint-3-era marketing copy (a
+    "status-Sprint_3" badge, an "Imagine this" narrative, an OS-analogy
+    ASCII diagram) with zero real quickstart, command reference, or
+    walkthrough — nothing in it described the actual V1 surface built
+    across Sprints 3-7. Patching it in place would have left marketing
+    tone bolted onto technical content. Replaced wholesale with: what
+    it does, a real quickstart (`make install && make seed && make
+    dev`, prerequisites incl. Docker Desktop), a first-company
+    walkthrough, mock-vs-real-provider instructions, the full command
+    table, health-check endpoints, and an architecture/repo-layout
+    summary pointing at `docs/ARCHITECTURE.md` as the source of truth
+    rather than duplicating it. Kept internal terminology (Task,
+    Project, etc.) in the "Repo layout" and "Architecture" sections
+    since those describe code, per CLAUDE.md's own carve-out that only
+    UI-facing text is required to use Commander terms; the "What it
+    does" and walkthrough sections use Commander terms throughout since
+    they describe the CEO-facing product.
+
+121. **`docs/ARCHITECTURE.md`'s "Accepted MVP Tradeoffs" list dropped
+    "`create_all` on startup, no migrations"** — false as of this
+    sprint's Alembic work (`create_all` now only fires for the SQLite
+    test path; Postgres boots run `alembic upgrade head`). Rather than
+    just deleting the line, added two tradeoffs that are now the real
+    ones at Postgres's scale of use: no connection-pool tuning/read
+    replicas/backup tooling (a single local `docker-compose` Postgres
+    container is assumed), and `/api/health/db`'s synchronous
+    round-trip check having no background-polled cache — both true
+    monetary/complexity tradeoffs the CEO-facing docs shouldn't paper
+    over.
+
+122. **Sprint 7 complete.** All 6 phases (34/34 items) done: dockerized
+    Postgres as the default datastore, Alembic-owned schema, real-LLM
+    verification against the live Anthropic API, operational hardening
+    (health endpoints, boot validation, frontend resilience), and this
+    docs pass (README rewrite, CLAUDE.md status/layout/V1-V1.5-boundary
+    update, ARCHITECTURE.md datastore/health/tradeoffs update). No
+    V1.5 feature work was started, per the brief's explicit hardening
+    boundary. Final verification (`pytest`, `tsc`, `next build`, a
+    real-DB boot check) and the closing `chore(sprint7)` commit+push
+    follow immediately after this entry.
