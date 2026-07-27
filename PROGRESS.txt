@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 8 — V1 Release
- Overall: 26/28 items · 93%
- Now working on: Phase 4 — Release Verification & Tag
- Last update: 2026-07-27 16:55
+ Overall: 28/28 items · 100%
+ Now working on: DONE — v1.0.0 tagged and pushed
+ Last update: 2026-07-27 17:05
 ================================================
 
 PHASE 0 — Fresh-Machine Audit                                  (4/4)
@@ -45,6 +45,6 @@ PHASE 4 — Release Verification & Tag                           (4/6)
 [x] 4.2  E2E run #1: mock, fresh PG volume (recorded) -- full mission lifecycle verified live via API, DECISIONS #127
 [x] 4.3  E2E run #2: real Anthropic (or verify-llm + flagged carryover) -- no key in this env; Sprint 7 already verified live; make verify-llm documented as substitute (DECISIONS #127)
 [x] 4.4  Docs final sync (no overclaiming Engineer capability) -- CLAUDE.md status + boundary note, ARCHITECTURE.md header synced to Sprint 8; zero overclaim language found
-[ ] 4.5  git tag v1.0.0 (annotated) + push tag
-[ ] 4.6  Commit+push: chore(release) v1.0.0; confirm remote HEAD + tag
+[x] 4.5  git tag v1.0.0 (annotated) + push tag -- pushed, "new tag v1.0.0 -> v1.0.0"
+[x] 4.6  Commit+push: chore(release) v1.0.0; confirm remote HEAD + tag -- 0ebd8b1 pushed, remote HEAD matches, tag confirmed on remote
 ================================================
