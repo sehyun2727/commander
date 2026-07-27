@@ -1408,3 +1408,49 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     always-visible sidebar badge already covers, consistent with the
     brief's "no visual redesign" constraint. Flagging here in case a
     future sprint wants stricter per-figure labeling.
+
+126. **Phase 3 packaging & one-command run.** `docs/prompts/
+    sprint-4.5-employee-profiles.md` (item 3.6): the working tree had
+    an *uncommitted* local change re-appending the entire 307-line
+    `docs/design/UX_SPEC.md` content verbatim onto the end of this
+    already-committed sprint brief, byte-identical (empty `diff`) to
+    the real `UX_SPEC.md` file — an accidental duplication, not
+    intentional content. Reverted the file to its clean, committed
+    HEAD (172 lines; `git checkout --`) rather than editing, since the
+    committed version was already correct and nothing unique lived in
+    the duplicated tail. `.claude/scheduled_tasks.lock` (item 3.5):
+    confirmed via `git log` it carries no meaningful history (one
+    prior commit, "script 4 completed") and is local scheduler runtime
+    state, not product state — added to `.gitignore` and `git rm
+    --cached`'d rather than left tracked-but-ignored, since a tracked
+    file that changes every session was exactly the noise Phase 0's
+    audit (#123) flagged.
+    `make help` (item 3.2): added a `## comment`-driven `help` target
+    (grep + awk over `Makefile`, a standard idiom) as `.DEFAULT_GOAL`,
+    with a one-line `##` description on every existing target;
+    verified the parsing pipeline directly since no `make` binary is
+    present in this dev environment (Windows, no make in PATH — same
+    constraint noted in Sprint 7). Added `make demo` (`seed` + `dev`)
+    per the brief's "your call" invitation: the documented happy path
+    was already just two commands, but collapsing to exactly one
+    matches the brief's own bar ("reduces the happy path to one
+    obvious command") and costs nothing (thin wrapper, no new logic).
+    README (items 3.1, 3.4): prerequisites line now explicitly splits
+    Docker's two uses — required for Postgres, optional for the
+    execution sandbox — since the old single "Docker Desktop (running)"
+    line read as one unconditional requirement and buried the sandbox's
+    documented degrade-gracefully behavior. Added one explicit sentence
+    to the "What it does" Mission bullet stating what happens with no
+    Docker/no sandbox image/toggle off (skips straight to review, no
+    errors, no degraded UI) rather than leaving it only inferable from
+    the Architecture/Settings sections. Verified every command named in
+    the README (`make install/db-up/db-down/db-upgrade/db-downgrade/
+    seed/dev/demo/test/sandbox-image/verify-llm`) resolves to a real,
+    present script or `package.json` entry — same "verify against
+    current repo state, not a literal fresh clone" substitute
+    methodology as Phase 0 (#123), since no browser/fresh-VM tool is
+    available here either. `.env.example` (item 3.3): re-diffed against
+    `core/config.py`'s `Settings` fields — already complete (every env
+    var documented with a comment, real-key path already noted as
+    "can also be set at runtime from Company Settings"); no changes
+    needed.

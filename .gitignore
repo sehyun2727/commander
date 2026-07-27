@@ -29,6 +29,7 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 commander.db
 
 # Sprint 5: real git workspaces (one repo per company), local-only

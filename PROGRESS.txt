@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 8 — V1 Release
- Overall: 10/28 items · 36%
- Now working on: Phase 2 — Demo Honesty
- Last update: 2026-07-27 15:10
+ Overall: 22/28 items · 79%
+ Now working on: Phase 4 — Release Verification & Tag
+ Last update: 2026-07-27 16:20
 ================================================
 
 PHASE 0 — Fresh-Machine Audit                                  (4/4)
@@ -24,21 +24,21 @@ PHASE 1 — Experience Coherence                                 (6/6)
 [x] 1.5  Copy voice consistency (interface vs company voice) -- DECISIONS #124
 [x] 1.6  Commit+push: feat(polish) coherence -- 005ac36, pushed
 
-PHASE 2 — Demo Honesty                                         (4/5)
+PHASE 2 — Demo Honesty                                         (5/5)
 [x] 2.1  "Simulation mode" indicator in mock (hidden in real) -- Sidebar + CompanyCard, amber pill
 [x] 2.2  Strengthen mock deliverable/audit honesty signal -- mock_provider.py revision summary + audit text
 [x] 2.3  Settings: legible mock<->real switch + consequences -- reworded options + helper copy
 [x] 2.4  Confirm zero fabricated checks/costs/activity anywhere -- audited; found pre-existing mock Payroll $ figures (Sprint 4, tested), resolved via labeling not removal (DECISIONS #125)
-[ ] 2.5  Commit+push: feat(polish) simulation labeling
+[x] 2.5  Commit+push: feat(polish) simulation labeling -- 843a835, pushed
 
-PHASE 3 — Packaging & One-Command Run                          (0/7)
-[ ] 3.1  README front door (portfolio-facing, verbatim-correct commands)
-[ ] 3.2  make ergonomics (+ make help; optional make demo)
-[ ] 3.3  .env.example complete with comments + real-key path
-[ ] 3.4  Sandbox optionality documented clearly
-[ ] 3.5  Remove .claude/scheduled_tasks.lock (gitignore it)
-[ ] 3.6  Dedupe docs/prompts/sprint-4.5 file; verify .gitignore coverage
-[ ] 3.7  Commit+push: chore(release) packaging
+PHASE 3 — Packaging & One-Command Run                          (7/7)
+[x] 3.1  README front door (portfolio-facing, verbatim-correct commands) -- prereqs split required/optional Docker; verified every command resolves to a real script/package.json entry
+[x] 3.2  make ergonomics (+ make help; optional make demo) -- ## comment + awk help target, .DEFAULT_GOAL, added make demo (DECISIONS #126)
+[x] 3.3  .env.example complete with comments + real-key path -- re-diffed against config.py; already complete, no changes
+[x] 3.4  Sandbox optionality documented clearly -- explicit "no Docker/no image/toggle off -> skips cleanly" sentence added
+[x] 3.5  Remove .claude/scheduled_tasks.lock (gitignore it) -- git rm --cached + .gitignore entry
+[x] 3.6  Dedupe docs/prompts/sprint-4.5 file; verify .gitignore coverage -- reverted accidental uncommitted UX_SPEC.md re-paste (DECISIONS #126)
+[x] 3.7  Commit+push: chore(release) packaging
 
 PHASE 4 — Release Verification & Tag                           (0/6)
 [ ] 4.1  make test + tsc --noEmit + next build all clean

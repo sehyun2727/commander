@@ -9,7 +9,7 @@ Status: **V1** — a real, working vertical slice. FastAPI backend, Postgres-bac
 ## What it does
 
 - **Found a Company** and it auto-staffs three Employees: a PM, an Engineer, and a Reviewer, each with an editable personality/working-style/decision-style profile.
-- **Hand it a Mission.** The PM plans it, the Engineer implements it, and — for code Missions — the Engineer's output lands as a real commit on a per-Mission git branch. If the Company's template ships automated checks (pytest, `node --test`, etc.) that match the changed files, they run inside an isolated, no-network Docker sandbox before review.
+- **Hand it a Mission.** The PM plans it, the Engineer implements it, and — for code Missions — the Engineer's output lands as a real commit on a per-Mission git branch. If the Company's template ships automated checks (pytest, `node --test`, etc.) that match the changed files, they run inside an isolated, no-network Docker sandbox before review. This step is entirely **optional**: without Docker running or the sandbox image built (`make sandbox-image`), or with the per-Company toggle off in Company Settings, Missions still run end-to-end exactly the same — they just skip straight to review with no check results, no errors, no degraded UI.
 - **Review as CEO.** Every Mission that needs your sign-off becomes a Decision: Problem / Recommendation / Risk / Impact, plus — for code — a Change Summary and a real (truncatable) diff, plus check results if any ran. Approve, request changes, or reject.
 - **Watch it happen.** A single Timeline (CEO view or Technical view) narrates everything as it happens over SSE — no polling, no refresh.
 - **Stay in control of cost and models.** Payroll shows real token spend (company-wide, per-Employee, per-Mission). Any role's model can be reassigned per Company; any Employee's model can be overridden individually.
@@ -20,13 +20,15 @@ None of the AI's own generated code is ever executed, installed, or shelled out 
 
 ## Quickstart
 
-**Prerequisites:** Python 3.11+, Node.js + [pnpm](https://pnpm.io), [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running).
+**Prerequisites:** Python 3.11+, Node.js + [pnpm](https://pnpm.io), and [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running) — Docker is **required** to run Postgres, the default datastore. It's also used for one **optional** feature, the execution sandbox (see below); everything else works without it.
 
 ```bash
 make install   # api deps (venv + pip -e) + dashboard deps (pnpm)
 make seed      # starts Postgres via Docker, runs migrations, seeds a demo company
 make dev       # api on :8000, dashboard on :3000
 ```
+
+(Or run `make demo` for `seed` + `dev` in one command.)
 
 Then open **http://localhost:3000**. You'll see "Acme AI", a seeded demo Company with its three Employees and a couple of Missions already in flight, run entirely against the mock provider (zero API keys, zero cost).
 
@@ -63,6 +65,7 @@ To sanity-check a real key end-to-end outside the dashboard: `make verify-llm` r
 ## Commands
 
 ```bash
+make help         # list every command below with a one-line description
 make install      # api deps (pip -e) + dashboard deps (pnpm)
 make db-up        # start Postgres (docker compose), wait for healthy
 make db-down      # stop Postgres
@@ -70,8 +73,9 @@ make db-upgrade   # run Alembic migrations to head
 make db-downgrade # roll back one migration
 make seed         # db-up + db-upgrade, then reset DB and found demo company "Acme AI"
 make dev          # db-up + db-upgrade, then api :8000 + dashboard :3000
+make demo         # seed + dev in one command — the fastest way to see Commander running
 make test         # pytest (apps/api) + dashboard typecheck + dashboard build
-make sandbox-image  # build the Docker image used for automated checks (Sprint 6)
+make sandbox-image  # build the Docker image used for automated checks — optional (Sprint 6)
 make verify-llm    # one real Mission against a live Anthropic key + throwaway DB
 ```
 
