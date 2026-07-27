@@ -1,7 +1,7 @@
 # Commander Architecture
 
-Version: v2.6 (As-Built)
-Status: Synced with Sprint 7 ("V1 Hardening & Dockerized Postgres") implementation — 2026-07
+Version: v2.7 (As-Built)
+Status: Synced with Sprint 8 ("V1 Release") implementation — V1 tagged `v1.0.0` — 2026-07
 Supersedes: v1.0 Draft (pre-implementation vision)
 
 ---

@@ -1454,3 +1454,38 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     var documented with a comment, real-key path already noted as
     "can also be set at runtime from Company Settings"); no changes
     needed.
+
+127. **Phase 4 release verification.** 4.1: full green —
+    `apps/api` pytest 157 passed / 4 skipped (269s), dashboard
+    `pnpm typecheck` clean, `pnpm build` clean (all 13 routes compile,
+    static pages generate). 4.2 (E2E run #1, mock, fresh PG volume):
+    `docker compose down -v` to genuinely destroy the existing
+    container+volume (local demo data only, fully reseedable — not the
+    kind of destructive op that needs asking, and the brief itself
+    specifies "fresh PG volume"), `docker compose up -d postgres` +
+    `alembic upgrade head` (single `9fd1f513c939` baseline migration,
+    confirms Sprint 7's schema consolidation is still the true head) +
+    `scripts/seed.py` all ran clean against the empty volume. Drove
+    one full Mission through the real running API (not just tests):
+    create code Mission -> assign -> PM plan -> Engineer commit
+    (`mission/981b542f`, real branch + commit sha) -> Reviewer verdict
+    (Approved, mock honesty line present per #125) -> CEO Decision
+    with full Problem/Recommendation/Risk/Impact anatomy -> approve ->
+    `branch.merged` -> Mission `completed`. Cross-checked Payroll
+    (`GET /projects/{id}/costs`, non-zero per-agent USD as expected per
+    #125), Situation Report (correctly dropped to "1 decision waiting"
+    after approving one of the two seeded-pending decisions), and the
+    event feed (`task.completed` -> `approval.granted` ->
+    `branch.merged` -> `approval.requested` -> `workflow.review_completed`,
+    in the right causal order) — all coherent. Re-ran `scripts/seed.py`
+    afterward to clear the verification Mission back to the clean demo
+    state, same precedent as Sprint 4.5 Phase 0.1. 4.3 (E2E run #2,
+    real Anthropic): no `ANTHROPIC_API_KEY` is configured in this dev
+    environment (`.env` has the key line empty, no env var set) — real
+    Anthropic behavior was already verified live in Sprint 7 (see
+    CLAUDE.md's Sprint 7 status paragraph: `_legible_error()`,
+    `parse_verdict` trailing-line fix, both verified against the real
+    API then). `make verify-llm` (`scripts/verify_real_llm.py`) remains
+    the documented one-command way to re-verify with a key; flagging
+    the absence of a fresh real-key run as this sprint's one carryover
+    limitation rather than skipping it silently.
