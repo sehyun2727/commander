@@ -1,307 +1,325 @@
 # Commander UI/UX Specification
 
-Version: 1.1 (adds §10 Future Expansion Strategy)
-Author role: CPO / Senior SaaS Product Designer / UX Architect
-Status: Proposed — awaiting CEO approval
+Version: 2.0 (V1.1)
 Scope: Product experience and information architecture. No implementation details, no code.
+Status: Source of truth for all frontend work. Supersedes v1.1 (V1 spec).
+
+> **Commander is not an AI chat application.**
+> **Commander is software for operating an AI company.**
+>
+> Every experience decision reinforces this. When a design question is genuinely ambiguous, the tiebreaker is: *what would a real company do?*
+
+**Reading guide.** §1–§6 define the V1.1 experience. §7 preserves the V1 surfaces that continue to exist. §8–§10 are cross-cutting discipline (copy, risks, gating). Items marked *[V1.1 — not built]* require an explicit sprint brief.
 
 ---
 
-## 0. Product Analysis (answers before design)
+## 1. UX Philosophy
 
-### Q1. What should a CEO see immediately after login?
+**The CEO's workspace is a conversation, not a dashboard.**
+This is the central reversal in V1.1. In V1, entering a company presented a grid of panels and the CEO had to assemble a mental picture from them. In V1.1, entering a company presents **the PM**, who reports. The organization speaks first; the CEO responds. Dashboards exist, but they are peripheral instruments around a conversation, not the main event.
 
-In priority order: **(1) What needs my decision, (2) What is moving, (3) What just happened.**
+**CEO first, never developer first.** Every screen answers "what is happening in my company?" before "what changed in the system?" Every number has a sentence next to it, written by the company to its CEO.
 
-A CEO's first question is never "what's the data" — it's "does anything need me?" So the first screen leads with pending CEO Decisions, then company health at a glance, then the freshest activity. Everything else is one click deeper.
+**Employees, not chatbots.** Employees have names, avatars, roles, models, states, and voices. There is no "prompt box" as a primary surface — the CEO speaks to the PM, and the PM runs the company.
 
-### Q2. What should be hidden?
+**Trust through visibility, not through claims.** Autonomy is acceptable only when observable, explainable, and reversible. Everything material appears in the Timeline; every agent action carries a reason; every consequential change routes through a CEO Decision; history is never deleted. The UI never simulates certainty — if the company doesn't know, it says so.
 
-By default: raw event type names, state-machine states, model API identifiers, token counts, stack traces, diffs, retry mechanics. These exist and remain accessible (trust requires inspectability) but they live behind a deliberate "show technical details" action. The hiding rule: **hide the mechanism, never hide the fact.** "The Engineer hit an error and is retrying" is always shown; `provider_gateway 429 backoff attempt 2/3` is disclosure level 3.
+**Minimal surface, deep interior.** Benchmark: Render. Projects first. Avoid information overload. Complex capability lives behind Widgets and Sidebar pages, never crowded into the conversation.
 
-### Q3. What makes Commander different from Cursor / Claude Code / Copilot?
+**Honest numbers.** No invented precision. Progress is milestone-based and labeled as such — never a fabricated "72%". If a metric can't be computed honestly, show a status word instead.
 
-Those are **tools you drive**: developer-in-the-loop, code-first, session-based — when you stop typing, everything stops, and the artifact you review is code. Commander is an **organization you govern**: outcome-first, decision-in-the-loop, and continuous — employees keep working while you're away, and what you review are reports, recommendations, and decisions. The unit of interaction is not a prompt but a Mission; the unit of output is not a diff but an accountable result with an explanation. Nobody using Cursor asks "what happened while I was gone?" That question is Commander's entire product.
+### 1.1 Progressive disclosure — four levels
 
-### Q4. What creates the "wow moment"?
+- **L0 — glance:** company card ("Developing · 2 Missions active · 1 decision waiting")
+- **L1 — conversation:** the PM's report and the CEO's reply
+- **L2 — instruments:** Widgets in the dock, Sidebar pages
+- **L3 — mechanism:** diffs, raw events, model/config details, tool-call traces — opt-in only
 
-Four, in the order a new user meets them:
+Hiding rule: **hide the mechanism, never hide the fact.** "The Engineer hit an error and is retrying" is always shown; the retry's provider-level detail is L3.
 
-1. **Founding** — you name a company and three Employees appear with names, roles, and personalities, and introduce themselves in the Timeline. The org exists before any work does.
-2. **The first Mission run** — you assign a Mission and *watch* the PM plan, the Engineer build, the Reviewer audit — live, in conversation, without you. This is the moment "AI tool" becomes "AI company."
-3. **Being asked** — the Reviewer escalates a decision to you with a recommendation and a risk. The product asks *your* permission. Role reversal is the emotional core.
-4. **The report** — you come back later and read "while you were away: 2 Missions completed, 1 decision pending, payroll ₩1,400." Absence produced results.
+### 1.2 Status vocabulary (external)
 
-Design consequence: onboarding must reach moment 2 within ~3 minutes of first login, with zero configuration (mock mode makes this possible).
-
-### Q5. MVP scope? Q6. Future expansion?
-
-See §8 and §9. Summary: MVP is the CEO loop (found → assign → watch → decide → report) made trustworthy and legible. Expansion is depth of the company (real workspaces, execution, launches, org structure).
-
----
-
-## 1. Product UX Philosophy
-
-**CEO First.** Every screen answers "what is happening in my company?" before "what changed in the system?" Every number has a sentence next to it; every sentence is written by the company to its CEO, in executive language.
-
-**Employees, not chatbots.** Agents have names, faces (avatar identity), roles, states, and voices. They speak in the Timeline like colleagues, not in a chat input-output pane. There is no "prompt box" as a primary surface; the CEO gives work by creating Missions and speaks with Employees in Meetings.
-
-**Trust through visibility, not through claims.** Autonomy is only acceptable when it is observable, explainable, reversible. Hence: everything material appears in the Timeline; every agent action carries a reason; every consequential change routes through a CEO Decision; history is never deleted. The UI never simulates certainty — if the company doesn't know, it says so.
-
-**Progressive disclosure in three levels.**
-- L0 — glance: company card ("Developing · 2 Missions active · 1 decision waiting")
-- L1 — situation: Headquarters (report sentences, vitals, live feed)
-- L2 — domain: Missions / Employees / Timeline / Decisions pages
-- L3 — mechanism: diffs, raw events, model/config details, opt-in only
-
-**Honest numbers.** No invented precision. Progress is milestone-based (Missions completed vs. planned), labeled as such — never a fake "72%" derived from nothing. If a metric can't be computed honestly, show a status word instead.
-
-### Status vocabulary (external)
-
-Internal states never reach the CEO's eyes. Mapping (UI copy in both locales):
+Internal states never reach the CEO's eyes. One source, reused by every card, badge, column, filter, and report.
 
 | Internal | UI (EN) | UI (KO) |
 |---|---|---|
 | planning | Planning | 기획 중 |
+| discussing | In discussion | 협의 중 |
+| awaiting spec approval | Needs your decision | 결정 대기 |
 | working / in_progress | Developing | 개발 중 |
-| waiting_review (agent review) | Reviewing | 검토 중 |
+| waiting_review | Reviewing | 검토 중 |
 | waiting CEO decision | Needs your decision | 결정 대기 |
 | blocked | Blocked — see why | 중단됨 |
+| budget exhausted | Paused — resource limit | 예산 초과 |
 | completed | Completed | 완료 |
 | failed | Failed — see report | 실패 |
 
-"Needs your decision" (not "Waiting Approval") — the copy addresses the CEO directly. This vocabulary is a design token: one source, reused everywhere (cards, badges, filters, reports).
+"Needs your decision," not "Waiting Approval" — the copy addresses the CEO directly.
 
 ---
 
 ## 2. Information Architecture
 
 ```
-Public website (pre-login)                     [Phase E]
-└── Landing · Product · (Docs) · Sign in
+Pre-login
+└── Sign in · Sign up                                    [V1.1 — Sprint 9]
 
 Commander App
-├── My Companies                    /                     [exists — upgrade]
+├── Projects (Overview)             /                    ← Render's "my services" applied to companies
 ├── Found a Company                 modal / first-run
-└── Company (CEO context)           /company/[id]
-    ├── Headquarters (Overview)     .                     [exists — upgrade]
-    ├── Missions                    /missions             [exists]
-    │   └── Mission detail          /missions/[id]        [exists — upgrade]
-    ├── Employees                   /employees            [exists]
-    │   └── Employee profile        /employees/[id]       [new]
-    ├── Timeline                    /timeline             [new page, feed exists]
-    ├── Decisions                   /decisions            [new — archive + pending]
-    ├── Reports                     /reports              [Sprint 4]
-    ├── Workspace                   /workspace            [Phase D]
-    └── Company Settings            /settings             [exists — upgrade]
+└── Company                         /company/[id]
+    │
+    ├── ★ CEO Workspace             .                    ← DEFAULT LANDING. PM conversation + Widget Dock
+    │
+    ├── Missions                    /missions
+    │   └── Mission detail          /missions/[id]
+    ├── Employees                   /employees            ← includes Add Employee flow  [V1.1]
+    │   └── Employee profile        /employees/[id]
+    ├── Decisions                   /decisions
+    ├── Timeline                    /timeline
+    ├── Reports                     /reports
+    ├── Workspace                   /workspace
+    └── Company Settings            /settings
 ```
 
-Navigation: left sidebar within a company (CEO context); top bar carries the company switcher and the CEO identity. Entering a company is a context switch — the moment the user "becomes CEO of this company." The sidebar order mirrors CEO priority: Headquarters → Decisions → Missions → Employees → Timeline → Reports → Workspace → Settings.
+**Top bar** carries the company switcher (left) and the CEO account menu (right) — the Render pattern. **Sidebar** is thin and grouped; it is a set of deeper instruments, not the primary workspace.
+
+**Entering a company always lands on the CEO Workspace.** Not Headquarters, not a mission list — the PM, mid-report.
+
+**Rule: new capability arrives as a Widget or a Sidebar page.** Nothing new is attached to the conversation area. This keeps the center stable as the product grows.
 
 ---
 
-## 3. Page Hierarchy & Key Screens
+## 3. The CEO Workspace — the core screen  *[V1.1 — Sprints 13–15]*
 
-### 3.1 My Companies `/`
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  ▾ Acme AI                                    Search      ⊕  ⚙  (S)  │
+├────────┬──────────────────────────────────┬──────────────────────────┤
+│        │                                  │  Widget Dock         [+] │
+│  Side  │      PM CONVERSATION             │  ┌────────────────────┐  │
+│  bar   │      (primary surface)           │  │ Progress           │  │
+│        │                                  │  │ 4 / 7 Missions     │  │
+│  ·     │  ┌────────────────────────────┐  │  └────────────────────┘  │
+│  ·     │  │ PM · 09:12                 │  │  ┌────────────────────┐  │
+│  ·     │  │ Current Progress …         │  │  │ Pending Approvals  │  │
+│  ·     │  │ Completed Work …           │  │  │ 1 waiting          │  │
+│  ·     │  │ Current Blockers …         │  │  └────────────────────┘  │
+│  ·     │  │ Estimated Completion …     │  │  ┌────────────────────┐  │
+│  ·     │  │ Needs your decision …      │  │  │ Employees          │  │
+│  ·     │  └────────────────────────────┘  │  │ ● ● ○ ○            │  │
+│  ·     │                                  │  └────────────────────┘  │
+│  ·     │  ┌────────────────────────────┐  │                          │
+│  ·     │  │ CEO                        │  │                          │
+│  ·     │  └────────────────────────────┘  │                          │
+│        │  ┌──────────────────────────┐    │                          │
+│        │  │ Message your PM…         │    │                          │
+└────────┴──────────────────────────────────┴──────────────────────────┘
+```
 
-Render's "my services" philosophy applied to organizations. A grid of Company Cards; the page's single job is *"which of my companies needs me?"*
+**The conversation is always the largest area on the screen.** That is a hard layout constraint, not a default.
 
-Company Card contents: company name + avatar mark · status word (vocabulary above) · milestone progress ("4 / 6 Missions" + thin bar) · Employee avatar stack with live-state dots · one line of latest activity ("Engineer completed the auth module") · a decision badge ("1 decision waiting") that visually outranks everything else on the card.
+### 3.1 Who the CEO can talk to
 
-Empty state = the founding moment: "Found your first company." One field (name), one optional field (what it should build), one button. No configuration.
+**Only the PM.** There is no UI through which the CEO messages an Engineer, the CTO, or the Reviewer — not disabled, *absent*. Other Employees are visible (Timeline, Employees page, Widgets) and audible (their work and words appear), but they communicate through events, and the PM speaks for the organization.
 
-### 3.2 Headquarters `/company/[id]` — the core screen
+The Meeting transcript on a Mission remains readable — the CEO can watch any conversation. Reading is not the same as directing.
 
-Layout concept (top to bottom):
+### 3.2 The PM Report
 
-1. **Decision strip (hero).** Pending CEO Decisions as cards. If none: a quiet single line — "Nothing needs your decision." (calm is a feature, not emptiness).
-2. **PM Situation Report.** One or two sentences of prose, generated, timestamped: "Payment work is paused waiting for your database decision. Two Missions are developing normally." This is the "CEO summary" — language before numbers.
-3. **Vitals.** Four compact figures: Missions active · Employees working now · Risks open · Payroll this month. Each links to its domain page.
-4. **Live Timeline (condensed).** The most recent activity streaming in, mixed feed (see 3.5), with "Open full Timeline."
+**The standalone CEO Brief / Situation Report block is removed.** A separate summary card competing with the PM's own voice is redundant and breaks the fiction. Instead the PM reports *in the conversation*, the way a real project manager does.
 
-### 3.3 Missions `/missions` + detail
+An opening report is posted when the CEO enters, and periodically as work advances. Its shape:
 
-Kanban: Backlog / Developing / Needs your decision / Done. Mission detail is a story, not a form: header (status, assignee avatars, cost so far), then the **Meeting transcript** (the conversation that produced the work), then the **deliverable** (summary card first — see 3.7), then the decision history for this Mission. Dependencies and blockers appear as labeled chips; a blocked Mission always states *why* in a sentence.
+> **Current Progress** — where the project stands, in one or two sentences
+> **Completed Work** — what closed since the CEO was last here
+> **Current Blockers** — what is stuck, and why, in plain language
+> **Estimated Completion** — honest, hedged when uncertain, or "can't estimate yet" — never fabricated
+> **Decisions requiring your approval** — with a link to each Decision Card
 
-### 3.4 Employees `/employees` + profile
+This must read like a person reporting, not a generated status object. Headings may be softened into prose; what is fixed is that all five things are addressed and nothing material is omitted.
 
-Grid of Employee Cards: avatar, name, role, live state badge, current Mission, one-line style ("Careful senior developer"). Clicking opens the **Employee profile** (new): role & responsibility statement · current model (shown as a plain name — "Claude Sonnet", never an API string) · personality & working style (from the Agent Profile system, editable when that ships) · performance history (Missions completed, audit outcomes, payroll) · "Start a Meeting" action. The profile is where "this is a colleague" solidifies.
+### 3.3 CEO replies
 
-### 3.5 Timeline `/timeline`
+Natural language. Approve, ask, redirect, or set new direction. The PM interprets, and when interpretation requires technical judgment, the PM discusses it with the CTO before answering — visibly, in the Timeline. The CEO sees "PM is consulting the CTO" rather than an unexplained pause.
 
-The company's collective memory and the trust engine. Full-page feed with two render modes in one stream: **conversation events** as meeting bubbles (avatar, name, role, text) and **system events** as compact single-line rows. Filters: All / Meetings / Decisions / System. A subtle "CEO view ↔ Technical view" toggle controls whether L3 detail rows (retries, provider events) appear. As volume grows, consecutive minor system events group into a collapsible digest row ("14 routine events") — the feed must never become a log file.
+**The CEO's instruction may be vague.** "Build an ecommerce site" is a complete, valid input. Turning it into a specification is the organization's job, not the CEO's (§5.1).
 
-### 3.6 Decisions `/decisions`
+---
 
-The CEO's desk. Two tabs: **Pending** and **History** (immutable). Every Decision Card has a fixed anatomy — this is the product's most important component:
+## 4. The Widget Dock  *[V1.1 — Sprint 15]*
+
+The dock is the CEO's instrument panel: glanceable state that would otherwise clutter the conversation.
+
+- **Customizable.** `+` opens a widget catalog. Widgets can be added, removed, and reordered. Layout persists per CEO per company.
+- **Only real widgets appear in the catalog.** A widget whose data does not yet exist is not listed, not greyed out, not "coming soon" (§10.2).
+- **Every widget is a summary with a destination.** Tapping a widget opens the Sidebar page or detail view that owns that data. Widgets never become mini-apps.
+
+Widget catalog (V1.1 target set — shipped progressively as their data becomes real):
+
+| Widget | Shows | Depends on |
+|---|---|---|
+| Progress | milestone completion (n/m Missions) | V1 |
+| Pending Approvals | decisions waiting on the CEO | V1 |
+| Timeline | most recent activity, condensed | V1 |
+| Employees | roster with live state dots | V1 |
+| Decisions | recent decisions + outcomes | V1 |
+| Costs | spend this month | V1 |
+| Payroll | per-Employee spend | V1 |
+| Token Usage | consumption against the resource limit | Sprint 9 |
+| Reports | latest report + generate action | V1 |
+| Risks | open risks from Reviewer findings | V1 (derived) |
+| Repository Activity | recent commits and merges | V1 |
+| Mission Tree | Project → Mission → Task progress | Sprint 19 |
+| Architecture | current architecture decisions | Sprint 12 |
+| Sprint | current sprint state | Sprint 18 |
+
+---
+
+## 5. Organization Experience
+
+### 5.1 From instruction to specification  *[V1.1 — Sprint 12]*
+
+```
+CEO: "Build a shopping mall."
+        │
+   PM ⇄ CTO discuss (visible in the Timeline)
+        │
+   PM: "Before we start, I need a few things from you —
+        who are the target customers? Is an admin page needed?
+        Which payment methods? Which login methods? Expected scale?"
+        │
+   CEO answers (or says "you decide")
+        │
+   Project Specification → CEO Decision → Kick-off
+```
+
+Requirement Discovery is a **feature of the organization, not a form.** The PM asks because a real PM would ask, and asks only what actually matters — the questions themselves are produced by the PM/CTO discussion, not from a fixed checklist.
+
+The Specification presented to the CEO is readable in under two minutes: Goal · Target User · Core Features · Technical Constraints · Acceptance Criteria · Risks. Engineering does not begin before approval.
+
+### 5.2 Decisions reach the CEO only when they matter  *[V1.1 — Sprint 13]*
+
+The PM classifies. Minor decisions the PM makes alone; Major ones the PM makes with the CTO; only Critical ones become CEO Decisions. Both lower tiers remain fully visible in the Timeline — the CEO can always see what was decided without them, which is what makes the delegation trustworthy rather than opaque.
+
+If everything asks, nothing matters. If nothing asks, the CEO isn't a CEO.
+
+### 5.3 The Decision Card — unchanged anatomy
+
+Still the product's most important component:
 
 > **Problem** — one sentence, plain language
-> **Recommendation** — what the company proposes, and who proposes it (Reviewer avatar + name)
+> **Recommendation** — what the company proposes, and who proposes it (avatar + name)
 > **Risk** — what could go wrong, stated honestly
 > **Impact** — what approving changes (scope, cost, time)
 > Actions: **Approve** · **Request changes** (with comment) · **Reject**
 
-Only material decisions arrive here (architecture, external services, security, spend thresholds, destructive changes). Routine work never asks. History shows the decision, the CEO's comment, and what happened after — decisions have consequences, and the archive proves the system respects them.
+V1.1 adds one variant: the **Specification approval** card, whose body is the specification summary rather than a single problem statement.
 
-### 3.7 Workspace `/workspace` — code without code-first  [Phase D]
+### 5.4 Employees  *[V1.1 — Sprints 10–11]*
 
-The doc's principle, made concrete: **summary → files → diff**, strictly in that order.
+**Roles are positions; Employees are people.** The Employees page shows the org, grouped by role:
 
-Default view per change-set: a **Change Summary Card** — "Engineer modified 12 files. Added the authentication system. Potential risk: token expiration handling." plus test results as a plain verdict ("All 34 checks passed"). Expansion level 1: file list with per-file one-liners. Expansion level 2: full diff viewer. The diff is never the landing view, and nothing in L1/L2 requires reading code to make a decision — the Decision Card must carry everything material.
+```
+Leadership              (permanent, exactly one each)
+  PM        · Jun    · Claude Sonnet
+  CTO       · Mina   · Claude Opus
+  Reviewer  · Tae    · Claude Sonnet
 
-### 3.8 Reports `/reports`  [Sprint 4]
+Engineering             (unlimited)
+  Backend Engineer
+    · Kim   · Claude Sonnet
+    · Lee   · GPT-5.5
+  Frontend Engineer
+    · Park  · Gemini
 
-Daily Report list + reader. Executive memo format: headline, what moved, decisions made/pending, failures with causes, payroll. Written to be read in 60 seconds.
+                                        [ + Add Employee ]
+```
 
-### 3.9 Public website  [Phase E]
+**Add Employee flow:** select Role → select AI model → select skill template → name → create. The Role is a position with fixed behavior; the Employee is a worker with an identity and a model. The UI must make that distinction legible — a CEO should understand that hiring a second Backend Engineer on a different model is a staffing choice, not a configuration change.
 
-Landing narrative, in order: **Hero** — "Become the CEO of an AI software company." One sentence on why this is not a coding assistant: your company works while you decide. A live-looking product frame (real Timeline animation, not screenshots of code). Then five sections matching the product's trust ladder: (1) The AI Company — found one in a minute; (2) Your Employees — roles, personalities, models; (3) How work happens — Mission → plan → build → audit; (4) The CEO experience — Headquarters, reports, one place to decide; (5) Trust & control — everything visible, every decision yours, full history. Close with the founding CTA. The page sells governance and delegation, never "code faster."
+Leadership roles cannot be removed or duplicated; the UI never offers the action.
+
+Future roles (Designer, QA, DevOps, Security, ML Engineer, Data Analyst, Technical Writer, …) appear in the role list only when the template actually defines them.
 
 ---
 
-## 4. User Journey (first session → steady state)
+## 6. First Session → Steady State
 
-1. **Land** → understand "I can run an AI company" → sign in
-2. **Found** — name the company; 3 Employees appear and introduce themselves in the Timeline (wow 1)
-3. **First Mission** — guided suggestion ("Try asking your team to build a landing page"); CEO assigns
-4. **Watch** — live Meeting: PM plans → Engineer builds → Reviewer audits (wow 2)
-5. **Decide** — first Decision Card arrives; CEO approves with full context (wow 3)
-6. **Leave & return** — Daily Report summarizes what happened in absence (wow 4)
-7. **Steady state** — CEO's loop becomes: read report → clear decisions → set new Missions → occasionally deep-dive an Employee or the Timeline. Sessions get *shorter* as trust grows — that is success, not churn.
+1. **Sign up** → **Projects** (empty) → "Found your first company"
+2. **Found** — name + optional "what should it build". Leadership and starting Employees appear and introduce themselves.
+3. **Land in the CEO Workspace** — the PM opens with a report and a question.
+4. **Give a vague instruction** — the PM and CTO discuss it, ask what's missing, and return a specification.
+5. **Approve** — the first Decision Card. The role reversal lands: the company asks *your* permission.
+6. **Watch** — work proceeds; the dock updates; the Timeline fills.
+7. **Leave and return** — the PM's first message summarizes the absence.
+8. **Steady state** — read the PM's report, clear decisions, set direction, occasionally open a Widget or Sidebar page. Sessions get *shorter* as trust grows. That is success, not churn.
+
+Onboarding must reach step 3 in under two minutes and step 5 in under five, with zero configuration — mock mode makes this possible and must never regress.
 
 ---
 
-## 5. Component List (design system inventory)
+## 7. Sidebar Pages (V1 surfaces, retained)
 
-Priority-ordered; ★ = carries the product's identity.
+These already exist and continue to; most also project a Widget into the dock.
 
-- ★ **DecisionCard** — Problem / Recommendation / Risk / Impact + three actions
-- ★ **TimelineFeed** — MeetingBubble (conversation) + SystemRow (compact) + DigestRow (grouped)
-- ★ **EmployeeCard / EmployeeStatusBadge / LiveDot** — presence and state
-- ★ **ChangeSummaryCard** — summary→files→diff progressive disclosure [Phase D]
+- **Projects `/`** — Render's Overview applied to companies: name, status word, milestone bar, Employee avatar stack, latest activity line, decision badge. Empty state is the founding invitation.
+- **Missions** — kanban (Backlog / Developing / Needs your decision / Done) + Mission detail: Meeting transcript, deliverable, decision history. Code missions render the **Change Summary Card** (summary → files → diff, strictly that order) with check results as plain verdict chips. The diff is never the landing view.
+- **Employees** — §5.4.
+- **Decisions** — Pending / History (immutable). History shows the decision, the CEO's comment, and what happened after.
+- **Timeline** — the company's collective memory and the trust engine. Conversation events as meeting bubbles, system events as compact rows, filters, CEO ↔ Technical toggle, digest grouping for consecutive minor events. The feed must never become a log file. V1.1 adds discussion turns, tool calls, and memory recalls to the Technical view.
+- **Reports** — executive memo list + reader; readable in 60 seconds.
+- **Workspace** — the company's real git-backed codebase: file tree, file viewer, merge history. Read-only.
+- **Company Settings** — provider, write-only API key field, per-role model reassignment, execution sandbox toggle, resource limits.
+
+---
+
+## 8. Component Inventory
+
+★ = carries the product's identity.
+
+- ★ **PMConversation** — the primary surface: report messages, CEO composer, live streaming replies *[V1.1]*
+- ★ **PMReport** — the five-part report rendered as a message, not a card *[V1.1]*
+- ★ **WidgetDock / WidgetCard / WidgetCatalog** — add, remove, reorder *[V1.1]*
+- ★ **DecisionCard** — Problem / Recommendation / Risk / Impact + three actions (+ Specification variant)
+- ★ **TimelineFeed** — MeetingBubble + SystemRow + DigestRow
+- ★ **ChangeSummaryCard** — summary → files → diff
+- **SpecificationView** — readable Project Specification *[V1.1]*
+- **EmployeeRoster / AddEmployeeFlow / RoleGroup** — org as org *[V1.1]*
+- **EmployeeCard / StatusBadge / LiveDot** — presence and state
 - **CompanyCard** — status word, milestone bar, avatar stack, decision badge
-- **SituationReport** — generated prose block with timestamp and PM attribution
-- **VitalsStrip** — four linked figures
-- **MissionCard / MissionBoard** — kanban with "Needs your decision" column
-- **MeetingTranscript / MeetingComposer** — conversation view + CEO message input
-- **ReportCard / ReportReader** — executive memo
+- **MissionCard / MissionBoard**
+- **MeetingTranscript** — readable, not writable by the CEO *[V1.1 change]*
+- **ReportCard / ReportReader**
 - **StatusWord** — the single source of external status vocabulary
-- **ProgressMilestones** — honest progress (n/m Missions), never bare percentages
-- **EmptyState** set — every empty screen is an invitation to act (found, assign, decide)
+- **ProgressMilestones** — honest progress, never bare percentages
+- **EmptyState** set — every empty screen is an invitation to act
 - **TechnicalDisclosure** — the uniform "show technical details" affordance for all L3 content
+- **AuthForms** — sign in / sign up *[V1.1 — Sprint 9, minimal; styled properly in Sprint 14]*
 
 ---
 
-## 6. MVP Scope (what "done" means for the experience)
+## 9. Copy Discipline
 
-The MVP is the complete CEO loop, legible and trustworthy, in mock or real mode:
+Every string is either **company voice** (the PM reporting, an Employee speaking, a report) or **interface voice** (buttons, labels, empty states). Mixing them breaks the fiction.
 
-My Companies with upgraded cards · Headquarters with Decision strip + Situation Report + vitals + live feed · Missions kanban + Mission detail with transcript and deliverable summary · Employees grid + basic profile · full Timeline page with filters and CEO/Technical toggle · Decisions page (pending + history) with the full DecisionCard anatomy · Reports (Sprint 4) · Settings. Status vocabulary applied everywhere. Onboarding path that reaches the first live Mission in under 3 minutes.
+Generic components use organization language ("work", "deliverable", "team"); software-specific words live only in template-owned content. This costs nothing now and prevents a full copy audit when a second template eventually ships.
 
-Explicitly **not** MVP: public website, Workspace/diff views, execution, Launch, multi-member orgs, CTO Agent, notification channels (email/Slack), mobile-dedicated layouts (responsive is enough).
-
----
-
-## 7. Future Roadmap (experience layer)
-
-- **Phase D (Workspace & Sandbox):** ChangeSummaryCard, file/diff disclosure, test verdicts in Audits; Risks become a first-class object (a Risk register fed by Reviewer findings)
-- **Phase E (Launch & release):** Launch flow with mandatory Decision, launch history in Timeline; public website; onboarding polish
-- **Beyond MVP:** CTO Agent (strategy recommendations in Headquarters) · org customization (departments, hiring new Employees) · personality editing UI (Agent Profile system) · notification digests to email/Slack · CEO command bar (natural-language "ask my company") · multi-company portfolio view with cross-company payroll
+Both locales (EN / KO) share one vocabulary table (§1.2). Never hardcode a status string.
 
 ---
 
-## 8. Risks & Recommendations
+## 10. Risks & Standing Rules
 
-1. **Theater vs. truth.** The company metaphor must never *fabricate* — an Employee "thinking" animation with no real work behind it poisons trust permanently. Rule: every visible state maps to a real system state; delight comes from real events rendered warmly, never from invented ones.
-2. **Fake precision.** "72% complete" cannot be computed honestly today. Ship milestone progress (n/m) and status words; introduce percentages only if a real estimation model exists. (This intentionally amends the example in the request document.)
-3. **Timeline noise.** Event volume will grow faster than reading time. Digest grouping and the CEO/Technical toggle are not polish — they are load-bearing and belong in the first Timeline-page iteration.
-4. **Decision fatigue.** If everything asks, nothing matters. Keep the materiality bar high (the request document's list is right); add per-company thresholds later (e.g., spend limits) rather than more approval types.
-5. **Audience tension.** Early adopters are developers; the CEO framing could feel like hiding *their* details. The Technical toggle and full inspectability (L3 always reachable) are the bridge — CEO-first defaults, developer-complete depths.
-6. **Two-sided copy discipline.** Every string in the app is either company-voice (reports, employees speaking) or interface-voice (buttons, labels). Mixing them breaks the fiction. Maintain a copy guide alongside the terminology table.
-
----
-
-## 9. Adoption Plan (where this spec lands in the sprint flow)
-
-| Spec element | Applies to |
-|---|---|
-| Status vocabulary, DecisionCard anatomy, SituationReport, Decisions page, Timeline page + toggle, Employee profile, CompanyCard upgrade, onboarding path | **Sprint 4.7 — "Headquarters UX"** (new UI-focused sprint after Real Intelligence; pairs naturally with Sprint 4.5 Employee Profiles) |
-| Reports reader | Sprint 4 (already specced; align copy with §3.8) |
-| Personality display/editing in Employee profile | Sprint 4.5 (Agent Profiles) |
-| ChangeSummaryCard, Workspace page, Risk register | Sprint 5–6 briefs (Phase D) — this spec's §3.7 is the UX requirement for Workspace |
-| Public website | Sprint 8 (Phase E) — §3.9 is the content architecture |
-| Template-data founding refactor (§10.6, internal only) | Sprint 4.7 — backend item, zero UI change |
-| This document | `docs/design/UX_SPEC.md` — source of truth; all future frontend briefs reference it; CLAUDE.md gains a pointer |
+1. **Theater vs. truth.** The company metaphor must never fabricate. An Employee "thinking" animation with no real work behind it poisons trust permanently. Every visible state maps to a real system state; delight comes from real events rendered warmly.
+2. **Hidden means absent.** No "coming soon" tabs, no disabled menu items, no teaser widgets, no template picker with one option. A focused product that hints at an unfinished bigger one feels smaller, not bigger.
+3. **Fake precision.** Ship milestone progress and status words. Introduce percentages only when a real estimation model exists.
+4. **Conversation bloat.** The PM conversation is the center precisely because it is uncluttered. Rule #17 (new capability → Widget or Sidebar page) is load-bearing, not stylistic.
+5. **Decision fatigue vs. rubber-stamping.** Delegation is only trustworthy when the CEO can see what was decided without them. Lower-tier decisions must remain fully visible in the Timeline.
+6. **Timeline noise.** Volume grows faster than reading time. Digest grouping and the CEO/Technical toggle are load-bearing.
+7. **Audience tension.** Early adopters are developers; the CEO framing could feel like hiding *their* details. The Technical toggle and full L3 reachability are the bridge — CEO-first defaults, developer-complete depths.
+8. **Widget sprawl.** A dock with twenty widgets is a dashboard again. Ship the catalog with restraint and let the CEO opt in.
 
 ---
 
-## 10. Future Expansion Strategy — from AI Software Company to AI Organization OS
-
-MVP scope is unchanged by this section. Everything here is about making today's design *evolvable*, not about building any of it now.
-
-### 10.1 How Commander evolves beyond software development
-
-The honest audit: most of Commander is **already organization-agnostic**. Company, Employees, Missions, Meetings, Timeline, Decisions, Reports, Payroll, profiles, the event architecture, PromptBuilder's layering — none of these know they belong to a software company. Only four things do:
-
-1. The **founding trio** (PM / Engineer / Reviewer) hardcoded at company creation
-2. The **workflow shape** (plan → build → audit) hardcoded in the engine
-3. The **deliverable type** (code/diffs, Phase D Workspace)
-4. Scattered **copy** ("Developing", development-flavored strings)
-
-Therefore the evolution path is not a redesign — it is the extraction of those four things into data. A future organization type is: a set of roles (with role contracts and default profiles), a workflow shape, a deliverable type, and a vocabulary. That tuple is a **Template**.
-
-### 10.2 How Company Templates should work
-
-A Template is a data document, not code:
-
-```
-Template
-├── identity        name, description, icon
-├── roles[]         role_key, title, default AgentProfile,
-│                   role contract (incl. output contract like Verdict),
-│                   audit criteria for this domain
-├── workflow        ordered stages mapping roles to steps
-│                   (plan → produce → review is one shape, not the shape)
-├── deliverable     type key (code | document | design | video-script | …)
-│                   → selects the summary/detail renderer
-├── vocabulary      status-word overrides (a Research Lab "Experimenting",
-│                   an Agency "Producing" — mapped onto the same internals)
-└── starters        suggested first Missions for onboarding
-```
-
-Founding flow, future version: Found a Company → choose Template → the team appears and introduces itself — identical emotional beat to today, one added step. Custom Organization is just a template authored by the user (much later: shared/marketplace templates).
-
-Two design consequences worth locking now: **the Reviewer role and the Decision loop are universal** — every template must define a reviewer with domain audit criteria, because trust-through-review is Commander's identity, not a software feature. And **role contracts stay immutable per template** (the PromptBuilder layering from Sprint 4.5 already enforces this), which is what keeps a Copywriter's output parseable just like an Engineer's Verdict.
-
-### 10.3 How today's UI supports this — without showing it
-
-- **Navigation is already generic.** Headquarters / Missions / Employees / Timeline / Decisions / Reports / Settings apply to any organization. Only **Workspace** is domain-specific: treat it as a *deliverable-driven* nav item (it appears because the template's deliverable type is code), not a permanent fixture.
-- **Founding modal stays single-step** but is built as the first step of a wizard-shaped flow, so a template picker can slot in front later without relayout.
-- **Roles render from data, never from constants.** Employee titles, avatars, style lines all come from the DB/profile — already true; keep it true. No component may ever branch on `role === "engineer"`; branch on template-provided keys.
-- **Status words are tokens** (§1) — a vocabulary override is a data swap, zero component changes.
-- **Mission deliverable area is a keyed renderer.** Today it renders one type (markdown summary). Keep that renderer behind a `deliverable_type` key even while only one key exists.
-- **Copy discipline:** generic components use organization language ("work", "deliverable", "team"); software words live only in template-owned content. This costs nothing now and prevents a full copy audit later.
-
-### 10.4 What stays hidden until later versions
-
-Template picker, custom organization builder, role library, non-software templates, template sharing/marketplace, multi-workflow shapes. Hidden means **absent** — no "coming soon" tabs, no disabled menu items, no teaser cards. A focused MVP that hints at a bigger unfinished product feels smaller, not bigger.
-
-### 10.5 Risks of expanding too early
-
-1. **The verifiability cliff.** Software is the *easiest* domain to build trust in: outputs have objective audits (tests pass, diffs review). Marketing copy and research have no such ground truth — a Reviewer's verdict becomes an opinion. Each new template needs real domain audit criteria, or the Decision loop (the product's core) degrades into theater. This is the single strongest reason to expand late.
-2. **The prompt-pack trap.** A template that only swaps titles and personas produces five orgs with identical shallow output. Real differentiation requires deliverable types + audit criteria + workflow shapes per domain — genuine content and engineering work per template, not configuration.
-3. **Wedge dilution.** "AI dev company" is a sharp, sellable story; "OS for any AI organization" is a vision statement. Marketing the vision before the wedge wins means competing with everyone while excelling at nothing.
-4. **Surface explosion.** Every template multiplies the testing matrix, mock-provider content, onboarding paths, and support burden. MVP economics assume one path polished deeply.
-5. **Sunk-cost tension with Phase D.** Workspace/Sandbox investment is software-specific. That's fine — it's the wedge — but plan it as *the code deliverable module*, not as Commander's spine, so generalizing later doesn't mean unwinding it.
-
-### 10.6 Recommendations — focused MVP, scalable bones
-
-1. **Implement the MVP as a template, invisibly.** Move the founding trio, workflow order, role contracts, and default profiles into a single internal `software_company` template data file. One template, no picker, zero UI change — but "Software Company can become Organization Template" then requires adding files, not redesigning systems. (Small backend refactor; slotted into Sprint 4.7.)
-2. **Gate expansion on wedge quality, not ambition.** Add template #2 only after the software company sustains real usage quality (missions completed without babysitting, decisions trusted, retention). The vision is the reward for winning the wedge, not a substitute.
-3. **Choose the second template for verifiability.** When the time comes, pick an adjacent domain whose outputs can still be audited semi-objectively (e.g., technical documentation studio) before opinion-heavy domains (marketing, design).
-4. **Spend now only where it's free.** Data-driven vocabulary, data-driven roles, keyed deliverable renderer, wizard-shaped founding: near-zero cost today. Defer everything with real cost (renderer plugin system, template authoring UI, audit-criteria frameworks) until template #2 is scheduled.
-5. **Keep the external identity as the wedge.** Publicly: Commander is the AI software company OS. Internally (docs, schema names): "organization" is acceptable vocabulary. Rename the product story only when a second template ships.
-
----
-
-*This document intentionally contains no colors, spacing, or component code. Visual language continues from the existing dashboard identity (dark, violet accent, Render-inspired calm) unless a dedicated brand pass supersedes it.*
+*This document contains no colors, spacing, or component code. Visual language continues from the existing dashboard identity — dark, violet accent, Render-inspired calm — unless a dedicated brand pass supersedes it. The Render benchmark governs structure and restraint, not palette.*

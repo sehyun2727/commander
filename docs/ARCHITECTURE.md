@@ -1,119 +1,315 @@
 # Commander Architecture
 
-Version: v2.7 (As-Built)
-Status: Synced with Sprint 8 ("V1 Release") implementation — V1 tagged `v1.0.0` — 2026-07
-Supersedes: v1.0 Draft (pre-implementation vision)
+Version: v3.0 (V1.1 Target + V1 As-Built)
+Status: V1 shipped and tagged `v1.0.0` (Sprint 8). V1.1 in development — this document defines the target architecture V1.1 builds toward.
+Supersedes: v2.7 (As-Built, Sprint 8)
+
+**How to read this document.** §1–§5 define the **V1.1 target architecture** — the shape the system is being built into. §6 documents **what exists today (V1 as-built)**, honestly, including where it falls short of the target. §7–§9 are cross-cutting concerns that apply to both. Never confuse the two: if a section says *[V1.1 — not built]*, it requires an explicit sprint brief.
 
 ---
 
-## Vision
+## 0. Vision
 
-Commander is an operating system where a solo developer becomes the CEO of an AI software company.
+> **Commander is not a program that gives work to AI. Commander is an operating system for running an AI company.**
 
-Users never manage prompts. Users manage a company.
+A solo operator becomes the CEO of an AI software company. The CEO never manages prompts; the CEO manages an organization.
 
-Every action performed by AI must be **visible, explainable, reviewable, and replaceable**.
+Every action performed by AI must be **visible, explainable, reviewable, and replaceable.**
+
+The competitive claim is the **organization layer**, not the worker. Workers (agent implementations, models, harnesses) are deliberately replaceable. What Commander owns is the company around them: planning, delegation, review, approval, memory, and accountability.
 
 ---
 
-## High-Level Architecture (as built)
+## 1. Organization Model
 
-```text
-                       Commander
+### 1.1 Two axes, not one chart
 
-                ┌─────────────────────┐
-                │   CEO Dashboard      │
-                │  Next.js App Router  │
-                │  TanStack Query      │
-                └──────┬───────▲───────┘
-                       │       │
-                 REST API    SSE stream
-                       │       │
-                       ▼       │
-              ┌────────────────┴──────┐
-              │  Commander API Server │
-              │       (FastAPI)       │
-              └──────────┬────────────┘
-                         │
-      ┌──────────┬───────┴──────┬─────────────┐
-      ▼          ▼              ▼             ▼
- Workflow    Agent          Event Bus    Provider
-  Engine     Runtime       (persist +    Gateway
-      │          │          fan-out +        │
-      │          │          SSE push)        ▼
-      │          │              │       Model Registry
-      │          │              ▼            │
-      │          │         PostgreSQL   ┌────┴─────┐
-      │          │        (default,     ▼          ▼
-      │          │        via Docker;  Mock     Anthropic
-      │          │        SQLite for   Provider   Provider
-      │          │        tests only) (default)  (httpx)
-      │          │        events, projects,
-      │          │        tasks, agents,
-      │          │        approvals, settings_kv,
-      │          │        cost_entries, reports —
-      │          │        schema owned by Alembic
+Rendering the org as a single tree produces a contradiction, because leadership relates two different ways depending on the phase of work.
+
+**Decision axis — planning.** PM and CTO are peers. Neither reports to the other.
+
+```
+                 CEO
+                  │
+             one channel
+                  │
+         PM ←── 협의 ──→ CTO
+      business         technical
+                  │
+        Project Specification
+                  │
+             CEO approval
+        Approve / Request change / Reject
 ```
 
-Realtime is **SSE** (not WebSocket): one endpoint per company, replays last 50 events on connect, heartbeat every 15s, client dedups by `event.id`.
+**Delegation axis — execution.** After approval, work descends and results climb.
 
-`GET /api/health` (liveness, zero dependencies) and `GET /api/health/db` (readiness, real DB round-trip, `503` on failure) sit beside the API server for deploy tooling and the dashboard's own API-down banner to poll.
+```
+     PM ──assigns──▶ CTO ──assigns──▶ Employees
+                                          │
+                                      Reviewer
+                                          │
+                                    PM judgment
+                        Minor → PM · Major → PM+CTO · Critical → CEO
+```
+
+The PM is the organization's representative to the CEO in both phases.
+
+### 1.2 Role vs Employee  *[V1.1 — not built]*
+
+This separation is the largest structural change in V1.1.
+
+```
+Template
+  └── Role (immutable definition)
+        ├── role_key, title, category (leadership | worker)
+        ├── prompt contract          (immutable output contract, e.g. trailing Verdict)
+        ├── tool grants              (whitelist — see Rule #12)
+        ├── permissions              (what organizational actions this role may take)
+        ├── workflow position        (which pipeline stages it occupies)
+        ├── harness                  (execution strategy: one-shot | tool-loop)
+        └── default behavior         (founding AgentProfile defaults)
+
+Company
+  └── Employee (instance)
+        ├── role_key ────────────────▶ Role
+        ├── name
+        ├── model_ref                (per-employee model)
+        └── AgentProfile             (personality / working style / decision style / custom instructions)
+```
+
+Constraints:
+
+- **Leadership roles are singletons.** Exactly one PM, one CTO, one Reviewer per company. Enforced at the data layer, not by convention. Never zero, never two.
+- **Worker roles are unbounded.** One role may hold many Employees, each on a different model. The PM assigns a Mission to a specific Employee, not to a role.
+- **Roles are data (Rule #16).** No engine branch, prompt, or component may test a hardcoded role name. Adding Designer / QA / DevOps / Security / ML Engineer / Data Analyst / Technical Writer must be a template-data change, never an engine change.
+- **Employee creation:** Add Employee → select Role → select AI model → select skill template → create. The Role supplies behavior; the Employee supplies identity and model.
+
+Employee count caps may exist as a commercial policy later. The architecture assumes none.
+
+### 1.3 Company Templates  *[architecture in V1.1 — only one template ships]*
+
+A Template is a data document, not code:
+
+```
+Template
+├── identity        name, description, icon
+├── roles[]         the Role definitions above
+├── workflow        ordered stage sequence (role_key + stage kind + flags)
+├── approval_flow   which decisions are Critical (require CEO) by default
+├── tool_registry   the complete set of tools this template may grant to its roles
+├── prompt_templates  role contracts and stage prompts
+├── deliverable     type key (code | document | …) → selects the renderer
+├── vocabulary      status-word overrides
+└── starters        suggested first Missions for onboarding
+```
+
+Future templates (Marketing Agency, Game Studio, Research Lab, Law Firm, Consulting) must require **adding a data file, not redesigning a system.** That is the whole point of the abstraction.
+
+**Only `software_company` ships in V1.1.** No template picker, no "coming soon" entries — hidden means absent (UX_SPEC §11.5). The gating criterion for a second template is unchanged and still binding: outputs must be **semi-objectively auditable**, or the Decision loop degrades into theater. See §9.2.
 
 ---
 
-## Core Principle: Everything Is an Event
+## 2. High-Level Architecture (V1.1 target)
 
-Every significant company action publishes an `Event` through the EventBus, which:
+```text
+                              Commander
 
-1. **Persists** it to the unified `events` table
-2. **Fans out** to module subscribers
-3. **Pushes** to live SSE queues per company
+              ┌───────────────────────────────────────────┐
+              │              CEO Workspace                 │
+              │   Next.js App Router · TanStack Query      │
+              │                                            │
+              │   ┌──────────────────┬──────────────────┐  │
+              │   │  PM Conversation │  Widget Dock     │  │
+              │   │    (primary)     │  (customizable)  │  │
+              │   └──────────────────┴──────────────────┘  │
+              └────────┬────────────────────▲──────────────┘
+                       │                    │
+                  REST API              SSE stream
+                       │                    │
+                       ▼                    │
+              ┌────────────────────────────┴──────┐
+              │      Commander API Server          │
+              │            (FastAPI)               │
+              │   auth guard on every route        │
+              └──────────────┬─────────────────────┘
+                             │
+   ┌──────────┬──────────────┼──────────────┬───────────────┐
+   ▼          ▼              ▼              ▼               ▼
+Workflow   Agent          Event Bus     Provider        Project
+ Engine    Runtime       (persist +     Gateway         Memory
+   │      (Role/Employee   fan-out +       │          (projection
+   │       registry)       SSE push)       ▼           over events)
+   │          │                │      Model Registry        │
+   │          │                ▼            │               │
+   │          │           PostgreSQL   ┌────┴─────┐          │
+   │          │          (Alembic-     ▼          ▼          │
+   │          │           owned)     Mock     Anthropic      │
+   │          │                              (httpx)         │
+   │          └──────────── events ──────────────────────────┘
+   │
+   └── Agent Harness ──▶ SandboxRunner ──▶ Docker (no network, capped, non-root)
+        (tool loop,        run_checks only — template-defined commands
+         budget-capped)
+```
+
+Realtime is **SSE**: one endpoint per company, replays the last 50 events on connect, heartbeat every 15s, client dedups by `event.id`.
+
+`GET /api/health` (liveness, zero dependencies) and `GET /api/health/db` (readiness, real round-trip, `503` on failure) sit outside the auth guard for deploy tooling and the dashboard's own API-down banner.
+
+---
+
+## 3. Core Principle: Everything Is an Event
+
+Every significant company action publishes an `Event` through the EventBus, which **persists** it to the unified `events` table, **fans out** to module subscribers, and **pushes** to live SSE queues per company.
 
 Event envelope: `id, project_id, kind, type, actor {role, id, name}, payload, reason, created_at`.
 
-- `kind: "system" | "conversation"` — one storage model, two renderings. Conversation messages ARE events. (Resolves the v1.0 pending "Timeline data model" question.)
-- Code-mission events: `workspace.initialized` (first code mission for a company), `code.changed` (Engineer commit landed on the mission branch — stats payload), `branch.merged` (CEO approval merged the branch into `main`). Rendered by the same generic Timeline row via `event.reason` — no special-cased renderer needed.
-- `reason` makes every agent action explainable (Rule 2).
+- `kind: "system" | "conversation"` — one storage model, two renderings. Conversation messages ARE events.
+- `reason` makes every agent action explainable (Rule #3).
 - Payload shapes are validated per-type via `PAYLOAD_MODELS` in `build_event()`.
-- TypeScript types are **generated** from the Pydantic contracts (`scripts/generate_ts_schemas.py` → `packages/event-schemas/ts/`). Frontend never redeclares event shapes.
+- TypeScript types are **generated** from the Pydantic contracts (`scripts/generate_ts_schemas.py`). The frontend never redeclares event shapes.
+
+This single stream is also what makes Project Memory possible without a second source of truth (Rule #14).
+
+### Event families
+
+| Family | Examples | Since |
+|---|---|---|
+| Mission lifecycle | `task.created`, `task.assigned`, `task.completed`, `task.failed` | V1 |
+| Conversation | agent replies, CEO messages, Employee intros | V1 |
+| Code | `workspace.initialized`, `code.changed`, `branch.merged` | V1 |
+| Execution | `execution.completed` (per-check results) | V1 |
+| Decision | decision created / approved / changes requested / rejected | V1 |
+| Reliability | `task.recovered`, `budget.exceeded` | *V1.1 S9* |
+| Organization | `employee.hired`, `employee.updated`, `role.assigned` | *V1.1 S10–11* |
+| Planning | `discussion.turn`, `specification.drafted`, `specification.approved`, `requirement.asked` | *V1.1 S12* |
+| Harness | `tool.called`, `checks.reacted`, `self_correction.attempted` | *V1.1 S16–17* |
+| Memory | `memory.recorded`, `memory.recalled` | *V1.1 S18* |
 
 ---
 
-## Modules (as built)
+## 4. Workflow Engine (V1.1 target)
+
+### 4.1 Template-driven stage sequence
+
+The engine must not know the names PM, Engineer, or Reviewer. It executes a sequence the template supplies:
+
+```
+StageSpec
+  role_key      which role performs this stage
+  kind          plan | discuss | produce | review
+  lands_code    whether this stage's output is parsed into files and committed
+  runs_checks   whether the sandbox runs after this stage
+```
+
+The V1 pipeline (`plan → produce → review`) becomes one instance of a general sequence, not the shape. Resume-after-decision addresses a **stage index**, not a role name, because the same role may appear more than once.
+
+### 4.2 Planning phase  *[V1.1 — Sprint 12]*
+
+```
+CEO instruction (vague is fine)
+   │
+   ├─▶ PM drafts business framing
+   │
+   ├─▶ PM ⇄ CTO discussion loop  (bounded turns, budget-capped per Rule #13)
+   │
+   ├─▶ missing information? ──▶ PM asks the CEO (Requirement Discovery)
+   │                             never invents an answer
+   │
+   └─▶ Project Specification
+         Goal · Target User · Core Features · Technical Constraints
+         · Acceptance Criteria · Open Questions · Risks
+              │
+              ▼
+        CEO Decision (Critical) — engineering does not start before approval
+```
+
+Requirement Discovery is a first-class behavior: when the specification cannot be completed honestly, the organization asks rather than guesses.
+
+### 4.3 Decision authority  *[V1.1 — Sprint 13]*
+
+| Level | Decided by | Examples |
+|---|---|---|
+| Minor | PM alone | naming, file placement, small reviewer nits, task ordering |
+| Major | PM + CTO | library choice, data model change, API contract change, perf/security tradeoffs |
+| Critical | CEO approval | specification approval, scope change, budget overrun, architecture change, external service adoption, irreversible actions |
+
+The goal is fewer CEO interruptions, not fewer CEO rights. Misclassifying a Critical decision as Minor is a trust violation, not an optimization — the classification criteria live in the PM's role contract and are auditable in the Timeline.
+
+### 4.4 Agent Harness  *[V1.1 — Sprints 16–17]*
+
+Worker roles whose harness is `tool-loop` execute as:
+
+```
+analyze repo → plan → modify → run_checks → react to results → commit → summarize
+```
+
+- **Repository awareness:** read files, search code, understand structure, modify only what is necessary. Never blindly overwrite.
+- **Budget (Rule #13):** max tool calls, max tokens, max wall time, max cost. Exhaustion → `blocked` + reason + CEO informed.
+- **Every tool call emits an event.** A loop the CEO cannot watch is not acceptable.
+- **`run_checks` is the only execution tool that exists** (Rule #12). The harness cannot gain a shell by any path.
+- The harness is an implementation of a stable worker interface, so an alternative worker (e.g. an external coding agent) can be substituted without changing events, payroll, or the surrounding organization.
+
+### 4.5 Self-correction  *[V1.1 — Sprint 17]*
+
+A failed check no longer waits for the CEO. The Employee reacts inside its budget; if it still fails, the Reviewer's feedback routes through PM judgment (§4.3) and only reaches the CEO when Critical.
+
+---
+
+## 5. Project Memory  *[V1.1 — Sprint 18]*
+
+Memory is a **projection over the event stream** (Rule #14), not a new datastore.
+
+Recorded categories: architecture decisions · CEO approvals · PM specifications · Reviewer feedback · coding conventions · failed attempts · successful solutions · prior discussions.
+
+Two behaviors depend on it:
+
+- **Continuity** — Mission N starts by recalling what Missions 1..N-1 established, instead of re-deriving it.
+- **Sprint Learning** — when work fails, the next attempt reads the previous attempts, the Reviewer's comments, and the failure reasons *first*. This is project learning, not model fine-tuning.
+
+Selective recall is mandatory: injecting the entire history into every prompt would blow the context window. Relevance selection is itself a design surface and must be observable (`memory.recalled` events).
+
+---
+
+## 6. V1 As-Built (what exists today)
+
+### 6.1 Modules
 
 | Module | Responsibility | Status |
 |---|---|---|
-| `event_bus` | Persist → fan out → SSE push. Dependency floor: depends only on core. | ✅ In-process |
-| `projects` | Company CRUD. Founding a company auto-creates a Department with 3 Employees (PM / Engineer / Reviewer), each founded with default `AgentProfile` field values, and posts each Employee's template `intro` line as a task-less conversation event. `GET /projects/{id}/starters` serves the template's one-click starter Mission suggestions. | ✅ |
-| `tasks` | Mission CRUD, assignment, Meeting messages, `deliverable_type: "code" \| "document"` (defaults `"code"`). Assignment triggers the workflow. Serves `GET /tasks/{id}/diff` (real diff + truncation flag) since it owns `branch_name`. | ✅ |
-| `workflow_engine` | The brain. PM → Engineer → checks → Reviewer pipeline as background asyncio tasks; publishes every beat; creates CEO Decisions. System prompts built per call via `prompt_builder.build(profile, role, deliverable_type)`. For code missions, the Engineer's FILE-block output is parsed (`parsing.parse_file_blocks` / `parse_change_summary`), written + committed to the mission branch via `WorkspaceManager`, then `_run_checks` detects which of the template's `CheckSpec`s apply to the landed file tree and runs them through `SandboxRunner` before the Reviewer sees the diff — the Reviewer's context becomes the Change Summary + a real (possibly truncated) diff + a short plain-language checks summary, never the raw deliverable text. Zero valid FILE blocks silently falls back to a document mission rather than failing the pipeline; execution disabled, no sandbox, or zero matched checks all short-circuit `_run_checks` to a no-op with zero events. Approve → merge → `branch.merged`; reject → branch left unmerged; request_changes → same-branch recommit (attempt+1); merge conflict → `blocked` with a plain-language reason (no AI code is ever executed to resolve it). | ✅ Single fixed pipeline |
-| `agent_runtime` | Employee state + validated transitions (state machine in `core/lifecycle`). Founds Employees with role-keyed default `AgentProfile`s. | ✅ DB-backed |
-| `templates` | Not an event-driven module — a static internal data file (`app/templates/software_company.py`, §10.6). Single source of the founding trio, pipeline role order, each role's immutable prompt contract, founding profile defaults, and onboarding data (intro lines, starter Missions). `agent_runtime`, `workflow_engine`, and `prompt_builder` all read from it; no component branches on a hardcoded role name. One template, no picker (§10.4). | ✅ |
-| `agent_profiles` | CEO-editable Employee configuration: `AgentProfile` (personality / working style / decision style / custom instructions / per-Employee model override), persisted as JSON on `AgentORM.profile`. `GET`/`PUT /api/agents/{agent_id}/profile`; `PUT` emits `agent.profile_updated` (changed fields only) via EventBus. | ✅ |
-| `prompt_builder` | Pure function: `AgentProfile` + role → system prompt. Layers personality/working/decision trait text, then optional custom instructions, then the immutable per-role contract appended LAST — no profile configuration (including adversarial custom instructions) can suppress the Reviewer's trailing `**Verdict:**` requirement. No DB/provider deps. | ✅ |
-| `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (httpx, streaming, retry-with-backoff). Verdicts parsed from a trailing `**Verdict:**` line — provider-agnostic. Resolves models via three-tier precedence: Employee `profile.model_ref` override > CEO per-role override > registry default. | ✅ |
-| `model_registry` | Logical refs (`planner-default`, `builder-default`, `reviewer-default`, `reporter-default`) → (provider, model). `COMMANDER_PROVIDER=mock\|anthropic`. CEO can reassign the model behind planner/builder/reviewer per company (override stored in `settings_kv`, Anthropic only — mock roles are template-locked). | ✅ |
-| `costs` | Per-call token usage → USD via `PRICE_PER_MILLION_TOKENS`. Payroll (calendar-month, per company + per Employee) and Mission Budget (all-time, per mission) summaries. | ✅ |
-| `approvals` | CEO Decisions: approve → completed · request_changes → Engineer re-run (attempt+1) · reject → cancelled. | ✅ |
-| `timeline` | Cursor-paginated event reads + kind filter, newest-first (`cursor=None` returns the most recent page; passing back the returned `next_cursor` walks further into the past). | ✅ |
+| `event_bus` | Persist → fan out → SSE push. Depends only on core. | ✅ In-process |
+| `projects` | Company CRUD. Founding auto-creates a Department with 3 Employees (PM / Engineer / Reviewer) from the template, posts each intro as a conversation event, serves starter Missions. | ✅ |
+| `tasks` | Mission CRUD, assignment, Meeting messages, `deliverable_type: "code" \| "document"`. Assignment triggers the workflow. Serves `GET /tasks/{id}/diff`. | ✅ |
+| `workflow_engine` | The brain. PM → Engineer → checks → Reviewer as background asyncio tasks. Parses FILE blocks, commits to the mission branch, runs matched `CheckSpec`s through `SandboxRunner`, hands the Reviewer a Change Summary + real diff + checks summary. Approve → merge; reject → branch preserved; request_changes → same-branch recommit; merge conflict → `blocked` with a plain-language reason. | ⚠️ **Single fixed 3-stage pipeline, positional role unpacking** — Sprint 9 generalizes |
+| `agent_runtime` | Employee state + validated transitions. Founds Employees with role-keyed defaults. | ⚠️ **Agent ≡ role; no Role/Employee split** — Sprints 10–11 |
+| `templates` | Static internal data file (`app/templates/software_company.py`). Single source of the founding trio, pipeline order, role contracts, founding profile defaults, onboarding data, `CheckSpec`s. | ⚠️ **Covers roles+workflow only; no tool registry, approval flow, or template registry** — Sprints 10–11, 19 |
+| `agent_profiles` | CEO-editable personality / working style / decision style / custom instructions / per-Employee model override, persisted as JSON on `AgentORM.profile`. | ✅ |
+| `prompt_builder` | Pure function: profile + role → system prompt. Role contract appended **last**, so no custom instruction can suppress the Reviewer's trailing `**Verdict:**`. | ✅ |
+| `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (streaming, retry-with-backoff). Three-tier model resolution: Employee override > CEO per-role override > registry default. | ✅ |
+| `model_registry` | Logical refs (`planner-default`, `builder-default`, …) → (provider, model). | ✅ |
+| `costs` | Per-call token usage → USD. Payroll (monthly, per company + per Employee) and Mission Budget (all-time, per mission). | ⚠️ **Accounting only; no enforcement** — Sprint 9 adds budget guards |
+| `approvals` | CEO Decisions: approve → completed · request_changes → re-run (attempt+1) · reject → cancelled. | ✅ |
+| `timeline` | Cursor-paginated event reads + kind filter, newest-first. | ✅ |
 | `realtime` | SSE stream per company; live streaming deltas for in-flight replies. | ✅ |
-| `reports` | On-demand CEO Daily Report: trailing-24h summary (missions, decisions, payroll, highlights) from the Timeline's own event history, written via `ProviderGateway`. Now its own page/list (`/reports`), not a Headquarters card. | ✅ |
-| `situation` | `GET /projects/{id}/situation` — 1-2 sentence PM-voiced glanceable status (pending decisions, missions in flight, last notable event), generated via `ProviderGateway` with a deterministic mock fallback. Ephemeral/uncached, regenerated on read; distinct from the Daily Report. | ✅ |
-| `core/secrets` | `SecretsProvider` port. `DBSecretsProvider`: `settings_kv` override → `.env` fallback, so keys can be pasted in Company Settings at runtime. Write-only through the API. | ✅ Plaintext (local MVP) |
-| `auth` | Single hardcoded local CEO. | 🔲 Placeholder |
-| `workspace_manager` | One real git repo per company at `${COMMANDER_WORKSPACE_ROOT}/{project_id}` (`LocalGitWorkspaceManager`, plain `git` CLI via async subprocess). Branch-per-mission (`mission/{task_id[:8]}`); lazy-init with a `README.md` on `main`; path validation (relative-only, no `..`, no symlink escape, no `.git`); limits of 30 files / 256KB / text-only per write (violations skipped + reported, never fail the mission); `diff()` truncates at `max_chars` and flags `truncated`. Read-only browsing (`tree`/`file`/`merges`) served from `workspace_manager/routes.py`; the per-mission diff is served from `tasks/routes.py` since only `TaskORM` knows `branch_name` (DECISIONS.md #94). | ✅ |
-| `sandbox` | The one controlled place AI-generated code is ever executed. `SandboxRunner` port (`core/interfaces/sandbox.py`) + `DockerSandbox` (`docker create` → tar-copy the landed branch files in → run a template-defined `CheckSpec` command → capture stdout/stderr tail (10k chars) → always destroy the container) and `FakeSandbox` for tests. Constraints: no network, memory/cpu/pids caps, non-root, 120s hard kill, auto-remove. `CheckSpec`s (name / `detect_globs` / command) are trusted data from `templates/software_company.py` — never AI-authored or AI-chosen; `detection.py` glob-matches the landed file tree to decide which checks apply. `GET /api/system/capabilities` probes Docker + the sandbox image at runtime; `execution-settings` (`settings_kv`, default enabled) lets the CEO turn checks off per company. Degrades silently to a no-op (zero events, `check_results: null`) when Docker/the image is absent or the toggle is off — the rest of the pipeline is unaffected either way. | ✅ Docker (graceful no-op without Docker Desktop) |
-| `core/db` + Alembic | PostgreSQL (via `docker-compose`, Phase 1) is the default datastore; SQLite (`aiosqlite`) remains a zero-dependency fallback for tests and CI. Schema is owned by Alembic (`apps/api/alembic/`, async env) — `create_all` now only fires for the SQLite test path; a Postgres boot runs `alembic upgrade head` instead (`db.py: init_db`). `make db-up` / `db-upgrade` / `db-downgrade` wrap the compose lifecycle + migrations. | ✅ |
-| `core/boot_checks` | Fail-fast startup validation, run before `init_db()` in `main.py`'s lifespan: `COMMANDER_PROVIDER=anthropic` with no key anywhere, or a `DATABASE_URL` that isn't `sqlite`/`postgresql`, raises `BootConfigError` and exits cleanly (`SystemExit(1)`, plain-language stderr message, no traceback) instead of failing confusingly on the first Mission or with a raw connection error. | ✅ |
+| `reports` | On-demand CEO Daily Report from the Timeline's own history. | ✅ |
+| `situation` | `GET /projects/{id}/situation` — 1–2 sentence PM-voiced glanceable status, generated with a deterministic mock fallback. | ⚠️ **Repurposed in V1.1** as the PM conversation's opening report (§UX_SPEC §11.3); the standalone UI block is removed |
+| `core/secrets` | `SecretsProvider` port; `DBSecretsProvider` reads `settings_kv` override → `.env` fallback. Write-only through the API. | ✅ Plaintext (local MVP) |
+| `workspace_manager` | One real git repo per company; branch-per-mission; path validation (relative-only, no `..`, no symlink escape, no `.git`); 30 files / 256KB / text-only per write; truncating `diff()`. Read-only browsing routes. | ✅ |
+| `sandbox` | The one controlled place AI-generated code is executed. `SandboxRunner` port + `DockerSandbox` + `FakeSandbox`. See §7. | ✅ |
+| `core/db` + Alembic | Postgres default (Docker Compose), SQLite for tests. Schema owned by Alembic. | ✅ |
+| `core/boot_checks` | Fail-fast startup validation before `init_db()`. | ✅ |
+| `auth` | — | 🔲 **Empty placeholder** — Sprint 9 |
+| `roles`, `employees`, `specifications`, `memory`, `widgets` | — | 🔲 **Do not exist** — Sprints 10–18 |
 
-### Lifecycles
+### 6.2 Lifecycles
 
 Agent: `Idle → Assigned → Planning → Working → WaitingReview → (Blocked) → Completed/Failed → Idle`
 Task: `backlog → in_progress → waiting_review → completed / cancelled / failed`
 
 All transitions validated in `core/lifecycle/state_machine.py`; every transition emits an event with a reason.
 
-### Dependency Rules
+### 6.3 Dependency rules
 
 ```
 Events (core)  →  Domain Modules  →  Workflow  →  API
@@ -121,73 +317,78 @@ Events (core)  →  Domain Modules  →  Workflow  →  API
 
 No circular deps. Modules communicate only via EventBus. Agents never call each other or providers directly.
 
----
+### 6.4 Known structural debt entering V1.1
 
-## Frontend (Headquarters)
+Identified by code review at the V1.1 planning gate; scheduled into Sprint 9:
 
-Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark Render.com-style theme, Commander terminology throughout.
-
-- **My Companies** `/` — founding invitation (name + optional "what should it build") that skips straight to a live Mission when filled in; `CompanyCard` per company (status word, "n/m Missions" milestone bar, live employee avatar stack, latest activity line, decision badge)
-- **Headquarters** `/company/[id]` — top to bottom: Decision strip hero (pending `DecisionCard`s, quiet "Nothing needs your decision." when empty) → Situation Report block (PM attribution + timestamp) → four Vitals linked to their source pages (Missions active, Employees working now, Risks open — proxied via FAILED-mission count, Payroll this month) → condensed live Timeline with an "Open full Timeline" link
-- **Missions** — kanban (Backlog / Developing / Needs your decision / Done); empty state offers a one-click starter Mission (from the template's `starters`, via `GET /projects/{id}/starters`) + create modal; create form includes a code/document deliverable toggle (defaults code)
-- **Mission detail / Meeting** — conversation-kind transcript with live streaming replies, CEO can message, Mission Budget spent, reuses `DecisionCard` for its pending Approval. Code missions render `ChangeSummaryCard` instead of raw deliverable text: Change Summary + aggregate stats (`N files +A -D`) + verdict chip, with the real diff lazily fetched and expandable per-file only on request — the diff is never the landing view. When a mission ran automated checks, `ExecutionResults` (chips per check + duration, output tail behind a click) appears below the deliverable, and both `ChangeSummaryCard` and `DecisionCard` show a one-line checks verdict (`checksSummary()`, computed client-side from `check_results` so it can never drift from the chip data)
-- **Workspace** `/company/[id]/workspace` — the company's real git-backed codebase: file tree + file viewer (`GET /projects/{id}/workspace/tree`\|`/file`) and recent merge history (`GET /projects/{id}/workspace/merges`), all read-only
-- **Employees** — live state cards
-- **Decisions** `/company/[id]/decisions` — Pending / History tabs; `DecisionCard`'s full anatomy (Problem / Recommendation with reviewer attribution / Risk / Impact + Approve · Request changes · Reject), History adds the CEO's decision + outcome
-- **Timeline** `/company/[id]/timeline` — full-page live feed (cursor-paginated "load earlier"), filter tabs (All / Meetings / Decisions / System), CEO view ↔ Technical view toggle (hidden mechanism-event set defined as data in `lib/timelineVocabulary.ts`), 4+ consecutive minor system events collapse into an expandable digest row. `execution.completed` is never digested — in CEO view its server-set `reason` already reads as a plain verdict via the default row; Technical view gets a dedicated expandable `ExecutionRow` with a per-check breakdown
-- **Reports** `/company/[id]/reports` — list + Generate Report button; **Report detail** `/company/[id]/reports/[reportId]` — full report + past-report history
-- **Company Settings** — provider select, write-only API key field, per-role model reassignment, Execution Sandbox toggle (always interactive — a durable preference, not a live control — with an explanatory note when Docker Desktop/the sandbox image is unavailable)
-- **Status vocabulary** — one external-facing status word table (`components/StatusWord.tsx`) shared by every card/badge/kanban column/filter; `companyStatusWord()` reduces a company's Missions to a single priority-ranked token for `CompanyCard`
-- Realtime: one SSE connection per company (`RealtimeProvider`), events dedup by id, query invalidation per event, transient streaming-delta bubble for in-flight replies
-- **Resilience (Sprint 7)** — `ApiStatusBanner` polls `GET /api/health` every 5s (`retry: false`) and shows a sticky top banner when the API is unreachable; `useEventStream` surfaces a `ConnectionStatus` ("connecting" \| "open" \| "reconnecting") through `RealtimeProvider`/`useRealtimeConnectionStatus`, rendered as a small "Reconnecting…" pill in the Sidebar. The browser's native `EventSource` already retries indefinitely on its own — this only adds visibility, not retry logic.
+1. **Orphaned missions.** The pipeline runs as fire-and-forget `asyncio.create_task` with no recovery on startup. A restart leaves missions permanently `in_progress`, and no cancel route exists.
+2. **No budget enforcement.** `costs` records spend after the fact; nothing stops a runaway or concurrent burn.
+3. **Detached ORM reuse.** `_run_pipeline` reads ORM attributes after its session closes; a fallback currently masks it. Loops will break it.
+4. **Positional role unpacking.** `_PM, _ENGINEER, _REVIEWER = TEMPLATE.roles` breaks the moment a fourth role exists.
+5. **Sandbox hardening gaps.** `--cap-drop ALL` and `--security-opt no-new-privileges` are not set (residual, low severity — non-root and no-network already hold).
 
 ---
 
-## Accepted MVP Tradeoffs (deliberate — see docs/DECISIONS.md)
+## 7. Security Model
 
-- In-process EventBus → single API worker only; subscribers run inline in `publish` (a slow subscriber delays publish)
-- Secrets stored plaintext (in Postgres/SQLite, whichever backs the deployment)
-- Conversation filtering for Meetings done in Python (small per-company volume)
-- Failure handling minimal: provider error → Mission `failed` + event (full retry/escalation policy in `docs/backend/workflow/FAILURE_HANDLING.md` deferred)
-- No connection pooling tuning, no read replicas, no backup/restore tooling — a single Postgres container is assumed local-dev scale
-- `/api/health/db` is a synchronous round-trip check, not a background-polled health cache — fine at V1's request volume, would need revisiting under real load
+### 7.1 Execution — what runs, and what never does
 
-Future extraction points if scaled: Agent Runtime Service, Workflow Service, Event Service (broker-backed bus), Cloud Runner (Sprint 6's local `DockerSandbox` is the first materialization of this — same `SandboxRunner` port a hosted/remote runner would implement).
+- **The command is never AI output.** `CheckSpec.command` (e.g. `pytest`, `node --test`) is trusted data in the template. The Employee's output — deliverable, FILE blocks, prose — is never parsed for commands and never reaches a shell. Only the *presence* of matching files (`detect_globs`) selects which fixed commands run.
+- **Isolation, per run:** fresh container → tar-copy the landed branch files in → run one fixed command → capture output tail → destroy unconditionally, even on failure or timeout. No container is reused.
+- **Constraints:** no network (`--network none`), memory / CPU / PIDs caps, non-root user, 120s hard kill-and-reap. *Sprint 9 adds `--cap-drop ALL` and `--security-opt no-new-privileges`.*
+- **Fails closed, never open:** Docker missing, image absent, check timed out, or CEO toggle off → no-op (`check_results: null`, zero events). It never falls back to running anything unsandboxed. Capability is probed live, never assumed.
+- **The harness changes none of this.** When agents gain tool loops (Sprint 16), the only execution tool is `run_checks`. There is no path by which an agent obtains a shell, and blocklists are never accepted as a substitute for the whitelist (Rule #12).
 
----
+### 7.2 Authorization  *[V1.1 — Sprint 9]*
 
-## Not Built Yet (requires an explicit sprint brief)
-
-Deployment/Launch · auth · hosted/remote cloud runner (beyond the local Docker sandbox) · additional providers (OpenAI/Google/OpenRouter/local) · plugin marketplace · multi-company orgs.
-
-**Sandbox gate:** AI-generated code is never executed, installed, evaluated, or spawned on the host, and never via an AI-chosen command — full stop. Sprint 6 opens exactly one controlled exception to "nothing is ever run": template-defined, trusted `CheckSpec` commands (never Engineer/AI-authored) executed inside an isolated, network-disconnected, resource-capped, non-root, auto-destroyed Docker container, gated behind a live capability probe and a CEO-controlled per-company toggle, and silently absent when Docker isn't available. The Reviewer still audits the diff statically; sandboxed check output is additional evidence handed to the Reviewer and the CEO, not a replacement for that audit.
-
----
-
-## Security Model: Sandboxed Execution (Sprint 6)
-
-What actually runs, and what never does:
-
-- **The command is never AI output.** `CheckSpec.command` (e.g. `pytest`, `node --test`) is trusted data hardcoded in `templates/software_company.py`. The Engineer's own output — the deliverable, the FILE blocks, any prose — is never parsed for commands and never reaches a shell. Only the *presence* of matching files (via `detect_globs`) decides which trusted, fixed commands run.
-- **Isolation, per run:** `docker create` a fresh container from the pinned sandbox image → tar-copy the landed branch's files in → run the one fixed command → capture stdout/stderr (10k-char tail) and exit code → `docker rm` unconditionally, even on failure/timeout. No container is ever reused across checks or missions.
-- **Constraints on the container:** no network (`--network none`), memory/CPU/PIDs caps, non-root user, 120s hard kill-and-reap. A stuck or malicious process can't outlive the timeout, can't exhaust the host, and can't reach anything else on the network.
-- **Fails closed, never open:** if Docker isn't running, the sandbox image isn't built, a check times out, or the CEO has the toggle off, `_run_checks` short-circuits to a no-op (`check_results: null`, zero events) — it never falls back to running anything unsandboxed. Capability is probed live (`GET /api/system/capabilities`), never assumed.
-- **What the sandbox is not:** it does not make the product "run AI code" in the general sense — it runs a small, fixed menu of static-analysis/test commands the CEO's own template chose in advance, against files the CEO already reviewed were committed. The Reviewer's static diff audit is unchanged and still authoritative; check output is corroborating evidence, never a substitute for it.
+- Session-cookie authentication (HttpOnly), session tokens stored as hashes, sliding expiry.
+- Every Company has an owner; every route outside health and auth requires a session.
+- Cross-account access returns **404, not 403** — existence is not disclosed (Rule #15).
+- Password hashes only; no plaintext column exists anywhere in the schema.
+- The identity provider is an interface with one implementation (local email+password); adding Google OAuth must be one new file, not a refactor.
 
 ---
 
-## Design Principles
+## 8. Frontend Architecture
 
-1. CEO first, never developer first
-2. AI are Employees, never tools
-3. Everything observable — nothing happens silently
-4. Every important decision explainable
-5. Every model replaceable
-6. Event-driven, never tightly coupled
-7. Mock mode must always work — the product demos with zero API keys
+Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark, Render-inspired calm.
+
+**V1.1 target layout** (detailed in UX_SPEC §11): entering a company presents **the PM conversation as the primary surface**, with a customizable **Widget Dock** beside it and a thin sidebar for deeper pages. New CEO-facing capability lands as a Widget or a Sidebar page (Rule #17) — never bolted onto the conversation.
+
+**V1 as-built surfaces** (all real, all shipping today): My Companies · Headquarters · Missions kanban + detail · Employees + profile · Timeline (CEO/Technical toggle, filters, digest grouping) · Decisions (Pending/History) · Reports · Workspace browser · Company Settings. These are not discarded in V1.1 — most become Sidebar pages, and their summaries become Widgets.
+
+Cross-cutting: one SSE connection per company, events dedup by id and invalidate queries; generated event types only; `ApiStatusBanner` polls health; SSE connection status surfaces as a "Reconnecting…" pill; a persistent "Simulation mode" badge whenever the company runs on mock.
 
 ---
 
-## Doc Sync Rule
+## 9. Accepted Tradeoffs & Deferred Risks
 
-Any architecture change must update **ARCHITECTURE.md and CLAUDE.md in the same commit**. Desync is an architecture violation.
+### 9.1 Accepted MVP tradeoffs (deliberate — see `docs/DECISIONS.md`)
+
+- In-process EventBus → single API worker; subscribers run inline in `publish`
+- Secrets stored plaintext in the database
+- Conversation filtering done in Python (small per-company volume)
+- Minimal failure handling: provider error → Mission `failed` + event
+- No connection pooling tuning, read replicas, or backup tooling — single local Postgres assumed
+- `/api/health/db` is a synchronous round-trip, not a polled cache
+
+Future extraction points if scaled: Agent Runtime Service, Workflow Service, broker-backed Event Service, Cloud Runner (the local `DockerSandbox` is the first materialization of that port).
+
+### 9.2 Why only one template ships in V1.1
+
+The architecture is template-driven from Sprint 10. Shipping a second template is a separate, later decision governed by these risks, which are unchanged from the V1 analysis:
+
+1. **The verifiability cliff.** Software is the easiest domain in which to build trust: tests pass or fail, diffs can be audited. Marketing copy and research have no such ground truth, and a Reviewer's verdict becomes an opinion. Every new template needs real domain audit criteria or the Decision loop — the product's core — degrades into theater.
+2. **The prompt-pack trap.** A template that only swaps titles and personas produces N orgs with identical shallow output. Real differentiation needs deliverable types, audit criteria, and workflow shapes per domain.
+3. **Wedge dilution.** "AI dev company" is a sharp story; "OS for any AI organization" is a vision statement. Marketing the vision before the wedge wins means competing everywhere and excelling nowhere.
+4. **Surface explosion.** Every template multiplies the testing matrix, mock content, onboarding paths, and support burden.
+
+Criterion for template #2: the software company sustains real usage quality first, and the second domain is chosen for auditability (e.g. a technical-documentation studio) before opinion-heavy domains.
+
+---
+
+## 10. Doc Sync Rule
+
+Any architecture change must update **ARCHITECTURE.md and CLAUDE.md in the same commit**, and UX_SPEC.md too when the change is CEO-facing. Desync is an architecture violation.
+
+These three documents must never contradict each other. When they do, `ARCHITECTURE.md` governs system structure, `UX_SPEC.md` governs the CEO's experience, and `CLAUDE.md` governs day-to-day implementation rules — reconcile in that order of scope and fix all three in one commit.
