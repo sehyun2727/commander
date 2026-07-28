@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 8.5 — V1.1 Kickoff (Documentation Integration)
- Overall: 19/35 items · 54%
- Now working on: Phase 3 — cross-document consistency
- Last update: 2026-07-28 01:10
+ Overall: 25/35 items · 71%
+ Now working on: Phase 4 — repository cleanup
+ Last update: 2026-07-28 01:45
  (total corrected 40->35 at Phase 2 close: true count of all [ ]/[x] lines
  across Phase 0-5; prior header's 40 was a miscount, not a scope change)
  (n/m and % in this header must always match item state)
@@ -78,13 +78,38 @@ PHASE 2 — 코드 대조 검증                                       (9/9)
          prevented, just via resolve()+relative_to() rather than an explicit
          check. Claim CONFIRMED true, not a discrepancy.
 
-PHASE 3 — 문서 간 정합성                                       (0/6)
-[ ] 3.1  중복 서술 claim map 작성 + 완전 일치 확인
-[ ] 3.2  로드맵 스프린트 번호 3문서 동일 확인
-[ ] 3.3  조직도 2종 + UX_SPEC §3.1/§5 상호 일치
-[ ] 3.4  모든 § 참조 · 파일 경로 · 규칙 번호 해석 가능
-[ ] 3.5  기계적 오류만 수정, 실질 문제는 보고로
-[ ] 3.6  커밋+푸시: cross-document consistency pass
+PHASE 3 — 문서 간 정합성                                       (6/6)
+[x] 3.1  claim map: 철학 인용구/두 축 조직도/규칙#11-17/Decision authority 표 등
+         3문서 교차 서술 전부 대조 -- 전부 일치. +discovery: CLAUDE.md §2 예시
+         (Backend Engineer: Kim/Lee/Park) vs UX_SPEC §5.4 예시 (Park는
+         Frontend Engineer 소속으로 표기) -- 동일 인물 예시가 두 문서에서
+         다른 role에 배치됨. 순수 예시라 아키텍처에 영향 없음, 판단 소관이라
+         임의 수정하지 않고 보고만 함
+[x] 3.2  로드맵 스프린트 번호 검증 -- CLAUDE.md §9 표(Phase A~H, Sprint 9~20) 기준
+         ARCHITECTURE.md 전체(event families표/§4.2/4.3/4.4/4.5/§5/§6.1/§6.4/§7.2)
+         + UX_SPEC.md 전체(§2/§3/§4 widget표/§5.1/§5.2/§5.4/§8) 스프린트 인용
+         전부 대조 -- 100% 일치, 불일치 0건
+[x] 3.3  조직도 2종(CLAUDE §2 · ARCHITECTURE §1.1) 상호 일치 확인 + UX_SPEC
+         §3.1(PM만 대화 상대)/§5.2(Minor·Major·Critical 분류) 대조 -- 전부 일치
+         (CLAUDE Rule #11 문구가 UX_SPEC §3.1과 거의 축자적으로 동일)
+[x] 3.4  § 참조/파일 경로/규칙 번호 전수 검사 -- CRITICAL FINDING: ARCHITECTURE.md
+         가 존재하지 않는 "UX_SPEC §11"을 3곳에서 인용 (실제 UX_SPEC은 §10까지만
+         존재). 라인 109 "UX_SPEC §11.5"→실제 내용은 §10.2(Hidden means absent);
+         라인 296 "§UX_SPEC §11.3"(중복 § 오타까지)→실제 내용은 §3.2(PM Report);
+         라인 356 "UX_SPEC §11"→실제 내용은 §3-§4(CEO Workspace+Widget Dock).
+         기계적 오류(존재하지 않는 절 번호)로 판단, 3곳 모두 올바른 번호로 수정.
+         파일 경로 17개 전부 disk 존재 확인 (templates/software_company.py,
+         core/boot_checks.py, scripts/*, docs/* 등) -- 전부 OK.
+         +discovery: ARCHITECTURE §8이 "My Companies·Headquarters"를 V1 as-built
+         surface로 서술(현재 대시보드에 실재, Sidebar.tsx/company/[id]/page.tsx
+         확인됨)하면서 "not discarded in V1.1"이라 하지만, UX_SPEC §2 IA트리와
+         §7 "Sidebar Pages (V1 surfaces, retained)" 목록 어디에도 Headquarters가
+         없고 landing이 "My Companies"→"Projects"로 개명됨. Headquarters 페이지가
+         V1.1에서 정확히 어떻게 되는지(위젯으로 흡수/완전 대체/유지) 3문서 어디도
+         명시하지 않음 -- 설계 판단 소관이라 임의 결정하지 않고 보고만 함
+[x] 3.5  기계적 오류만 수정(위 3.4의 §11 참조 3건), 위 두 건의 실질적 불일치는
+         수정하지 않고 보고 전용으로 남김
+[x] 3.6  커밋+푸시: cross-document consistency pass
 
 PHASE 4 — 레포 정리                                            (0/5)
 [ ] 4.1  V1.5 계획 참조 제거 (docs/prompts 이력은 보존)

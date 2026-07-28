@@ -106,7 +106,7 @@ Template
 
 Future templates (Marketing Agency, Game Studio, Research Lab, Law Firm, Consulting) must require **adding a data file, not redesigning a system.** That is the whole point of the abstraction.
 
-**Only `software_company` ships in V1.1.** No template picker, no "coming soon" entries — hidden means absent (UX_SPEC §11.5). The gating criterion for a second template is unchanged and still binding: outputs must be **semi-objectively auditable**, or the Decision loop degrades into theater. See §9.2.
+**Only `software_company` ships in V1.1.** No template picker, no "coming soon" entries — hidden means absent (UX_SPEC §10.2). The gating criterion for a second template is unchanged and still binding: outputs must be **semi-objectively auditable**, or the Decision loop degrades into theater. See §9.2.
 
 ---
 
@@ -293,7 +293,7 @@ Selective recall is mandatory: injecting the entire history into every prompt wo
 | `timeline` | Cursor-paginated event reads + kind filter, newest-first. | ✅ |
 | `realtime` | SSE stream per company; live streaming deltas for in-flight replies. | ✅ |
 | `reports` | On-demand CEO Daily Report from the Timeline's own history. | ✅ |
-| `situation` | `GET /projects/{id}/situation` — 1–2 sentence PM-voiced glanceable status, generated with a deterministic mock fallback. | ⚠️ **Repurposed in V1.1** as the PM conversation's opening report (§UX_SPEC §11.3); the standalone UI block is removed |
+| `situation` | `GET /projects/{id}/situation` — 1–2 sentence PM-voiced glanceable status, generated with a deterministic mock fallback. | ⚠️ **Repurposed in V1.1** as the PM conversation's opening report (UX_SPEC §3.2); the standalone UI block is removed |
 | `core/secrets` | `SecretsProvider` port; `DBSecretsProvider` reads `settings_kv` override → `.env` fallback. Write-only through the API. | ✅ Plaintext (local MVP) |
 | `workspace_manager` | One real git repo per company; branch-per-mission; path validation (relative-only, no `..`, no symlink escape, no `.git`); 30 files / 256KB / text-only per write; truncating `diff()`. Read-only browsing routes. | ✅ |
 | `sandbox` | The one controlled place AI-generated code is executed. `SandboxRunner` port + `DockerSandbox` + `FakeSandbox`. See §7. | ✅ |
@@ -353,7 +353,7 @@ Identified by code review at the V1.1 planning gate; scheduled into Sprint 9:
 
 Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark, Render-inspired calm.
 
-**V1.1 target layout** (detailed in UX_SPEC §11): entering a company presents **the PM conversation as the primary surface**, with a customizable **Widget Dock** beside it and a thin sidebar for deeper pages. New CEO-facing capability lands as a Widget or a Sidebar page (Rule #17) — never bolted onto the conversation.
+**V1.1 target layout** (detailed in UX_SPEC §3–§4): entering a company presents **the PM conversation as the primary surface**, with a customizable **Widget Dock** beside it and a thin sidebar for deeper pages. New CEO-facing capability lands as a Widget or a Sidebar page (Rule #17) — never bolted onto the conversation.
 
 **V1 as-built surfaces** (all real, all shipping today): My Companies · Headquarters · Missions kanban + detail · Employees + profile · Timeline (CEO/Technical toggle, filters, digest grouping) · Decisions (Pending/History) · Reports · Workspace browser · Company Settings. These are not discarded in V1.1 — most become Sidebar pages, and their summaries become Widgets.
 
