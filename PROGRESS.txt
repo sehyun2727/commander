@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 8.5 — V1.1 Kickoff (Documentation Integration)
- Overall: 30/35 items · 86%
- Now working on: Phase 5 — close
- Last update: 2026-07-28 02:15
+ Overall: 35/35 items · 100%
+ Now working on: done — kickoff complete
+ Last update: 2026-07-28 02:40
  (total corrected 40->35 at Phase 2 close: true count of all [ ]/[x] lines
  across Phase 0-5; prior header's 40 was a miscount, not a scope change)
  (n/m and % in this header must always match item state -- every time an
@@ -137,12 +137,17 @@ PHASE 4 — 레포 정리                                            (5/5)
          출시 근거, Phase 0~4 전체 자체 판단 4건(각 phase별)
 [x] 4.5  커밋+푸시: repository cleanup and decision log
 
-PHASE 5 — 종료                                                 (0/5)
-[ ] 5.1  make test → 157 passed / 4 skipped
-[ ] 5.2  git diff v1.0.0 --stat → 문서 경로만 변경
-[ ] 5.3  세 문서 연속 통독 최종 정합성 확인
-[ ] 5.4  커밋+푸시: kickoff complete
-[ ] 5.5  원격 HEAD 일치 확인
+PHASE 5 — 종료                                                 (5/5)
+[x] 5.1  pytest (apps/api, make test 핵심 스텝) → 157 passed, 4 skipped in
+         369.32s -- baseline과 정확히 일치, 코드 변경 없음 재확인
+[x] 5.2  git diff v1.0.0 --stat → 7개 파일 전부 문서 경로만: CLAUDE.md,
+         PROGRESS.txt, README.md, docs/ARCHITECTURE.md, docs/DECISIONS.md,
+         docs/design/UX_SPEC.md, docs/prompts/sprint-8.5-kickoff.md.
+         apps/ · packages/ · scripts/ · alembic/ 변경 0건
+[x] 5.3  CLAUDE.md/ARCHITECTURE.md/UX_SPEC.md 3문서 순서대로 재통독 완료 --
+         Phase 3에서 수정한 §11 참조 3건 정상 반영 확인, 새로운 불일치 없음
+[x] 5.4  커밋+푸시: kickoff complete
+[x] 5.5  원격 HEAD 일치 확인
 ================================================
 
 Baseline recorded (Phase 0.4):
