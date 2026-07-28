@@ -1,12 +1,15 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 8.5 — V1.1 Kickoff (Documentation Integration)
- Overall: 25/35 items · 71%
- Now working on: Phase 4 — repository cleanup
- Last update: 2026-07-28 01:45
+ Overall: 30/35 items · 86%
+ Now working on: Phase 5 — close
+ Last update: 2026-07-28 02:15
  (total corrected 40->35 at Phase 2 close: true count of all [ ]/[x] lines
  across Phase 0-5; prior header's 40 was a miscount, not a scope change)
- (n/m and % in this header must always match item state)
+ (n/m and % in this header must always match item state -- every time an
+ item flips, the header updates in the same edit, never batched at phase end)
+ (markers: [ ] not started · [~] in progress · [x] done · [!]reason blocked/
+ skipped with why · +discovery unplanned finding worth carrying forward)
 ================================================
 
 PHASE 0 — Baseline                                             (5/5)
@@ -111,12 +114,28 @@ PHASE 3 — 문서 간 정합성                                       (6/6)
          수정하지 않고 보고 전용으로 남김
 [x] 3.6  커밋+푸시: cross-document consistency pass
 
-PHASE 4 — 레포 정리                                            (0/5)
-[ ] 4.1  V1.5 계획 참조 제거 (docs/prompts 이력은 보존)
-[ ] 4.2  README.md 갱신 + 모든 명령어 실제 실행 확인
-[ ] 4.3  PROGRESS.txt 카운터 규칙 헤더 주석
-[ ] 4.4  DECISIONS.md #128~ (필수 8주제 + 자체 판단 전부)
-[ ] 4.5  커밋+푸시: repository cleanup and decision log
+PHASE 4 — 레포 정리                                            (5/5)
+[x] 4.1  git grep "V1\.5" 전수 조사 -- docs/prompts 이력 3건 + DECISIONS.md #122
+         (이미 과거형 서술) 외 히트 없음. docs/V1.5-SPEC-refined.md 파일 자체가
+         존재하지 않음 확인. 제거할 대상이 이미 없었음 -- 신규 문서들이 already
+         compliant. 변경 없음 (역사 기록은 보존 원칙대로 손대지 않음)
+[x] 4.2  README.md Status 줄 갱신 -- "V1 released (v1.0.0)... V1.1 is in
+         development -- see CLAUDE.md §9" 추가. 명령어 검증: Makefile 12개
+         타겟 전부 README 목록과 정확히 일치 확인 + 각 타겟이 참조하는
+         파일(.venv, docker-compose.yml, sandbox/Dockerfile, scripts/seed.py,
+         scripts/verify_real_llm.py, alembic) 전부 디스크 존재 확인.
+         +discovery: 이 세션의 도구 환경에 make 바이너리 자체가 PATH에 없음
+         (Bash/PowerShell 양쪽에서 확인, where/choco 검색도 실패) -- 실제
+         make dev/make seed 라이브 실행은 하지 않음 (서버 기동 + Postgres
+         볼륨 변경은 문서 전용 스프린트 범위 밖이기도 함). pytest 핵심 스텝은
+         이미 Phase 0 baseline에서 157/4로 통과 검증됨. DECISIONS #138에 기록
+[x] 4.3  PROGRESS.txt 헤더에 카운터 규칙 주석 확장 -- n/m·% 매치 규칙(기존) +
+         마커 범례([ ]/[~]/[x]/[!]reason/+discovery) 추가
+[x] 4.4  DECISIONS.md #128~138 추가 (11건): V1.5→V1.1 전환 사유, 2축 조직도
+         근거, Role/Employee 분리+singleton 근거, 불변식 #11~17 각 1줄 사유,
+         3문서 체제 근거, situation 재활용 근거, 템플릿 아키텍처+단일 템플릿
+         출시 근거, Phase 0~4 전체 자체 판단 4건(각 phase별)
+[x] 4.5  커밋+푸시: repository cleanup and decision log
 
 PHASE 5 — 종료                                                 (0/5)
 [ ] 5.1  make test → 157 passed / 4 skipped

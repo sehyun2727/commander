@@ -1489,3 +1489,205 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     the documented one-command way to re-verify with a key; flagging
     the absence of a fresh real-key run as this sprint's one carryover
     limitation rather than skipping it silently.
+
+## Sprint 8.5 — V1.1 Kickoff (Documentation Integration)
+
+128. **V1.5 plan superseded by V1.1, not merged with it.** The old
+    two-phase roadmap (V1 in Sprints 7-8, then a monolithic "V1.5" of
+    Agent Harness + CTO + PM Specification + Project Memory in one
+    block, spec'd in a `docs/V1.5-SPEC-refined.md` that was never
+    actually created) is retired outright. V1.1 replaces it with a
+    12-sprint phased roadmap (CLAUDE.md §9, Sprints 9-20) that breaks
+    the same underlying capability set into ordered, independently
+    shippable phases (reliability -> org model -> planning -> CEO
+    experience -> harness -> memory -> cleanup), each gated by its own
+    sprint brief. Reason: a single undifferentiated "V1.5" sprint was
+    too large to brief, build, or verify as one unit — this sprint's
+    own three-document rewrite is the first artifact of that
+    decomposition. `docs/V1.5-SPEC-refined.md` never existed on disk
+    (grep confirmed); no reference to it survives outside historical
+    `docs/prompts/` sprint briefs and one already-past-tense
+    `docs/DECISIONS.md` entry (#122, Sprint 7), both preserved as
+    record per the brief's own instruction not to rewrite history.
+
+129. **Two-axis org model (decision vs. delegation) instead of one
+    chart.** A single org tree can't represent both facts at once:
+    PM and CTO are peers while a Specification is being planned
+    (neither reports to the other), but once work is approved, the
+    CTO assigns down to Employees and results climb back through the
+    PM (CLAUDE.md §2, ARCHITECTURE.md §1.1). Collapsing this into one
+    hierarchy diagram would force a false reporting relationship in
+    one phase or the other. Drawing the two phases as two separate,
+    explicitly-labeled diagrams (Decision axis / Delegation axis) is
+    the documents' own resolution, carried into both CLAUDE.md and
+    ARCHITECTURE.md identically (verified word-for-word in Phase 3.3).
+
+130. **Role/Employee separation, with leadership roles as
+    data-layer-enforced singletons.** V1 conflates "the PM" with a
+    hardcoded Agent record; V1.1 splits this into an immutable Role
+    (owned by the Template: prompt contract, tool grants, workflow
+    position) and an unlimited-count Employee (owned by the CEO:
+    name, model, profile) bound to a role_key. Leadership roles (PM,
+    CTO, Reviewer) stay singletons — never zero, never two, enforced
+    at the data layer rather than by convention — because the CEO's
+    one conversational counterpart (Rule #11) and the Reviewer's
+    trailing-Verdict contract (prompt_builder) both depend on there
+    being exactly one of each. Worker roles (Backend/Frontend
+    Engineer and beyond) are deliberately unbounded so hiring a
+    second Engineer on a different model is a staffing action, not a
+    schema change.
+
+131. **Invariants #11-17 (CLAUDE.md §4), one line each on why:**
+    - **#11** (CEO talks only to the PM) — keeps the org metaphor
+      literal; a CEO who can also DM the Reviewer isn't running a
+      company, they're prompting workers, which is the exact
+      distinction Commander is selling.
+    - **#12** (tools are template-granted to a Role, only
+      `run_checks` exists) — extends Rule #9 into the harness era so
+      the same "whitelist, never a blocklist" guarantee holds once
+      agents get tool loops in Sprint 16, before that code exists to
+      audit.
+    - **#13** (every autonomous loop runs under a budget) — without
+      this, Sprint 16's tool loops and Sprint 12's PM<->CTO discussion
+      have no bound; budget exhaustion must be a first-class
+      organizational event (`blocked` + reason), not a silent hang or
+      infinite retry.
+    - **#14** (Project Memory is a projection over events, no second
+      store) — keeps the single-event-stream guarantee (Rule #8) from
+      quietly growing a second source of truth once Memory ships.
+    - **#15** (cross-account access is 404, not 403) — the smallest
+      correct rule once multi-account auth exists (Sprint 9); 403
+      confirms a resource exists for an account that shouldn't know
+      that.
+    - **#16** (roles are data, never a hardcoded role-name branch) —
+      the concrete engineering promise that adding Designer/QA/DevOps
+      later is a template-data change, not an engine change; directly
+      enforces the Role/Employee split (#130) in code.
+    - **#17** (new CEO-facing capability is a Widget or Sidebar page)
+      — keeps the PM conversation area from accreting ad-hoc panels
+      as the product grows past V1.1; the conversation's stability is
+      UX_SPEC's central bet (§1, §10.4).
+
+132. **Three documents, not four.** CLAUDE.md (implementation rules),
+    ARCHITECTURE.md (system structure), UX_SPEC.md (CEO experience)
+    already covered day-to-day rules, structure, and experience
+    respectively with no real gap; a fourth document would either
+    duplicate one of the three or fragment a concern (e.g. "product
+    terminology") that reads better living inside CLAUDE.md next to
+    the rules that enforce it. ARCHITECTURE.md §10 codifies the
+    precedence order for when the three ever conflict (ARCHITECTURE >
+    UX_SPEC > CLAUDE.md, narrowest scope wins) — this was itself
+    checked for consistency across all three docs in Phase 3 and
+    found to be stated identically only in ARCHITECTURE.md itself
+    (the other two don't restate it, which is fine — it's a
+    tie-breaking rule for the docs' own maintainers, not CEO- or
+    implementation-facing content).
+
+133. **`situation` module repurposed, not deleted, this sprint.** The
+    standalone Situation Report UI block is removed in the V1.1
+    target (UX_SPEC §3.2 — its content is absorbed into the PM's
+    opening conversational report so the CEO doesn't read the same
+    status twice from two different voices), but the module and its
+    `GET /projects/{id}/situation` endpoint stay exactly as they are
+    in the codebase through this sprint (ARCHITECTURE.md §6.1: "⚠️
+    Repurposed in V1.1"). The actual code change — folding its output
+    into the PM conversation — is out of scope until whichever sprint
+    builds the PM Conversation surface (Sprint 13 per CLAUDE.md §9);
+    this sprint only had to confirm the module isn't prematurely
+    deleted or orphaned by the new docs, which it isn't.
+
+134. **Template-driven architecture ships with exactly one template.**
+    ARCHITECTURE.md §1.3 defines a Template as a data document (roles,
+    workflow, approval_flow, tool_registry, prompt_templates,
+    deliverable, vocabulary, starters) specifically so a second
+    template is "add a data file," not "redesign a system" — but
+    §9.2 (unchanged from the old V1 UX_SPEC's §10 Future Expansion
+    Strategy analysis) holds that shipping a second template before
+    `software_company` sustains real usage is premature: non-software
+    domains lack software's pass/fail verifiability, so a Reviewer's
+    verdict degrades into unfounded opinion and the Decision loop —
+    the product's core mechanic — becomes theater. Building the
+    generality now while deliberately not exercising it with a real
+    second template is the documented tradeoff; it was carried
+    forward from the old UX_SPEC essentially unchanged, which this
+    sprint's Phase 0 read confirmed.
+
+135. **Phase 0-1 judgment calls.** (a) The three new documents were
+    already staged as uncommitted working-tree modifications rather
+    than needing to be authored or fetched — treated as "provided
+    with this brief" per the brief's own framing, not as a discovery
+    requiring separate installation steps. (b) Phase 1.4's "no
+    duplicate copy" check was read narrowly (no exact/near-verbatim
+    duplicate of the *new* docs' content) rather than broadly (no
+    stale architecture doc of any kind); `docs/backend/MODULES.md`,
+    `docs/backend/DEPENDENCIES.md`, and `docs/adr/README.md` are
+    Sprint-2-era docs describing a module/dependency model that
+    predates even the old V1 ARCHITECTURE.md and no longer matches
+    reality, but they aren't literal duplicates of the new docs, so
+    they're reported as a finding rather than treated as a Phase 1.4
+    failure or silently deleted (deletion is a repo-cleanup action
+    with no sprint-brief authorization here).
+
+136. **Phase 2 judgment calls.** (a) `workspace_manager`'s §6.1 claim
+    of "no symlink escape" protection was re-verified directly rather
+    than accepted as a gap on a subagent's report of "no explicit
+    `is_symlink()` call": `validate_path()` resolves the candidate via
+    `Path.resolve()` (which follows symlinks) and then checks
+    `relative_to(repo_root)`, and `local_git.py` only ever
+    `write_text()`s into that resolved path — so the guarantee holds
+    via a different, equally valid mechanism, and the claim is
+    CONFIRMED true, not a discrepancy. (b) ARCHITECTURE.md §7.1's
+    "Sprint 9 adds `--cap-drop ALL`..." clause was judged
+    correctly-future-tense rather than an overstatement, since it
+    names the sprint explicitly and matches §6.4(5)'s independent
+    statement of the same gap — read literally, it makes no claim
+    about the current state. (c) PROGRESS.txt's header item-count was
+    corrected from a pre-existing 40 to the true count of 35 (summed
+    directly from the file's own `[ ]`/`[x]` lines) when it was
+    noticed the header no longer matched item state — a bookkeeping
+    correction, not a scope change.
+
+137. **Phase 3 judgment calls.** (a) CLAUDE.md §2's worked example
+    (Backend Engineer: Kim/Lee/Park) and UX_SPEC §5.4's worked example
+    (same three names, but Park under Frontend Engineer instead of
+    Backend Engineer) disagree on which role Park illustratively
+    holds. Both are illustrative only — no architecture or scope is
+    affected either way — but which one is "correct" is an authorial
+    choice, not a typo, so it's reported rather than silently
+    resolved in one document's favor. (b) Three ARCHITECTURE.md
+    citations of a nonexistent "UX_SPEC §11" (the current UX_SPEC
+    only goes to §10) were treated as mechanical errors — wrong
+    section numbers, not wrong content — and corrected in place to
+    the sections that actually carry the cited claims (§10.2, §3.2,
+    §3-§4). (c) ARCHITECTURE.md §8 states V1's "My Companies" and
+    "Headquarters" pages are "not discarded in V1.1," but UX_SPEC
+    v2.0's own IA tree (§2) and its "Sidebar Pages (V1 surfaces,
+    retained)" list (§7) rename "My Companies" to "Projects" and omit
+    Headquarters entirely, with CEO Workspace replacing it as the
+    default landing. None of the three documents states explicitly
+    whether Headquarters survives as a page, is absorbed into
+    Widgets, or is dropped — this is a real design gap, reported
+    rather than decided, since resolving it means choosing V1.1 IA,
+    which is out of this sprint's remit.
+
+138. **Phase 4 judgment calls.** (a) Audited every "V1.5" mention
+    repo-wide (`git grep`): the only hits outside historical
+    `docs/prompts/` briefs and one already-past-tense DECISIONS.md
+    entry are the checklist line in this sprint's own kickoff brief
+    and PROGRESS.txt describing this very task — i.e. Phase 4.1 was
+    already satisfied by the new documents' own text before any edit
+    was made this phase; no removal was needed or performed. (b) This
+    session's tool environment has no `make` binary on `PATH` (checked
+    via both the Bash and PowerShell tools, and `where`/`choco`
+    turned up nothing). "Verify every command actually runs" was
+    therefore done structurally instead of by literal execution:
+    every Makefile target's underlying script/binary/compose file was
+    confirmed present on disk (`apps/api/.venv`, `docker-compose.yml`,
+    `sandbox/Dockerfile`, `scripts/seed.py`,
+    `scripts/verify_real_llm.py`, Alembic), and `make test`'s core
+    step (`pytest`) was already proven passing end-to-end in this
+    sprint's own Phase 0 baseline (157 passed / 4 skipped). Running
+    `make dev`/`make seed` live was additionally out of scope on its
+    own merits — they start long-lived servers and mutate the local
+    Postgres volume, neither of which belongs in a documentation-only
+    sprint. Flagged as a carryover limitation, not glossed over.

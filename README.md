@@ -2,7 +2,7 @@
 
 Commander is an operating system where a solo developer becomes the **CEO of an AI software company**. You never manage prompts — you found a Company, it auto-staffs with three AI Employees (PM, Engineer, Reviewer), you hand it Missions, and every action they take is visible, explainable, and reviewable before it lands.
 
-Status: **V1** — a real, working vertical slice. FastAPI backend, Postgres-backed persistence with Alembic migrations, an event-driven core, mock and real (Anthropic) providers, an SSE-realtime Next.js dashboard, a real git-backed Workspace per company, and a sandboxed execution gate for automated checks.
+Status: **V1 released** (`v1.0.0`) — a real, working vertical slice. FastAPI backend, Postgres-backed persistence with Alembic migrations, an event-driven core, mock and real (Anthropic) providers, an SSE-realtime Next.js dashboard, a real git-backed Workspace per company, and a sandboxed execution gate for automated checks. **V1.1 is in development** — see `CLAUDE.md` §9 for the roadmap (accounts, Role/Employee separation, a CTO role, PM↔CTO planning, a conversation-first CEO Workspace, an Agent Harness, and Project Memory). Everything below describes what's runnable **today**, on V1.
 
 ---
 
