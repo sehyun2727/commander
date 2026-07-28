@@ -1,9 +1,11 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 8.5 — V1.1 Kickoff (Documentation Integration)
- Overall: 9/40 items · 23%
- Now working on: Phase 2 — verify factual claims against code
- Last update: 2026-07-28 00:20
+ Overall: 19/35 items · 54%
+ Now working on: Phase 3 — cross-document consistency
+ Last update: 2026-07-28 01:10
+ (total corrected 40->35 at Phase 2 close: true count of all [ ]/[x] lines
+ across Phase 0-5; prior header's 40 was a miscount, not a scope change)
  (n/m and % in this header must always match item state)
 ================================================
 
@@ -27,16 +29,54 @@ PHASE 1 — 문서 설치                                            (5/5)
          a finding (report only, not fixed -- out of this sprint's phase list)
 [x] 1.5  커밋+푸시: install V1.1 documentation baseline
 
-PHASE 2 — 코드 대조 검증                                       (0/9)
-[ ] 2.1  as-built 모듈 표 ~20항목 검증 (설명 + 상태 마커)
-[ ] 2.2a 고아 미션: lifespan 복구 부재 · cancel 라우트 부재
-[ ] 2.2b 예산: 강제 장치 부재 (기록만 하는지)
-[ ] 2.2c detached ORM: engine.py 정확한 라인 특정 + 인용
-[ ] 2.2d positional unpacking 라인 특정
-[ ] 2.2e 샌드박스 --cap-drop / --security-opt 부재 확인
-[ ] 2.3  Security Model §7.1 문장 단위 검증 (과장 = critical)
-[ ] 2.4  불변식 #1~#10 각각 준수 여부 + 확인 위치
-[ ] 2.5  용어표 / 명령어 / 라우트 확인 + 커밋/푸시
+PHASE 2 — 코드 대조 검증                                       (9/9)
+[x] 2.1  as-built 모듈 표 ~23항목 검증 -- ALL CONFIRMED vs §6.1 status markers;
+         one claim needed deeper check (see 2.2e note) but resolved TRUE
+[x] 2.2a 고아 미션 CONFIRMED -- main.py:41-78 lifespan has no in_progress-mission
+         recovery scan; no cancel route exists. Matches §6.4(1).
+[x] 2.2b 예산 CONFIRMED record-only -- costs/service.py:16-84 computes/stores
+         USD, no enforcement/guard anywhere. Matches §6.4(2)/§6.1 costs row.
+[x] 2.2c detached ORM CONFIRMED -- engine.py:445-449,492,500 read ORM attrs
+         after session close; broad try/except masks via _fail_task(). Matches §6.4(3).
+[x] 2.2d positional unpacking CONFIRMED -- engine.py:54
+         `_PM, _ENGINEER, _REVIEWER = TEMPLATE.roles`. Matches §6.4(4).
+[x] 2.2e sandbox hardening gap CONFIRMED -- docker_sandbox.py:118-129 create
+         args have --network none/--memory/--cpus/--pids-limit/--user but NOT
+         --cap-drop ALL or --security-opt no-new-privileges. Matches §6.4(5)
+         AND §7.1's own "Sprint 9 adds..." sentence (future tense, not a
+         current-state overstatement -- checked wording explicitly, correct).
+[x] 2.3  Security Model §7.1 sentence-by-sentence -- sentences 1,2,4 CONFIRMED
+         true as-built (command never AI output; fresh-container-per-run +
+         unconditional destroy; fails closed w/ check_results:null, zero
+         events, no unsandboxed fallback -- verified via docker_sandbox.py:
+         76-113 probe, 148-177 run+finally cleanup). Sentence 3's constraints
+         (no network/caps/non-root/120s kill) CONFIRMED; its "Sprint 9 adds
+         cap-drop/no-new-privileges" clause is correctly future-tense, not
+         overstated. Sentence 5 (harness/run_checks-only) CANNOT DETERMINE --
+         describes unbuilt V1.1 Sprint-16 feature, no code exists yet to
+         check against (expected/correct for a roadmap sentence). No
+         overstatement found anywhere in §7.1 -- highest-stakes section
+         holds up. Broad grep for subprocess/shell=True/eval/exec found no
+         unsafe execution path outside the trusted CheckSpec/sandbox path,
+         independently corroborating Invariant #9.
+[x] 2.4  불변식 #1~#10 각각 확인 -- all 10 hold in current codebase (EventBus-only
+         cross-module comms, agents never call each other directly, reason
+         strings present, ProviderGateway sole AI path, no circular deps,
+         mock-mode works zero-key, SecretsProvider-only secrets, single
+         event-stream w/ kind discriminator, workspace path validation,
+         sandboxed-only execution). No violations found.
+[x] 2.5  용어표/명령어/라우트 검증 -- zero terminology leaks found in rendered
+         dashboard UI text; all 11 Makefile commands (§6 CLAUDE.md) exist and
+         wired correctly; all UX_SPEC §7 sidebar-page routes exist on disk at
+         claimed paths. Followup check (not in original agent sweep): workspace_manager
+         §6.1's "no symlink escape" ✅ claim re-verified directly -- validation.py
+         has no explicit is_symlink() call, but validate_path() (line 39)
+         resolves the candidate path via Path.resolve() (which follows
+         symlinks) then checks relative_to(repo_root) (line 41), and
+         local_git.py:86 only ever write_text()s into that resolved path
+         (never creates a symlink node) -- so escape via symlink IS
+         prevented, just via resolve()+relative_to() rather than an explicit
+         check. Claim CONFIRMED true, not a discrepancy.
 
 PHASE 3 — 문서 간 정합성                                       (0/6)
 [ ] 3.1  중복 서술 claim map 작성 + 완전 일치 확인
