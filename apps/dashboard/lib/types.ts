@@ -32,6 +32,13 @@ export interface Project {
   created_at: string;
 }
 
+export interface User {
+  id: string;
+  email: string;
+  display_name: string;
+  created_at: string;
+}
+
 export interface Agent {
   id: string;
   project_id: string;

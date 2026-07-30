@@ -1953,3 +1953,36 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     cookie jar persisting `Set-Cookie` across requests on the same client
     instance is what makes the register→cookie→authenticated-request and
     login→logout→401 flows testable in a handful of lines each.
+
+### Phase 4 — Frontend auth
+159. **`AuthProvider` is a plain React Context, not a TanStack Query
+    hook**, deliberately matching `RealtimeProvider`'s existing pattern
+    rather than adding a state library for one value. `lib/api.ts`
+    (no React/router dependency) dispatches a `window` event on any 401;
+    `AuthProvider` is the sole listener and owns the redirect, so every
+    request path in the app — not just ones a page explicitly guards —
+    gets the same "session gone -> back to /login" behavior for free.
+160. **`AccountBadge` is a single click-to-sign-out circular initial
+    button, not a dropdown**, per the brief's explicit §2.11 constraint
+    ("드롭다운 메뉴 같은 건 만들지 마라"). The separate sidebar-footer email +
+    "Sign out" text button (also brief-specified, "로그아웃 버튼 (사이드바
+    하단)") is the second, distinct affordance — the two aren't meant to
+    be collapsed into one control.
+161. **Phase 4 manual verification ran against a throwaway SQLite DB, not
+    Postgres**, because Docker Desktop's daemon wasn't running in this
+    session (same constraint noted in DECISIONS.md #153 for the Alembic
+    migration check). `config.py` already documents sqlite+aiosqlite as
+    the supported zero-dependency fallback for "quick local runs", so
+    this is within the architecture's own stated allowances, not a
+    workaround. Booted the real API (`uvicorn`) and real dashboard dev
+    server, then drove the actual cookie-based flow with `curl` end to
+    end: register -> `/me` succeeds -> `/me` without cookie is 401 ->
+    logout -> `/me` is 401 -> login -> `/me` succeeds again. No headless
+    browser tool is available in this environment, so the visual
+    click-through was not captured; SSR HTML output was checked instead
+    to confirm the login page renders real `type="email"`/`type=
+    "password"` inputs with the expected copy. Flagging this gap
+    explicitly rather than silently calling it "browser-tested" — a
+    true click-through (and the Postgres migration path from #153)
+    should be re-run in Phase 5 or Sprint 10 if a machine with Docker
+    running becomes available.

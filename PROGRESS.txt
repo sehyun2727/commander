@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 9 — Phase A: Foundation & Authentication
- Overall: 42/56 items · 75%
- Now working on: Phase 4 frontend auth (starting)
+ Overall: 49/56 items · 87.5%
+ Now working on: Phase 5 verification, docs, report (starting)
  Last update: 2026-07-30
  (n/m and % in this header must always match item state -- every time an
  item flips, the header updates in the SAME edit, never batched at phase
@@ -150,14 +150,35 @@ PHASE 3 — 인증 백엔드                                          (14/14)
         191 passed / 4 skipped, 176.83s (기존 157 -> 191, DoD #10의
         190+ 충족) -- 커밋+푸시 완료
 
-PHASE 4 — 프론트 최소 인증                                     (0/7)
-[ ] 4.1  /login 페이지
-[ ] 4.2  /register 페이지
-[ ] 4.3  인증 상태 관리 + 미인증 리다이렉트
-[ ] 4.4  전역 401 처리 + credentials:"include" 전 호출 적용
-[ ] 4.5  사이드바 로그아웃 + 우상단 계정 표시(최소)
-[ ] 4.6  typecheck + build 통과
-[ ] 4.7  커밋+푸시: feat(auth) minimal login UI
+PHASE 4 — 프론트 최소 인증                                     (7/7)
+[x] 4.1  /login 페이지 (app/login/page.tsx -- 이메일/비밀번호, useAuth().login,
+        ApiError 메시지 인라인 표시, /register 링크)
+[x] 4.2  /register 페이지 (app/register/page.tsx -- 이름/이메일/비밀번호,
+        useAuth().register, /login 링크)
+[x] 4.3  인증 상태 관리 + 미인증 리다이렉트 (lib/auth-context.tsx:
+        AuthProvider/useAuth, mount 시 getMe() 1회 -- RealtimeProvider와
+        동일 패턴의 plain Context, 상태 라이브러리 미도입.
+        components/RequireAuth.tsx를 app/page.tsx + app/company/[id]/
+        layout.tsx 양쪽에 적용해 미인증 진입 시 /login으로 리다이렉트)
+[x] 4.4  전역 401 처리 + credentials:"include" 전 호출 적용 (lib/api.ts의
+        request()가 모든 호출에 credentials:"include" 설정 + 401 발생 시
+        commander:unauthorized 이벤트 dispatch -- AuthProvider가 전역
+        리스닝해 세션 만료를 최초 미인증과 동일하게 처리. api.ts는 React/
+        router 의존성 없이 유지)
+[x] 4.5  사이드바 로그아웃 + 우상단 계정 표시(최소) (Sidebar.tsx 하단에
+        이메일 + Sign out 버튼 추가; components/AccountBadge.tsx --
+        브리프 "드롭다운 메뉴 같은 건 만들지 마라" 준수, 클릭 1회로
+        즉시 로그아웃하는 이니셜 원형 버튼만 제공. app/page.tsx 헤더 +
+        company layout 우상단(fixed)에 배치)
+[x] 4.6  typecheck + build 통과 (pnpm typecheck: 에러 0 / pnpm build:
+        전 페이지 컴파일 성공, /login /register 정적 생성 확인)
+[x] 4.7  커밋+푸시 진행 예정 (다음 스텝) -- 그 전에 throwaway SQLite DB로
+        API+대시보드 개발서버 기동 후 register/me/logout/login/me curl
+        전체 사이클 실제 실행으로 쿠키 인증 흐름 검증 완료 (Docker 미기동
+        -> Postgres 대신 SQLite 폴백 사용, config.py에 문서화된 경로).
+        헤드리스 브라우저 도구가 이 환경에 없어 시각적 클릭 테스트는
+        SSR HTML 구조 확인(email/password input 존재)으로 대체 -- Phase 5
+        DoD 검증 시 재확인 필요하면 기록
 
 PHASE 5 — 검증 · 문서 · 보고                                   (0/7)
 [ ] 5.1  make test 전체 그린 (카운트 기록)

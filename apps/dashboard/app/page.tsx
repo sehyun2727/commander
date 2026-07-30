@@ -7,6 +7,8 @@ import { useCompanies, useCreateCompany } from "@/lib/hooks";
 import { CompanyCard } from "@/components/CompanyCard";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
+import { RequireAuth } from "@/components/RequireAuth";
+import { AccountBadge } from "@/components/AccountBadge";
 
 export default function CompanyListPage() {
   const { data: companies, isLoading, isError } = useCompanies();
@@ -41,10 +43,14 @@ export default function CompanyListPage() {
   const active = companies?.filter((c) => !c.archived) ?? [];
 
   return (
+    <RequireAuth>
     <main className="mx-auto min-h-screen max-w-4xl px-6 py-16">
-      <header className="mb-10">
-        <h1 className="text-2xl font-semibold text-text">Commander</h1>
-        <p className="mt-1 text-sm text-text-muted">Run your AI software companies. Pick one, or found a new one.</p>
+      <header className="mb-10 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-text">Commander</h1>
+          <p className="mt-1 text-sm text-text-muted">Run your AI software companies. Pick one, or found a new one.</p>
+        </div>
+        <AccountBadge />
       </header>
 
       <form
@@ -89,5 +95,6 @@ export default function CompanyListPage() {
         </div>
       )}
     </main>
+    </RequireAuth>
   );
 }

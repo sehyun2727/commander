@@ -4,11 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRealtimeConnectionStatus } from "@/components/RealtimeProvider";
 import { useCompany } from "@/lib/hooks";
+import { useAuth } from "@/lib/auth-context";
 
 export function Sidebar({ companyId }: { companyId: string }) {
   const pathname = usePathname();
   const { data: company } = useCompany(companyId);
   const connectionStatus = useRealtimeConnectionStatus();
+  const { user, logout } = useAuth();
 
   const links = [
     { href: `/company/${companyId}`, label: "Headquarters", exact: true },
@@ -60,7 +62,22 @@ export function Sidebar({ companyId }: { companyId: string }) {
           );
         })}
       </nav>
-      <div className="border-t border-base-border px-5 py-3 text-[11px] text-text-faint">Commander OS</div>
+      <div className="border-t border-base-border px-5 py-3">
+        {user && (
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="truncate text-[11px] text-text-faint" title={user.email}>
+              {user.email}
+            </span>
+            <button
+              onClick={() => logout()}
+              className="shrink-0 text-[11px] font-medium text-text-faint transition-colors hover:text-status-red"
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+        <p className="text-[11px] text-text-faint">Commander OS</p>
+      </div>
     </aside>
   );
 }
