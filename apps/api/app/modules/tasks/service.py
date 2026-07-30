@@ -12,7 +12,7 @@ from ...core.interfaces.workflow_engine import WorkflowEngine
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
-from ...templates import TEMPLATE
+from ...templates import TEMPLATE, first_stage_role_key
 from .. import prompt_builder
 from ..costs import record_usage
 from ..provider_gateway import build_gateway
@@ -20,7 +20,10 @@ from ..provider_gateway import build_gateway
 CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
 SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
 
-_PM_KEY = TEMPLATE.roles[0].key
+# The CEO's one conversational counterpart (Rule #11) is whichever role
+# does the pipeline's "plan" stage -- looked up by stage kind, not
+# position, so this survives future roles being added (Sprint 9).
+_PM_KEY = first_stage_role_key(TEMPLATE.pipeline, "plan")
 
 _ORPHANABLE_STATES = (TaskState.IN_PROGRESS.value, TaskState.IN_REVIEW.value)
 
@@ -219,7 +222,7 @@ async def post_message(
         project_id=project_id,
         session_factory=session_factory,
     )
-    model_ref = TEMPLATE.model_ref_for_role.get(agent.role, TEMPLATE.roles[0].model_ref)
+    model_ref = TEMPLATE.model_ref_for_role.get(agent.role, TEMPLATE.model_ref_for_role[_PM_KEY])
     actor = Actor(role="employee", id=agent.id, name=agent.name)
     profile = AgentProfile.model_validate(agent.profile)
     buffer: list[str] = []

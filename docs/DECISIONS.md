@@ -1822,3 +1822,51 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     the transition-and-event logic outside the pipeline — the two-path
     design keeps the pipeline coroutine as the single writer of its own
     Mission's terminal state whenever one is running.
+
+### Phase 2 — Pipeline data-ification
+
+149. **`StageSpec.kind` is a closed `Literal["plan", "produce", "review"]`,
+    not an open string, even though the brief's own example table (§4.1
+    of `ARCHITECTURE.md`) lists a fourth kind (`discuss`) for Sprint 12.**
+    Adding `"discuss"` now, with no engine branch that does anything with
+    it, would be dead code the moment it shipped — Rule #16's "roles are
+    data" doesn't mean "kinds are unbounded before the behavior exists."
+    The `Literal` stays exactly as wide as the engine's actual `if
+    stage.kind == ...` dispatch in `_run_pipeline`; Sprint 12 extends
+    both together.
+150. **`resume_from` changed from a `role_key: str` to a stage `index:
+    int`, per the brief's explicit instruction.** The old code resumed
+    rework at `_ENGINEER.key` — a role name that only worked because
+    "the Engineer" and "the one produce stage" were the same fact. Once a
+    `kind` can repeat (a second `produce` role in Sprint 11), "resume at
+    role X" is ambiguous the moment two stages share that role. A stage
+    index has no such ambiguity. `_REWORK_STAGE_INDEX` is computed once
+    at import time via `first_stage_index(TEMPLATE.pipeline, "produce")`
+    against the *real* `software_company` template — it is not
+    recomputed per-call, since only one template exists in this sprint
+    and the value cannot change at runtime.
+151. **Verification for "the engine can walk an arbitrary sequence" used
+    a 4-stage test-only pipeline built by `dataclasses.replace(TEMPLATE,
+    pipeline=...)` and reused the real template's three roles (`pm`,
+    `engineer` twice, `reviewer`), rather than inventing fourth and fifth
+    role/agent rows.** The brief prohibits adding a CTO or Frontend
+    Engineer this sprint (§2.8's closing line) — reusing `engineer` for
+    both `produce` stages tests the actually-required property (the same
+    `kind`, and the same `role_key`, can appear twice) without smuggling
+    in Sprint 11 scope. The test file monkeypatches the module-level
+    `TEMPLATE` name inside `app.modules.workflow_engine.engine` (not the
+    frozen `app.templates.TEMPLATE` singleton, which cannot be mutated in
+    place) so the swap is scoped to each test and invisible to every
+    other suite. `tests/test_pipeline_stages.py` also asserts the real
+    template's pipeline is still exactly 3 stages, as a guardrail against
+    Sprint 10/11 scope leaking in early.
+152. **`ARCHITECTURE.md` §7.1's Sprint-9-sandbox-hardening sentence was
+    updated in this phase's commit, not deferred to Phase 5 as Decision
+    #142 originally planned.** Phase 2's own checklist item (§3 "2.7
+    docs/ARCHITECTURE.md의 워크플로우 엔진 서술 동기화") required a pass over
+    `ARCHITECTURE.md` regardless, and §6.4's "Known structural debt
+    entering V1.1" list — which item 5 is part of — needed the same pass
+    to mark all five Sprint-9 debt items resolved. Fixing the one
+    remaining stale sentence in the same edit was strictly cheaper than
+    reopening the file a third time in Phase 5 for a single word change;
+    Decision #142 is superseded by this entry, not contradicted by it.

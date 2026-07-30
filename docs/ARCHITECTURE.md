@@ -181,7 +181,7 @@ This single stream is also what makes Project Memory possible without a second s
 | Code | `workspace.initialized`, `code.changed`, `branch.merged` | V1 |
 | Execution | `execution.completed` (per-check results) | V1 |
 | Decision | decision created / approved / changes requested / rejected | V1 |
-| Reliability | `task.recovered`, `budget.exceeded` | *V1.1 S9* |
+| Reliability | `task.recovered`, `budget.exceeded` | V1.1 S9 ✅ |
 | Organization | `employee.hired`, `employee.updated`, `role.assigned` | *V1.1 S10–11* |
 | Planning | `discussion.turn`, `specification.drafted`, `specification.approved`, `requirement.asked` | *V1.1 S12* |
 | Harness | `tool.called`, `checks.reacted`, `self_correction.attempted` | *V1.1 S16–17* |
@@ -191,7 +191,7 @@ This single stream is also what makes Project Memory possible without a second s
 
 ## 4. Workflow Engine (V1.1 target)
 
-### 4.1 Template-driven stage sequence
+### 4.1 Template-driven stage sequence  *[V1.1 — Sprint 9 ✅]*
 
 The engine must not know the names PM, Engineer, or Reviewer. It executes a sequence the template supplies:
 
@@ -204,6 +204,8 @@ StageSpec
 ```
 
 The V1 pipeline (`plan → produce → review`) becomes one instance of a general sequence, not the shape. Resume-after-decision addresses a **stage index**, not a role name, because the same role may appear more than once.
+
+**Built in Sprint 9** as `TEMPLATE.pipeline: tuple[StageSpec, ...]` (`app/templates/software_company.py`). The `software_company` template still ships exactly the 3-stage `plan → produce → review` shape this sprint — `kind` (`"discuss"` is not yet a real stage kind; PM↔CTO discussion is Sprint 12) drives the engine's per-stage event/side-effect dispatch generically, so adding a stage (a second `produce` role in Sprint 11, a `discuss` kind in Sprint 12) is template data, not an engine change. Verified by a test-only 4-stage pipeline (`tests/test_pipeline_stages.py`) built from the real template's three roles, with `produce` appearing twice.
 
 ### 4.2 Planning phase  *[V1.1 — Sprint 12]*
 
@@ -281,14 +283,14 @@ Selective recall is mandatory: injecting the entire history into every prompt wo
 | `event_bus` | Persist → fan out → SSE push. Depends only on core. | ✅ In-process |
 | `projects` | Company CRUD. Founding auto-creates a Department with 3 Employees (PM / Engineer / Reviewer) from the template, posts each intro as a conversation event, serves starter Missions. | ✅ |
 | `tasks` | Mission CRUD, assignment, Meeting messages, `deliverable_type: "code" \| "document"`. Assignment triggers the workflow. Serves `GET /tasks/{id}/diff`. | ✅ |
-| `workflow_engine` | The brain. PM → Engineer → checks → Reviewer as background asyncio tasks. Parses FILE blocks, commits to the mission branch, runs matched `CheckSpec`s through `SandboxRunner`, hands the Reviewer a Change Summary + real diff + checks summary. Approve → merge; reject → branch preserved; request_changes → same-branch recommit; merge conflict → `blocked` with a plain-language reason. | ⚠️ **Single fixed 3-stage pipeline, positional role unpacking** — Sprint 9 generalizes |
+| `workflow_engine` | The brain. Iterates `TEMPLATE.pipeline` (plan → produce → review for the real template) as background asyncio tasks, dispatching per-stage by `kind` (§4.1). Parses FILE blocks, commits to the mission branch, runs matched `CheckSpec`s through `SandboxRunner`, hands the Reviewer a Change Summary + real diff + checks summary. Approve → merge; reject → branch preserved; request_changes → resumes at the first `produce` stage index; merge conflict → `blocked` with a plain-language reason. Orphan recovery, cancel, and a per-mission budget guard run around it (Rule #13). | ✅ Template-driven stage sequence, `TaskSnapshot`-based (Sprint 9) |
 | `agent_runtime` | Employee state + validated transitions. Founds Employees with role-keyed defaults. | ⚠️ **Agent ≡ role; no Role/Employee split** — Sprints 10–11 |
-| `templates` | Static internal data file (`app/templates/software_company.py`). Single source of the founding trio, pipeline order, role contracts, founding profile defaults, onboarding data, `CheckSpec`s. | ⚠️ **Covers roles+workflow only; no tool registry, approval flow, or template registry** — Sprints 10–11, 19 |
+| `templates` | Static internal data file (`app/templates/software_company.py`). Single source of the founding trio, `TEMPLATE.pipeline` stage sequence (§4.1), role contracts, founding profile defaults, onboarding data, `CheckSpec`s. | ⚠️ **Covers roles+workflow only; no tool registry, approval flow, or template registry** — Sprints 10–11, 19 |
 | `agent_profiles` | CEO-editable personality / working style / decision style / custom instructions / per-Employee model override, persisted as JSON on `AgentORM.profile`. | ✅ |
 | `prompt_builder` | Pure function: profile + role → system prompt. Role contract appended **last**, so no custom instruction can suppress the Reviewer's trailing `**Verdict:**`. | ✅ |
 | `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (streaming, retry-with-backoff). Three-tier model resolution: Employee override > CEO per-role override > registry default. | ✅ |
 | `model_registry` | Logical refs (`planner-default`, `builder-default`, …) → (provider, model). | ✅ |
-| `costs` | Per-call token usage → USD. Payroll (monthly, per company + per Employee) and Mission Budget (all-time, per mission). | ⚠️ **Accounting only; no enforcement** — Sprint 9 adds budget guards |
+| `costs` | Per-call token usage → USD. Payroll (monthly, per company + per Employee) and Mission Budget (all-time, per mission), with a `usage_for_task` lookup the engine's budget guard checks before every stage. | ✅ Enforcement added (Sprint 9, Rule #13) |
 | `approvals` | CEO Decisions: approve → completed · request_changes → re-run (attempt+1) · reject → cancelled. | ✅ |
 | `timeline` | Cursor-paginated event reads + kind filter, newest-first. | ✅ |
 | `realtime` | SSE stream per company; live streaming deltas for in-flight replies. | ✅ |
@@ -319,13 +321,13 @@ No circular deps. Modules communicate only via EventBus. Agents never call each 
 
 ### 6.4 Known structural debt entering V1.1
 
-Identified by code review at the V1.1 planning gate; scheduled into Sprint 9:
+Identified by code review at the V1.1 planning gate; **all five items closed in Sprint 9**:
 
-1. **Orphaned missions.** The pipeline runs as fire-and-forget `asyncio.create_task` with no recovery on startup. A restart leaves missions permanently `in_progress`, and no cancel route exists.
-2. **No budget enforcement.** `costs` records spend after the fact; nothing stops a runaway or concurrent burn.
-3. **Detached ORM reuse.** `_run_pipeline` reads ORM attributes after its session closes; a fallback currently masks it. Loops will break it.
-4. **Positional role unpacking.** `_PM, _ENGINEER, _REVIEWER = TEMPLATE.roles` breaks the moment a fourth role exists.
-5. **Sandbox hardening gaps.** `--cap-drop ALL` and `--security-opt no-new-privileges` are not set (residual, low severity — non-root and no-network already hold).
+1. ✅ **Orphaned missions.** Fixed (Phase 1): `lifespan` sweeps `in_progress`/`in_review` Tasks at boot and blocks them with a `TASK_RECOVERED` event; `POST /api/tasks/{id}/cancel` + an in-memory `_running` registry give the CEO a live cancel path.
+2. ✅ **No budget enforcement.** Fixed (Phase 1): `_check_budget` runs before every pipeline stage against `commander_mission_max_tokens`/`_usd`/`_seconds`; exceeding any cap blocks the mission and publishes `BUDGET_EXCEEDED` instead of continuing to spend.
+3. ✅ **Detached ORM reuse.** Fixed (Phase 1): `TaskSnapshot` (frozen dataclass) is read once per pipeline run and threaded through stages instead of a detached `TaskORM`; `dataclasses.replace` re-syncs it after the one field a stage legitimately mutates (`branch_name`).
+4. ✅ **Positional role unpacking.** Fixed (Phase 2): `TEMPLATE.pipeline: tuple[StageSpec, ...]` replaces `_PM, _ENGINEER, _REVIEWER = TEMPLATE.roles`; the engine iterates the sequence generically by stage `kind`, and `resume_from` addresses a stage **index** rather than a role_key so the same `kind` can repeat. See §4.1.
+5. ✅ **Sandbox hardening gaps.** Fixed (Phase 0): `--cap-drop ALL` and `--security-opt no-new-privileges` added to `docker create`; `--read-only` deliberately omitted since checks write build/cache output under `/workspace` (see `docs/DECISIONS.md`).
 
 ---
 
@@ -335,7 +337,7 @@ Identified by code review at the V1.1 planning gate; scheduled into Sprint 9:
 
 - **The command is never AI output.** `CheckSpec.command` (e.g. `pytest`, `node --test`) is trusted data in the template. The Employee's output — deliverable, FILE blocks, prose — is never parsed for commands and never reaches a shell. Only the *presence* of matching files (`detect_globs`) selects which fixed commands run.
 - **Isolation, per run:** fresh container → tar-copy the landed branch files in → run one fixed command → capture output tail → destroy unconditionally, even on failure or timeout. No container is reused.
-- **Constraints:** no network (`--network none`), memory / CPU / PIDs caps, non-root user, 120s hard kill-and-reap. *Sprint 9 adds `--cap-drop ALL` and `--security-opt no-new-privileges`.*
+- **Constraints:** no network (`--network none`), memory / CPU / PIDs caps, non-root user, 120s hard kill-and-reap, `--cap-drop ALL` and `--security-opt no-new-privileges` (Sprint 9). `--read-only` is deliberately not set — checks need to write under `/workspace` (build artifacts, `__pycache__`, test caches).
 - **Fails closed, never open:** Docker missing, image absent, check timed out, or CEO toggle off → no-op (`check_results: null`, zero events). It never falls back to running anything unsandboxed. Capability is probed live, never assumed.
 - **The harness changes none of this.** When agents gain tool loops (Sprint 16), the only execution tool is `run_checks`. There is no path by which an agent obtains a shell, and blocklists are never accepted as a substitute for the whitelist (Rule #12).
 

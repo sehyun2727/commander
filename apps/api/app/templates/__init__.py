@@ -9,6 +9,6 @@ not a second template waiting to be un-hidden. Founding and the workflow
 engine both read from it so no module branches on a hardcoded role name.
 """
 
-from .software_company import TEMPLATE
+from .software_company import TEMPLATE, StageSpec, first_stage_index, first_stage_role_key
 
-__all__ = ["TEMPLATE"]
+__all__ = ["TEMPLATE", "StageSpec", "first_stage_index", "first_stage_role_key"]

@@ -13,10 +13,11 @@ prompt_builder code change.
 
 from __future__ import annotations
 
-from ...templates import TEMPLATE
+from ...templates import TEMPLATE, first_stage_role_key
 
 ROLE_CONTRACTS: dict[str, str] = TEMPLATE.role_contracts
 ENGINEER_CONTRACT_BY_DELIVERABLE: dict[str, str] = TEMPLATE.engineer_contract_by_deliverable
-# Tuple order is (PM, Engineer, Reviewer) -- see software_company.py's
-# ROLES comment; engine.py relies on the same positional unpacking.
-ENGINEER_ROLE_KEY: str = TEMPLATE.roles[1].key
+# The role that does the pipeline's "produce" stage -- looked up by stage
+# *kind*, not position, so this survives the pipeline growing a second
+# producer role (Sprint 9, Rule #16).
+ENGINEER_ROLE_KEY: str = first_stage_role_key(TEMPLATE.pipeline, "produce")

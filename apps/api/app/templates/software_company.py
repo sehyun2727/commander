@@ -14,6 +14,7 @@ ABSENT) -- this file is deliberately concrete, not a plugin system.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from ..core.contracts import AgentProfile
 from ..core.interfaces.sandbox import CheckSpec
@@ -124,12 +125,41 @@ REVIEWER = RoleSpec(
     ),
 )
 
-# Tuple order IS the pipeline order: PM plans, Engineer builds off the
-# PM's plan, Reviewer audits the Engineer's deliverable.
+# Tuple order IS the founding roster order (display / onboarding only —
+# the *pipeline* order is a separate, explicit sequence below, PIPELINE).
 ROLES: tuple[RoleSpec, ...] = (PM, ENGINEER, REVIEWER)
 ROLES_BY_KEY: dict[str, RoleSpec] = {role.key: role for role in ROLES}
 ROLE_CONTRACTS: dict[str, str] = {role.key: role.contract for role in ROLES}
 MODEL_REF_FOR_ROLE: dict[str, str] = {role.key: role.model_ref for role in ROLES}
+
+
+@dataclass(frozen=True)
+class StageSpec:
+    """One step of the workflow engine's pipeline sequence (Sprint 9,
+    Rule #16). `role_key` looks up the RoleSpec/Employee for this stage;
+    `kind` selects the engine's generic per-stage behavior (which events
+    fire, what payload shape) so the engine never branches on a role
+    *name* -- only on what kind of work a stage does. The same `kind` can
+    appear more than once in a pipeline (e.g. two "produce" stages once
+    Sprint 11 adds a second Engineer role), which is why the engine
+    tracks pipeline position by index, not by role_key."""
+
+    role_key: str
+    kind: Literal["plan", "produce", "review"]
+    lands_code: bool
+    runs_checks: bool
+
+
+# The pipeline's *shape* (PM plans -> Engineer builds -> Reviewer audits)
+# is still concrete engine behavior for this one template, but its
+# *sequence* is now data the engine iterates rather than three named
+# local variables (see docs/DECISIONS.md "Sprint 4.7" for why the shape
+# itself stays engine-owned, and the Sprint 9 entry for this table).
+PIPELINE: tuple[StageSpec, ...] = (
+    StageSpec(role_key=PM.key, kind="plan", lands_code=False, runs_checks=False),
+    StageSpec(role_key=ENGINEER.key, kind="produce", lands_code=True, runs_checks=True),
+    StageSpec(role_key=REVIEWER.key, kind="review", lands_code=False, runs_checks=False),
+)
 
 # The Engineer's contract varies by mission deliverable_type; every other
 # role's contract is deliverable-agnostic (see ROLE_CONTRACTS above).
@@ -210,6 +240,7 @@ class CompanyTemplate:
     vocabulary_overrides: dict[str, str]
     starters: list[dict[str, str]]
     checks: tuple[CheckSpec, ...]
+    pipeline: tuple[StageSpec, ...]
 
 
 TEMPLATE = CompanyTemplate(
@@ -224,4 +255,20 @@ TEMPLATE = CompanyTemplate(
     vocabulary_overrides=VOCABULARY_OVERRIDES,
     starters=STARTERS,
     checks=CHECKS,
+    pipeline=PIPELINE,
 )
+
+
+def first_stage_index(pipeline: tuple[StageSpec, ...], kind: str) -> int:
+    """Index of the first stage of a given `kind` in a pipeline sequence
+    -- used to resolve a *semantic* position (e.g. "the planner",
+    "where rework restarts") without hardcoding a role name or position,
+    per Rule #16 (Sprint 9)."""
+    for index, stage in enumerate(pipeline):
+        if stage.kind == kind:
+            return index
+    raise ValueError(f"pipeline has no stage of kind {kind!r}")
+
+
+def first_stage_role_key(pipeline: tuple[StageSpec, ...], kind: str) -> str:
+    return pipeline[first_stage_index(pipeline, kind)].role_key

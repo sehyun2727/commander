@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 9 — Phase A: Foundation & Authentication
- Overall: 20/56 items · 36%
- Now working on: Phase 2 pipeline data-ification (starting)
+ Overall: 28/56 items · 50%
+ Now working on: Phase 3 auth backend (starting)
  Last update: 2026-07-30
  (n/m and % in this header must always match item state -- every time an
  item flips, the header updates in the SAME edit, never batched at phase
@@ -66,15 +66,34 @@ PHASE 1 — 운영 신뢰성                                          (11/11)
         재실행: 170 passed / 4 skipped, 125.06s (기존 157 + 신규 13) --
         커밋+푸시 진행 중
 
-PHASE 2 — 파이프라인 데이터화                                  (0/8)
-[ ] 2.1  StageSpec 정의 (role_key / kind / lands_code / runs_checks)
-[ ] 2.2  TEMPLATE.pipeline 추가
-[ ] 2.3  엔진 시퀀스 순회 리팩터
-[ ] 2.4  _PM/_ENGINEER/_REVIEWER positional unpacking 제거
-[ ] 2.5  resume_from 을 스테이지 인덱스 기반으로
-[ ] 2.6  prompt_builder positional 의존 제거
-[ ] 2.7  테스트 전용 4스테이지 템플릿 + 검증 테스트 5+
-[ ] 2.8  기존 157 테스트 전부 통과 확인 + 커밋+푸시
+PHASE 2 — 파이프라인 데이터화                                  (8/8)
+[x] 2.1  StageSpec 정의 (role_key / kind / lands_code / runs_checks) +
+        TEMPLATE.pipeline 추가 (software_company.py) + first_stage_index/
+        first_stage_role_key 헬퍼 (kind 기반 시맨틱 조회, position 대신)
+[x] 2.2  엔진을 시퀀스 순회 구조로 리팩터. _PM/_ENGINEER/_REVIEWER positional
+        unpacking 전부 제거 -- _run_pipeline이 TEMPLATE.pipeline을 enumerate
+        하며 stage.kind로 이벤트/사이드이펙트 디스패치 (plan/produce/review)
+[x] 2.3  resume_from을 role_key(str)에서 스테이지 인덱스(int)로 전환.
+        _REWORK_STAGE_INDEX = first_stage_index(TEMPLATE.pipeline, "produce")
+        (모듈 로드 시 1회 계산, 실제 템플릿 기준)
+[x] 2.4  prompt_builder/role_contracts.py + tasks/service.py의
+        TEMPLATE.roles[1]/roles[0] positional 의존 제거 (first_stage_role_key
+        로 대체). 코드베이스 전체 grep으로 잔여 positional indexing 없음 확인
+[x] 2.5  테스트 전용 4스테이지 템플릿으로 임의 시퀀스 동작 검증 (5개 테스트,
+        tests/test_pipeline_stages.py) -- 실제 3개 역할(pm/engineer x2/
+        reviewer) 재사용, produce kind 2회 반복으로 "같은 kind가 두 번
+        등장" 케이스 검증. dataclasses.replace(TEMPLATE, pipeline=...) +
+        engine 모듈의 TEMPLATE 이름만 monkeypatch (frozen singleton은 직접
+        mutate 불가 -- DECISIONS.md #151)
+[x] 2.6  기존 170개 테스트 전부 통과 확인 (신규 5개 포함 175 passed / 4
+        skipped, 141.79s) -- 동작 변화 0 달성, 실제 3스테이지 파이프라인
+        그대로 (test_real_template_pipeline_is_still_three_stages로 가드)
+[x] 2.7  docs/ARCHITECTURE.md 동기화: §4.1에 Sprint 9 구현 상태 추가, §6.1
+        workflow_engine/templates/costs 모듈 상태 갱신, §6.4 "구조적 부채"
+        5항목 전부 해소 표시, §7.1 샌드박스 문장 현재형으로 갱신(원래 Phase
+        5 예정이었으나 같은 편집에서 처리 -- DECISIONS.md #152가 #142 대체)
+[x] 2.8  DECISIONS.md #149-152 기록 + 커밋+푸시:
+        refactor(workflow): template-driven stage pipeline
 
 PHASE 3 — 인증 백엔드                                          (0/14)
 [ ] 3.1  users / sessions 모델 정의

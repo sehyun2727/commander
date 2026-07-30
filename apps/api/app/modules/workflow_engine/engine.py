@@ -38,7 +38,7 @@ from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
 from ...core.config import settings
-from ...templates import TEMPLATE
+from ...templates import TEMPLATE, StageSpec, first_stage_index
 from .. import prompt_builder
 from ..costs import record_usage, usage_for_task
 from ..model_registry import RECOMMENDED_PROVIDER
@@ -51,11 +51,14 @@ logger = logging.getLogger("commander.workflow_engine")
 SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
 CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
 
-# The pipeline's fixed shape (PM plans -> Engineer builds -> Reviewer
-# audits) is concrete engine logic, not template-driven -- only the role
-# *identity* (key, model ref) comes from the template (§10.6). See
-# docs/DECISIONS.md "Sprint 4.7".
-_PM, _ENGINEER, _REVIEWER = TEMPLATE.roles
+# The engine iterates `TEMPLATE.pipeline` (a tuple of `StageSpec`) rather
+# than three named role variables (Sprint 9, Rule #16) -- see
+# docs/DECISIONS.md "Sprint 4.7" for why the pipeline's per-`kind`
+# *behavior* is still concrete engine logic, and the Sprint 9 entry for
+# why its *sequence* moved to template data. `_REWORK_STAGE_INDEX` is
+# where a CEO "request changes" decision resumes: the first "produce"
+# stage, skipping any earlier planning rather than redoing it.
+_REWORK_STAGE_INDEX = first_stage_index(TEMPLATE.pipeline, "produce")
 
 
 @dataclass(frozen=True)
@@ -133,9 +136,9 @@ class CommanderWorkflowEngine(WorkflowEngine):
     # --- public API -----------------------------------------------------
 
     async def start_task(self, task_id: str) -> None:
-        self._spawn(task_id, resume_from=_PM.key)
+        self._spawn(task_id, resume_from=0)
 
-    def _spawn(self, task_id: str, resume_from: str, ceo_comment: str | None = None) -> None:
+    def _spawn(self, task_id: str, resume_from: int, ceo_comment: str | None = None) -> None:
         async def _runner() -> None:
             try:
                 await self._run_pipeline(task_id, resume_from=resume_from, ceo_comment=ceo_comment)
@@ -213,7 +216,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     reason=comment or "CEO requested changes",
                 )
             )
-            self._spawn(task_id, resume_from=_ENGINEER.key, ceo_comment=comment)
+            self._spawn(task_id, resume_from=_REWORK_STAGE_INDEX, ceo_comment=comment)
 
     # --- internals --------------------------------------------------------
 
@@ -569,8 +572,15 @@ class CommanderWorkflowEngine(WorkflowEngine):
         return "\n".join(summary_lines), result_dicts
 
     async def _run_pipeline(
-        self, task_id: str, resume_from: str, ceo_comment: str | None = None
+        self, task_id: str, resume_from: int, ceo_comment: str | None = None
     ) -> None:
+        """Iterate `TEMPLATE.pipeline` from `resume_from` (a stage index,
+        not a role_key -- Sprint 9, since the same `kind` can repeat)
+        rather than three hardcoded PM/Engineer/Reviewer steps. Each
+        stage's `kind` selects its event shape and side effects; a
+        "review" stage is always pipeline-terminal (it creates the CEO
+        Decision), matching the current template's single trailing
+        audit step."""
         try:
             async with self._session_factory() as session:
                 task_row = await session.get(TaskORM, task_id)
@@ -581,138 +591,144 @@ class CommanderWorkflowEngine(WorkflowEngine):
             agents = await self._agents_for(project_id)
             gateway = await self._gateway_for(project_id)
 
-            if resume_from == _PM.key:
+            if resume_from == 0:
                 await self._set_task_state(
-                    task_id, TaskState.IN_PROGRESS, "PM began planning", SYSTEM_ACTOR
+                    task_id, TaskState.IN_PROGRESS, "Mission picked up by the Department", SYSTEM_ACTOR
                 )
-                await self._check_budget(task, _PM.key)
-                pm_agent = agents[_PM.key]
-                await self._event_bus.publish(
-                    build_event(
-                        type=EventType.TASK_STARTED,
-                        project_id=project_id,
-                        actor=Actor(role="employee", id=pm_agent.id, name=pm_agent.name),
-                        payload={"task_id": task_id, "agent_id": pm_agent.id},
-                        reason=f"PM started planning '{title}'",
-                    )
-                )
-                plan, pm_usage = await self._run_role(pm_agent, task, gateway, _PM.model_ref, "", None)
-                await self._record_usage(project_id, task_id, pm_agent, gateway, _PM.model_ref, pm_usage)
-            else:
-                plan, pm_usage = "", {}
 
-            await self._check_budget(task, _ENGINEER.key)
-            engineer_agent = agents[_ENGINEER.key]
-            await self._event_bus.publish(
-                build_event(
-                    type=EventType.CODING_STARTED,
-                    project_id=project_id,
-                    actor=Actor(role="employee", id=engineer_agent.id, name=engineer_agent.name),
-                    payload={"agent_id": engineer_agent.id, "task_id": task_id},
-                    reason="Engineer began building the deliverable",
-                )
-            )
-            deliverable, engineer_usage = await self._run_role(
-                engineer_agent, task, gateway, _ENGINEER.model_ref, plan, ceo_comment
-            )
-            await self._record_usage(
-                project_id, task_id, engineer_agent, gateway, _ENGINEER.model_ref, engineer_usage
-            )
-
-            reviewer_context = deliverable
+            context = ""
+            deliverable = ""
             change_summary = ""
             code_stats: dict | None = None
-            if task.deliverable_type == "code":
-                change_summary, code_stats = await self._land_code_changes(
-                    task, engineer_agent, deliverable
-                )
-                if code_stats is not None:
-                    reviewer_context = f"{change_summary}\n\n{code_stats['diff_text']}"
-                    code_stats = {k: v for k, v in code_stats.items() if k != "diff_text"}
 
-                    branch_name = task.branch_name or self._branch_name_for(task.id)
-                    task = dataclasses.replace(task, branch_name=branch_name)
-                    check_summary, check_results = await self._run_checks(task, branch_name)
-                    if check_results is not None:
-                        reviewer_context = f"{reviewer_context}\n\n{check_summary}"
-                        async with self._session_factory() as session:
-                            row = await session.get(TaskORM, task_id)
-                            row.check_results = check_results
-                            await session.commit()
+            for index, stage in enumerate(TEMPLATE.pipeline):
+                if index < resume_from:
+                    continue
 
-            await self._set_task_state(
-                task_id, TaskState.IN_REVIEW, "Engineer finished; handing to Reviewer", SYSTEM_ACTOR
-            )
-            await self._check_budget(task, _REVIEWER.key)
-            reviewer_agent = agents[_REVIEWER.key]
-            await self._event_bus.publish(
-                build_event(
-                    type=EventType.REVIEW_STARTED,
-                    project_id=project_id,
-                    actor=Actor(role="employee", id=reviewer_agent.id, name=reviewer_agent.name),
-                    payload={"task_id": task_id, "reviewer_agent_id": reviewer_agent.id},
-                    reason="Reviewer began the audit",
-                )
-            )
-            audit, reviewer_usage = await self._run_role(
-                reviewer_agent, task, gateway, _REVIEWER.model_ref, reviewer_context, None
-            )
-            await self._record_usage(
-                project_id, task_id, reviewer_agent, gateway, _REVIEWER.model_ref, reviewer_usage
-            )
-            outcome = parsing.parse_verdict(audit)
-            sections = parsing.parse_decision_sections(audit)
-            await self._event_bus.publish(
-                build_event(
-                    type=EventType.REVIEW_COMPLETED,
-                    project_id=project_id,
-                    actor=Actor(role="employee", id=reviewer_agent.id, name=reviewer_agent.name),
-                    payload={"task_id": task_id, "outcome": outcome},
-                    reason=f"Reviewer verdict: {outcome}",
-                )
-            )
+                if stage.kind == "review":
+                    await self._set_task_state(
+                        task_id, TaskState.IN_REVIEW, "Handing off for review", SYSTEM_ACTOR
+                    )
 
-            async with self._session_factory() as session:
-                task_row = await session.get(TaskORM, task_id)
-                task_row.result_markdown = change_summary if code_stats is not None else deliverable
-                self._apply_task_transition(task_row, TaskState.PENDING_APPROVAL)
-                approval = ApprovalORM(
-                    project_id=project_id,
-                    task_id=task_id,
-                    subject="task_review",
-                    status="pending",
-                    reviewer_agent_id=reviewer_agent.id,
-                    reviewer_name=reviewer_agent.name,
-                    sections=sections,
-                    raw_summary=audit,
-                )
-                session.add(approval)
-                await session.commit()
-                await session.refresh(approval)
-                approval_id = approval.id
+                agent = agents[stage.role_key]
+                model_ref = TEMPLATE.model_ref_for_role[stage.role_key]
+                role_title = TEMPLATE.roles_by_key[stage.role_key].title
+                await self._check_budget(task, stage.role_key)
 
-            await self._event_bus.publish(
-                build_event(
-                    type=EventType.TASK_STATE_CHANGED,
-                    project_id=project_id,
-                    actor=SYSTEM_ACTOR,
-                    payload={
-                        "task_id": task_id,
-                        "previous_state": TaskState.IN_REVIEW.value,
-                        "new_state": TaskState.PENDING_APPROVAL.value,
-                    },
-                    reason="Reviewer finished; needs a CEO Decision",
-                )
-            )
-            await self._event_bus.publish(
-                build_event(
-                    type=EventType.APPROVAL_REQUESTED,
-                    project_id=project_id,
-                    actor=SYSTEM_ACTOR,
-                    payload={"approval_id": approval_id, "task_id": task_id, "subject": "task_review"},
-                    reason=f"'{title}' is ready for a CEO Decision (Reviewer verdict: {outcome})",
-                )
-            )
+                if stage.kind == "plan":
+                    await self._event_bus.publish(
+                        build_event(
+                            type=EventType.TASK_STARTED,
+                            project_id=project_id,
+                            actor=Actor(role="employee", id=agent.id, name=agent.name),
+                            payload={"task_id": task_id, "agent_id": agent.id},
+                            reason=f"{role_title} started planning '{title}'",
+                        )
+                    )
+                    context, usage = await self._run_role(agent, task, gateway, model_ref, context, None)
+                    await self._record_usage(project_id, task_id, agent, gateway, model_ref, usage)
+
+                elif stage.kind == "produce":
+                    await self._event_bus.publish(
+                        build_event(
+                            type=EventType.CODING_STARTED,
+                            project_id=project_id,
+                            actor=Actor(role="employee", id=agent.id, name=agent.name),
+                            payload={"agent_id": agent.id, "task_id": task_id},
+                            reason=f"{role_title} began building the deliverable",
+                        )
+                    )
+                    deliverable, usage = await self._run_role(
+                        agent, task, gateway, model_ref, context, ceo_comment
+                    )
+                    await self._record_usage(project_id, task_id, agent, gateway, model_ref, usage)
+                    ceo_comment = None  # only the resumed stage gets the CEO's feedback
+
+                    context = deliverable
+                    if stage.lands_code and task.deliverable_type == "code":
+                        change_summary, code_stats = await self._land_code_changes(
+                            task, agent, deliverable
+                        )
+                        if code_stats is not None:
+                            context = f"{change_summary}\n\n{code_stats['diff_text']}"
+                            code_stats = {k: v for k, v in code_stats.items() if k != "diff_text"}
+
+                            branch_name = task.branch_name or self._branch_name_for(task.id)
+                            task = dataclasses.replace(task, branch_name=branch_name)
+                            if stage.runs_checks:
+                                check_summary, check_results = await self._run_checks(task, branch_name)
+                                if check_results is not None:
+                                    context = f"{context}\n\n{check_summary}"
+                                    async with self._session_factory() as session:
+                                        row = await session.get(TaskORM, task_id)
+                                        row.check_results = check_results
+                                        await session.commit()
+
+                elif stage.kind == "review":
+                    await self._event_bus.publish(
+                        build_event(
+                            type=EventType.REVIEW_STARTED,
+                            project_id=project_id,
+                            actor=Actor(role="employee", id=agent.id, name=agent.name),
+                            payload={"task_id": task_id, "reviewer_agent_id": agent.id},
+                            reason=f"{role_title} began the audit",
+                        )
+                    )
+                    audit, usage = await self._run_role(agent, task, gateway, model_ref, context, None)
+                    await self._record_usage(project_id, task_id, agent, gateway, model_ref, usage)
+                    outcome = parsing.parse_verdict(audit)
+                    sections = parsing.parse_decision_sections(audit)
+                    await self._event_bus.publish(
+                        build_event(
+                            type=EventType.REVIEW_COMPLETED,
+                            project_id=project_id,
+                            actor=Actor(role="employee", id=agent.id, name=agent.name),
+                            payload={"task_id": task_id, "outcome": outcome},
+                            reason=f"{role_title} verdict: {outcome}",
+                        )
+                    )
+
+                    async with self._session_factory() as session:
+                        task_row = await session.get(TaskORM, task_id)
+                        task_row.result_markdown = change_summary if code_stats is not None else deliverable
+                        self._apply_task_transition(task_row, TaskState.PENDING_APPROVAL)
+                        approval = ApprovalORM(
+                            project_id=project_id,
+                            task_id=task_id,
+                            subject="task_review",
+                            status="pending",
+                            reviewer_agent_id=agent.id,
+                            reviewer_name=agent.name,
+                            sections=sections,
+                            raw_summary=audit,
+                        )
+                        session.add(approval)
+                        await session.commit()
+                        await session.refresh(approval)
+                        approval_id = approval.id
+
+                    await self._event_bus.publish(
+                        build_event(
+                            type=EventType.TASK_STATE_CHANGED,
+                            project_id=project_id,
+                            actor=SYSTEM_ACTOR,
+                            payload={
+                                "task_id": task_id,
+                                "previous_state": TaskState.IN_REVIEW.value,
+                                "new_state": TaskState.PENDING_APPROVAL.value,
+                            },
+                            reason="Reviewer finished; needs a CEO Decision",
+                        )
+                    )
+                    await self._event_bus.publish(
+                        build_event(
+                            type=EventType.APPROVAL_REQUESTED,
+                            project_id=project_id,
+                            actor=SYSTEM_ACTOR,
+                            payload={"approval_id": approval_id, "task_id": task_id, "subject": "task_review"},
+                            reason=f"'{title}' is ready for a CEO Decision ({role_title} verdict: {outcome})",
+                        )
+                    )
         except asyncio.CancelledError:
             logger.info("pipeline for task %s cancelled", task_id)
             reason = self._cancel_reasons.pop(task_id, "Cancelled by CEO")
