@@ -38,6 +38,14 @@ async def _set_task_state(harness, task_id: str, state: TaskState) -> None:
         await session.commit()
 
 
+async def _set_agent_state(harness, agent_id: str, state: AgentState, current_task_id: str | None) -> None:
+    async with harness.session_factory() as session:
+        row = await session.get(AgentORM, agent_id)
+        row.state = state.value
+        row.current_task_id = current_task_id
+        await session.commit()
+
+
 async def _engineer_agent_id(harness, project_id: str) -> str:
     async with harness.session_factory() as session:
         result = await session.execute(
@@ -131,6 +139,69 @@ async def test_recover_orphaned_tasks_emits_task_recovered_event(harness):
     items, _ = await harness.event_bus.page(project.id, None, 50, None)
     recovered_events = [e for e in items if e.type == EventType.TASK_RECOVERED]
     assert any(e.payload["task_id"] == task.id for e in recovered_events)
+
+
+@pytest.mark.asyncio
+async def test_recover_orphaned_tasks_frees_stuck_agent(harness):
+    """Found during Sprint 9's own DoD verification (docs/DECISIONS.md):
+    the Employee whose coroutine died with an orphaned Mission was left
+    parked in AgentState.WORKING forever, so the next Mission ever
+    assigned to that Employee crashed with InvalidTransition
+    (WORKING -> ASSIGNED). Recovery must free the Employee, not just the
+    Mission."""
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
+    task = await tasks_service.create_task(
+        harness.session_factory, harness.event_bus, project.id, "Orphaned mission", "", "normal"
+    )
+    await _set_task_state(harness, task.id, TaskState.IN_PROGRESS)
+    engineer_id = await _engineer_agent_id(harness, project.id)
+    await _set_agent_state(harness, engineer_id, AgentState.WORKING, task.id)
+
+    recovered_ids = await recover_orphaned_tasks(harness.session_factory, harness.event_bus)
+
+    assert task.id in recovered_ids
+    async with harness.session_factory() as session:
+        agent_row = await session.get(AgentORM, engineer_id)
+        assert agent_row.state == AgentState.IDLE.value
+        assert agent_row.current_task_id is None
+
+
+@pytest.mark.asyncio
+async def test_recover_orphaned_tasks_leaves_idle_agents_untouched(harness):
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
+    task = await tasks_service.create_task(
+        harness.session_factory, harness.event_bus, project.id, "Orphaned mission", "", "normal"
+    )
+    await _set_task_state(harness, task.id, TaskState.IN_PROGRESS)
+    engineer_id = await _engineer_agent_id(harness, project.id)
+
+    await recover_orphaned_tasks(harness.session_factory, harness.event_bus)
+
+    async with harness.session_factory() as session:
+        agent_row = await session.get(AgentORM, engineer_id)
+        assert agent_row.state == AgentState.IDLE.value
+
+
+@pytest.mark.asyncio
+async def test_recover_orphaned_tasks_emits_agent_state_changed_event(harness):
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
+    task = await tasks_service.create_task(
+        harness.session_factory, harness.event_bus, project.id, "Orphaned mission", "", "normal"
+    )
+    await _set_task_state(harness, task.id, TaskState.IN_PROGRESS)
+    engineer_id = await _engineer_agent_id(harness, project.id)
+    await _set_agent_state(harness, engineer_id, AgentState.WORKING, task.id)
+
+    await recover_orphaned_tasks(harness.session_factory, harness.event_bus)
+
+    items, _ = await harness.event_bus.page(project.id, None, 50, None)
+    agent_events = [
+        e for e in items if e.type == EventType.AGENT_STATE_CHANGED and e.payload["agent_id"] == engineer_id
+    ]
+    assert any(e.payload["new_state"] == AgentState.IDLE.value for e in agent_events)
 
 
 # --- Mission cancel -----------------------------------------------------------

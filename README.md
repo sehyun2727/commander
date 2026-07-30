@@ -2,12 +2,13 @@
 
 Commander is an operating system where a solo developer becomes the **CEO of an AI software company**. You never manage prompts — you found a Company, it auto-staffs with three AI Employees (PM, Engineer, Reviewer), you hand it Missions, and every action they take is visible, explainable, and reviewable before it lands.
 
-Status: **V1 released** (`v1.0.0`) — a real, working vertical slice. FastAPI backend, Postgres-backed persistence with Alembic migrations, an event-driven core, mock and real (Anthropic) providers, an SSE-realtime Next.js dashboard, a real git-backed Workspace per company, and a sandboxed execution gate for automated checks. **V1.1 is in development** — see `CLAUDE.md` §9 for the roadmap (accounts, Role/Employee separation, a CTO role, PM↔CTO planning, a conversation-first CEO Workspace, an Agent Harness, and Project Memory). Everything below describes what's runnable **today**, on V1.
+Status: **V1 released** (`v1.0.0`) — a real, working vertical slice. FastAPI backend, Postgres-backed persistence with Alembic migrations, an event-driven core, mock and real (Anthropic) providers, an SSE-realtime Next.js dashboard, a real git-backed Workspace per company, and a sandboxed execution gate for automated checks. **V1.1 is in development.** Sprint 9 (Phase A) shipped local CEO accounts + session auth on top of V1 — every route now requires sign-in, and every account only ever sees its own Companies. See `CLAUDE.md` §9 for the remaining roadmap (Role/Employee separation, a CTO role, PM↔CTO planning, a conversation-first CEO Workspace, an Agent Harness, and Project Memory). Everything below describes what's runnable **today**.
 
 ---
 
 ## What it does
 
+- **Sign in as CEO.** A local email+password account, an HttpOnly session cookie, and every Company scoped to its owner — another account's data returns a plain 404, not a hint that it exists.
 - **Found a Company** and it auto-staffs three Employees: a PM, an Engineer, and a Reviewer, each with an editable personality/working-style/decision-style profile.
 - **Hand it a Mission.** The PM plans it, the Engineer implements it, and — for code Missions — the Engineer's output lands as a real commit on a per-Mission git branch. If the Company's template ships automated checks (pytest, `node --test`, etc.) that match the changed files, they run inside an isolated, no-network Docker sandbox before review. This step is entirely **optional**: without Docker running or the sandbox image built (`make sandbox-image`), or with the per-Company toggle off in Company Settings, Missions still run end-to-end exactly the same — they just skip straight to review with no check results, no errors, no degraded UI.
 - **Review as CEO.** Every Mission that needs your sign-off becomes a Decision: Problem / Recommendation / Risk / Impact, plus — for code — a Change Summary and a real (truncatable) diff, plus check results if any ran. Approve, request changes, or reject.
@@ -30,7 +31,7 @@ make dev       # api on :8000, dashboard on :3000
 
 (Or run `make demo` for `seed` + `dev` in one command.)
 
-Then open **http://localhost:3000**. You'll see "Acme AI", a seeded demo Company with its three Employees and a couple of Missions already in flight, run entirely against the mock provider (zero API keys, zero cost).
+Then open **http://localhost:3000**. Commander requires a CEO account — sign in with the seeded demo account (`ceo@commander.local` / `commander1234`, overridable via `COMMANDER_DEMO_EMAIL`/`COMMANDER_DEMO_PASSWORD`) or register your own. Once signed in you'll see "Acme AI", a seeded demo Company with its three Employees and a couple of Missions already in flight, run entirely against the mock provider (zero API keys, zero cost).
 
 `make seed` and `make dev` both depend on `db-up` (starts/waits on the `docker-compose` Postgres service) and `db-upgrade` (runs Alembic migrations to head), so there's no separate database setup step — the two commands above are the entire quickstart.
 
@@ -38,11 +39,12 @@ To start from a truly empty Commander instead of the seeded demo, skip `make see
 
 ### A first walkthrough
 
-1. On `/`, found a Company — give it a name and, optionally, a sentence about what it should build. If you fill in the second field, Commander skips straight to a live starter Mission instead of an empty kanban.
-2. Land on Headquarters (`/company/[id]`). You'll see your three Employees introduce themselves in the Timeline, a Decision strip (empty until something needs you), and a PM-voiced Situation Report.
-3. Open **Missions**, create one (or use a one-click starter), and assign it. Watch the PM → Engineer → Reviewer pipeline run live — streaming replies, then (for code Missions) a real commit on a mission branch, then automated checks if the template has any that match, then a Reviewer verdict.
-4. When it reaches **Decisions**, review the Change Summary and diff (never raw deliverable text), then Approve, Request changes, or Reject. Approving a code Mission merges its branch.
-5. Browse the Company's actual codebase under **Workspace**, check **Payroll** for real token spend, and pull an on-demand **Daily Report** or **Situation Report** any time.
+1. Sign in (demo account above, or register a new one) — every page except `/login` and `/register` requires a session.
+2. On `/`, found a Company — give it a name and, optionally, a sentence about what it should build. If you fill in the second field, Commander skips straight to a live starter Mission instead of an empty kanban.
+3. Land on Headquarters (`/company/[id]`). You'll see your three Employees introduce themselves in the Timeline, a Decision strip (empty until something needs you), and a PM-voiced Situation Report.
+4. Open **Missions**, create one (or use a one-click starter), and assign it. Watch the PM → Engineer → Reviewer pipeline run live — streaming replies, then (for code Missions) a real commit on a mission branch, then automated checks if the template has any that match, then a Reviewer verdict.
+5. When it reaches **Decisions**, review the Change Summary and diff (never raw deliverable text), then Approve, Request changes, or Reject. Approving a code Mission merges its branch.
+6. Browse the Company's actual codebase under **Workspace**, check **Payroll** for real token spend, and pull an on-demand **Daily Report** or **Situation Report** any time.
 
 ---
 
@@ -77,7 +79,10 @@ make demo         # seed + dev in one command — the fastest way to see Command
 make test         # pytest (apps/api) + dashboard typecheck + dashboard build
 make sandbox-image  # build the Docker image used for automated checks — optional (Sprint 6)
 make verify-llm    # one real Mission against a live Anthropic key + throwaway DB
+make export-users  # export all CEO accounts to CSV on stdout (bcrypt hashes only, never plaintext)
 ```
+
+`python scripts/reset_password.py <email> <new-password>` resets a CEO's password from the shell (min 8 chars) — no make target, since it's an interactive admin action, not part of any workflow.
 
 ---
 
@@ -106,16 +111,17 @@ apps/api/          FastAPI backend (Python 3.11+, async SQLAlchemy, Postgres/SQL
                    secrets, config, boot_checks (fail-fast startup validation)
   app/templates/   software_company.py — internal-only template: founding trio, pipeline
                    order, role contracts, default profiles, onboarding intros/starters
-  app/modules/     projects, tasks, approvals, timeline, agent_runtime, agent_profiles,
-                   prompt_builder, workflow_engine, event_bus, provider_gateway,
-                   model_registry, costs, reports, situation, realtime (SSE),
+  app/modules/     auth (local accounts, sessions), projects, tasks, approvals, timeline,
+                   agent_runtime, agent_profiles, prompt_builder, workflow_engine, event_bus,
+                   provider_gateway, model_registry, costs, reports, situation, realtime (SSE),
                    workspace_manager (git-backed company codebase),
                    sandbox (Docker-isolated execution of trusted, template-defined checks)
   alembic/         async migration environment; `alembic/versions/` holds the schema history
   tests/           pytest suite
 apps/dashboard/    Next.js App Router + TS + Tailwind + TanStack Query (dark Render-style theme)
 packages/event-schemas/ts/   generated TS event types — do not hand-edit; regenerate
-scripts/           generate_ts_schemas.py, seed.py, verify_real_llm.py
+scripts/           generate_ts_schemas.py, seed.py, verify_real_llm.py, export_users.py,
+                   reset_password.py
 docs/              ARCHITECTURE.md (as-built), DECISIONS.md (judgment log), backend/ specs
 docs/design/UX_SPEC.md   product experience source of truth
 docs/prompts/      sprint briefs

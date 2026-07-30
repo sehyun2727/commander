@@ -1,8 +1,10 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 9 — Phase A: Foundation & Authentication
- Overall: 49/56 items · 87.5%
- Now working on: Phase 5 verification, docs, report (starting)
+ Overall: 55/56 items · 98.2%
+ Now working on: Phase 5 -- 5.7 final commit+push + remote HEAD check
+ (5.1-5.6 done; found + fixed a real Phase 1 bug during 5.2: orphan
+ recovery never freed the Agent, only the Task -- see DECISIONS.md #162)
  Last update: 2026-07-30
  (n/m and % in this header must always match item state -- every time an
  item flips, the header updates in the SAME edit, never batched at phase
@@ -180,12 +182,54 @@ PHASE 4 — 프론트 최소 인증                                     (7/7)
         SSR HTML 구조 확인(email/password input 존재)으로 대체 -- Phase 5
         DoD 검증 시 재확인 필요하면 기록
 
-PHASE 5 — 검증 · 문서 · 보고                                   (0/7)
-[ ] 5.1  make test 전체 그린 (카운트 기록)
-[ ] 5.2  DoD 14개 항목 수동 E2E 실행 + 결과 기록
-[ ] 5.3  CLAUDE.md 갱신 (인증/파이프라인/이벤트/명령어)
-[ ] 5.4  ARCHITECTURE.md As-Built 갱신
-[ ] 5.5  README.md (로그인 필요 + 데모 계정 + 신규 타깃)
-[ ] 5.6  DECISIONS.md 기록 (필수 7항목 + 자체 판단 전부)
-[ ] 5.7  커밋+푸시 + 원격 HEAD 일치 확인
+PHASE 5 — 검증 · 문서 · 보고                                   (5/7)
+[x] 5.1  make test 전체 그린 (카운트 기록) -- pytest 전체 재실행:
+        194 passed / 4 skipped, 184.02s (기존 191/4 + 이번에 추가한
+        agent-recovery 회귀 테스트 3개). dashboard typecheck/build은
+        Phase 4에서 이미 그린 확인 완료, 프론트 변경 없어 재실행 불필요.
+[x] 5.2  DoD 14개 항목 수동 E2E 실행 + 결과 기록 -- 완료. 요약(전체
+        상세는 Sprint 9 완료 보고 #3 참조):
+        #1 통과 (서버 kill -> 재기동 -> blocked + Timeline 사유).
+        #2 통과 -- +discovery: 최초 실행 중 실제 버그 발견.
+        recover_orphaned_tasks()가 Task 상태만 복구하고 Agent 상태는
+        방치, 재시작 후 같은 Employee에게 새 Mission을 배정하면
+        InvalidTransition(WORKING->ASSIGNED)으로 파이프라인이 죽음.
+        원인 규명 -> tasks/service.py에 Agent 복구 로직 추가(FAILED
+        경유 -> IDLE, AGENT_TRANSITIONS로 hop별 검증) -> 회귀 테스트
+        3개 추가 -> 전체 스위트 재그린(194/4) -> 실제 서버로 재현
+        (킬 -> 재기동 -> SQLite로 Agent가 idle/current_task_id=null
+        확인 -> 같은 PM에게 새 Mission 배정 -> completed까지 정상
+        완주, 트레이스백 없음)로 라이브 재검증. DECISIONS.md #162 기록.
+        수정 후 클린 재실행으로 #2 자체도 통과 확인(cancel 즉시 응답,
+        agent state idle 복귀).
+        #3 통과 (COMMANDER_MISSION_MAX_TOKENS=10으로 실제 서버 기동,
+        mock 미션 실행 -> blocked + task.budget_exceeded 이벤트
+        "tokens budget exceeded before 'engineer': 159 > 10" + CEO
+        가독 사유 "Budget guard blocked the mission before 'engineer'").
+        #4,5,6,7,8 통과 (이전 세션, 실제 curl/실행 기반, 계정 격리/401/
+        CSV/데모 미션 완주 전부 실제 확인).
+        #9 통과 (tests/test_pipeline_stages.py -- 임의 스테이지 수,
+        반복 kind, 인덱스 기반 resume 전부 통과, 194개 중 포함).
+        #10 통과 (194 passed / 4 skipped, 157 기준선 대비 +37, 190
+        기준 상회).
+        #11 통과 (Phase 0 측정: pacing on 349-369s -> pacing off
+        109.59s, 약 3.2배 단축).
+        #12 통과 (CLAUDE.md/ARCHITECTURE.md 최종 정합성 재확인 -- 이번
+        Agent 복구 수정 반영해 두 문서 모두 갱신).
+        #13,#14 5.7 최종 커밋+푸시 이후 확인 예정.
+[x] 5.3  CLAUDE.md 갱신 (인증/파이프라인/이벤트/명령어) -- 내용 편집 완료
+        (커맨드 블록, V1.1 스코프 표 Sprint 9 체크, Phase A 요약 문단).
+        아직 커밋 전, 5.7에서 함께 커밋.
+[x] 5.4  ARCHITECTURE.md As-Built 갱신 -- 내용 편집 완료 (버전 헤더,
+        6.1 auth 모듈 행, 7.2 Authorization 절, 8절 프론트 Auth 문단).
+        아직 커밋 전, 5.7에서 함께 커밋.
+[x] 5.5  README.md (로그인 필요 + 데모 계정 + 신규 타깃) -- 내용 편집
+        완료 (Status, Quickstart, 첫 워크스루 1단계 신설, 커맨드,
+        Repo layout). 아직 커밋 전, 5.7에서 함께 커밋.
+[x] 5.6  DECISIONS.md 기록 (필수 7항목 + 자체 판단 전부) -- Phase 4
+        항목(#159-161) 및 이번 발견/수정한 버그(#162) 기록 완료.
+        Appendix B 최종 완료 보고서는 세션 마지막 메시지로 CEO에게
+        전달 (기존 스프린트들과 동일하게 저장소 내 별도 파일 없음 --
+        docs/prompts/sprint-8*.md 검색 결과 선례 확인).
+[~] 5.7  커밋+푸시 + 원격 HEAD 일치 확인 -- 진행 중.
 ================================================

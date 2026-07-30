@@ -1986,3 +1986,44 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     true click-through (and the Postgres migration path from #153)
     should be re-run in Phase 5 or Sprint 10 if a machine with Docker
     running becomes available.
+
+### Phase 5 — Verification found a real Phase 1 bug
+
+162. **`recover_orphaned_tasks()` reset the orphaned `TaskORM` row but
+    never touched the `AgentORM` row working it** — found live during
+    Phase 5's DoD-2 manual test, not from reading code. Repro: create a
+    mission, assign it (PM goes idle -> ... -> working), kill the API
+    process mid-pipeline (DoD item 1's own scenario), restart. The boot
+    sweep correctly moved the task to `blocked`, but the PM's
+    `AgentState` stayed `working` forever — nothing in the system ever
+    transitions an agent out of a busy state except the pipeline
+    coroutine that just died. The next mission ever assigned to that
+    same Employee then crashed the whole pipeline with
+    `InvalidTransition: <AgentState.WORKING> -> <AgentState.ASSIGNED> is
+    not an allowed transition` (`workflow_engine/engine.py`'s `_run_role`
+    unconditionally transitions to `ASSIGNED` at stage start). This is
+    exactly the kind of gap the brief's Appendix B asks to be surfaced,
+    not hidden: Phase 1's own DoD item 1 only ever asserted on Task
+    state, so the automated tests passed while the live behavior was
+    still broken for a second mission. **Fix:** `recover_orphaned_tasks()`
+    now also queries `AgentORM` rows whose `current_task_id` matches a
+    just-recovered task, and walks each one back to `idle` through
+    `AGENT_TRANSITIONS` (validated hop-by-hop via the real `transition()`
+    state machine, same as the existing Task side) —
+    `WORKING/PLANNING/ASSIGNED/BLOCKED -> FAILED -> IDLE`, or
+    `WAITING_REVIEW -> BLOCKED -> FAILED -> IDLE`. `FAILED` was chosen as
+    the narrated intermediate because "the work never finished" is
+    honest CEO-legible framing, matching how a normal pipeline failure
+    already reads on the Timeline. One `AgentStateChanged` event is
+    published per freed Employee (not one per hop), so the Timeline
+    reads as a single recovery action, not simulated multi-step churn.
+    Added three tests to `tests/test_reliability.py`
+    (`test_recover_orphaned_tasks_frees_stuck_agent`,
+    `_leaves_idle_agents_untouched`, `_emits_agent_state_changed_event`);
+    full suite re-run at 194 passed / 4 skipped (was 191/4 before this
+    fix's 3 new tests). Re-verified live end-to-end against the running
+    mock-provider server: killed it mid-mission, restarted, confirmed
+    the Employee returned to `idle` with `current_task_id` cleared via
+    direct SQLite inspection, then successfully ran a brand-new mission
+    through the same Employee to full `completed` with no crash and no
+    traceback in the server log.

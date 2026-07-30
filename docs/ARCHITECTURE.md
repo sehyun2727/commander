@@ -1,8 +1,8 @@
 # Commander Architecture
 
-Version: v3.0 (V1.1 Target + V1 As-Built)
-Status: V1 shipped and tagged `v1.0.0` (Sprint 8). V1.1 in development — this document defines the target architecture V1.1 builds toward.
-Supersedes: v2.7 (As-Built, Sprint 8)
+Version: v3.1 (V1.1 Target + V1 As-Built)
+Status: V1 shipped and tagged `v1.0.0` (Sprint 8). V1.1 in development — this document defines the target architecture V1.1 builds toward. Sprint 9 (Foundation & Authentication) landed accounts/auth, pipeline data-ification, and operational reliability (orphan recovery, cancel, budget guard).
+Supersedes: v3.0 (Sprint 8)
 
 **How to read this document.** §1–§5 define the **V1.1 target architecture** — the shape the system is being built into. §6 documents **what exists today (V1 as-built)**, honestly, including where it falls short of the target. §7–§9 are cross-cutting concerns that apply to both. Never confuse the two: if a section says *[V1.1 — not built]*, it requires an explicit sprint brief.
 
@@ -301,7 +301,7 @@ Selective recall is mandatory: injecting the entire history into every prompt wo
 | `sandbox` | The one controlled place AI-generated code is executed. `SandboxRunner` port + `DockerSandbox` + `FakeSandbox`. See §7. | ✅ |
 | `core/db` + Alembic | Postgres default (Docker Compose), SQLite for tests. Schema owned by Alembic. | ✅ |
 | `core/boot_checks` | Fail-fast startup validation before `init_db()`. | ✅ |
-| `auth` | — | 🔲 **Empty placeholder** — Sprint 9 |
+| `auth` | Local email+password accounts. `IdentityProvider` port + `LocalIdentityProvider`; bcrypt (cost 12) password hashing, no plaintext column anywhere; HttpOnly session cookies, SHA-256 token hash at rest, sliding 7-day expiry / 30-day max age; `register`/`login`/`logout`/`me` routes; `get_current_user` dependency applied to every non-health/non-auth router. | ✅ Sprint 9 |
 | `roles`, `employees`, `specifications`, `memory`, `widgets` | — | 🔲 **Do not exist** — Sprints 10–18 |
 
 ### 6.2 Lifecycles
@@ -323,7 +323,7 @@ No circular deps. Modules communicate only via EventBus. Agents never call each 
 
 Identified by code review at the V1.1 planning gate; **all five items closed in Sprint 9**:
 
-1. ✅ **Orphaned missions.** Fixed (Phase 1): `lifespan` sweeps `in_progress`/`in_review` Tasks at boot and blocks them with a `TASK_RECOVERED` event; `POST /api/tasks/{id}/cancel` + an in-memory `_running` registry give the CEO a live cancel path.
+1. ✅ **Orphaned missions.** Fixed (Phase 1): `lifespan` sweeps `in_progress`/`in_review` Tasks at boot and blocks them with a `TASK_RECOVERED` event; `POST /api/tasks/{id}/cancel` + an in-memory `_running` registry give the CEO a live cancel path. The same sweep also frees the Employee that was mid-pipeline on that Task — found missing during Phase 5's own DoD verification (the Agent was otherwise left parked in a busy `AgentState` forever, crashing the next Mission ever assigned to it); it's walked back to `idle` through `AGENT_TRANSITIONS`, one `AgentStateChanged` event per Employee. See `docs/DECISIONS.md` #162.
 2. ✅ **No budget enforcement.** Fixed (Phase 1): `_check_budget` runs before every pipeline stage against `commander_mission_max_tokens`/`_usd`/`_seconds`; exceeding any cap blocks the mission and publishes `BUDGET_EXCEEDED` instead of continuing to spend.
 3. ✅ **Detached ORM reuse.** Fixed (Phase 1): `TaskSnapshot` (frozen dataclass) is read once per pipeline run and threaded through stages instead of a detached `TaskORM`; `dataclasses.replace` re-syncs it after the one field a stage legitimately mutates (`branch_name`).
 4. ✅ **Positional role unpacking.** Fixed (Phase 2): `TEMPLATE.pipeline: tuple[StageSpec, ...]` replaces `_PM, _ENGINEER, _REVIEWER = TEMPLATE.roles`; the engine iterates the sequence generically by stage `kind`, and `resume_from` addresses a stage **index** rather than a role_key so the same `kind` can repeat. See §4.1.
@@ -341,13 +341,14 @@ Identified by code review at the V1.1 planning gate; **all five items closed in 
 - **Fails closed, never open:** Docker missing, image absent, check timed out, or CEO toggle off → no-op (`check_results: null`, zero events). It never falls back to running anything unsandboxed. Capability is probed live, never assumed.
 - **The harness changes none of this.** When agents gain tool loops (Sprint 16), the only execution tool is `run_checks`. There is no path by which an agent obtains a shell, and blocklists are never accepted as a substitute for the whitelist (Rule #12).
 
-### 7.2 Authorization  *[V1.1 — Sprint 9]*
+### 7.2 Authorization  *[V1.1 — Sprint 9 ✅]*
 
-- Session-cookie authentication (HttpOnly), session tokens stored as hashes, sliding expiry.
-- Every Company has an owner; every route outside health and auth requires a session.
-- Cross-account access returns **404, not 403** — existence is not disclosed (Rule #15).
-- Password hashes only; no plaintext column exists anywhere in the schema.
-- The identity provider is an interface with one implementation (local email+password); adding Google OAuth must be one new file, not a refactor.
+- Session-cookie authentication (HttpOnly, `samesite=lax`), session tokens stored as SHA-256 hashes, sliding 7-day expiry capped at a 30-day absolute max. `commander_cookie_secure` gates the `Secure` flag (off for local http dev; a real deployment behind TLS must set it, or the browser drops the cookie).
+- Every Company has an `owner_id`; `get_current_user` is a dependency on every router except `health` and `auth` itself.
+- Cross-account access returns **404, not 403** — existence is not disclosed (Rule #15). Enforced by `core/ownership.py`'s `project_owned_by` (direct) and `resource_owned_by` (generic, any ORM row with a `project_id` column — covers Task/Approval/Agent/Report without per-type duplication).
+- Password hashes only (bcrypt, cost 12); no plaintext column exists anywhere in the schema. `scripts/export_users.py` never touches `password_hash`.
+- The identity provider is an interface (`IdentityProvider`) with one implementation (`LocalIdentityProvider`, email+password); adding Google OAuth is one new file, not a refactor — the schema already carries the optional `provider_subject` column, NULL for local accounts.
+- The SSE `/stream` route authenticates the same way as any other route (session cookie), which is *why* sessions are cookies and not a bearer token in the first place — `EventSource` cannot set custom headers.
 
 ---
 
@@ -369,6 +370,8 @@ Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark, Render-ins
 Rationale: the widget dock already replicates everything Headquarters does; keeping both would be a direct duplication and would force the CEO to guess which screen to check.
 
 Cross-cutting: one SSE connection per company, events dedup by id and invalidate queries; generated event types only; `ApiStatusBanner` polls health; SSE connection status surfaces as a "Reconnecting…" pill; a persistent "Simulation mode" badge whenever the company runs on mock.
+
+**Auth (Sprint 9 ✅):** every API call sends `credentials: "include"`; a plain React `AuthProvider` context (mirroring `RealtimeProvider`'s pattern, not a state library) holds the current user and is mounted once in `Providers`. Any 401, from any request anywhere in the app, dispatches a `commander:unauthorized` `window` event that `AuthProvider` alone listens for — clearing local state and redirecting to `/login`, decoupling `lib/api.ts` from React/router. `RequireAuth` gates `/` and `/company/[id]` (and everything under it); `/login` and `/register` are the only unauthenticated routes. Per brief §2.11, the top-right `AccountBadge` is a single click-to-sign-out control, deliberately not a dropdown; a separate email + "Sign out" row lives in the Sidebar footer.
 
 ---
 

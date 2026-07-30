@@ -175,7 +175,9 @@ make dev          # db-up + db-upgrade, then api :8000 + dashboard :3000
 make demo         # seed + dev, one command
 make test         # pytest (apps/api) + dashboard typecheck + dashboard build
 make verify-llm   # one real Mission against a live Anthropic key + throwaway DB
+make export-users # export all CEO accounts to CSV on stdout (bcrypt hashes only, no plaintext)
 python scripts/generate_ts_schemas.py   # after ANY event schema change
+python scripts/reset_password.py <email> <new-password>   # admin password reset, min 8 chars
 ```
 
 ## 7. Conventions
@@ -215,7 +217,7 @@ Shipped and working today:
 
 | Phase | Sprint | Delivers |
 |---|---|---|
-| A | 9 | Reliability foundation (orphan recovery, cancel, budget guard, snapshot pipeline) + accounts/auth |
+| A | 9 ✅ | Reliability foundation (orphan recovery, cancel, budget guard, snapshot pipeline) + accounts/auth |
 | B | 10 | Role/Employee separation; roles become template data |
 | B | 11 | CTO role; unlimited employees; multi-employee-per-role; employee creation flow |
 | C | 12 | PM↔CTO discussion; Project Specification; Requirement Discovery; CEO pre-approval |
@@ -227,6 +229,8 @@ Shipped and working today:
 | F | 18 | Project Memory + Sprint Learning |
 | G | 19 | Mission Tree; remaining widgets; template registry cleanup |
 | H | 20 | V1.1 release |
+
+**Sprint 9 (Phase A) delivered:** local email+password accounts (`modules/auth`, HttpOnly session cookies, bcrypt cost 12, `get_current_user` on every non-health/non-auth route, cross-account access returns 404 per Rule #15) · a minimal login/register/logout frontend (`AuthProvider`, `RequireAuth`, a single click-to-sign-out `AccountBadge` — no dropdown, per brief) · orphan-mission recovery on boot (frees both the Mission and the Employee that was working it — the Employee-side gap was found live during this sprint's own DoD verification, see `docs/DECISIONS.md` #162) + a CEO cancel path · a per-mission budget guard (Rule #13) with a new `BUDGET_EXCEEDED` event, plus `TASK_RECOVERED` for the recovery path · the workflow engine now iterates `TEMPLATE.pipeline: tuple[StageSpec, ...]` instead of positionally unpacking PM/Engineer/Reviewer, so stage order and repetition are template data, not engine code. See `docs/ARCHITECTURE.md` §4.1, §6.1, §7.2 for the as-built detail and `docs/DECISIONS.md` #143–162 for the judgment calls.
 
 **Out of scope for all of V1.1:** shipping a second company template (the architecture must support it; only Software Company ships) · multi-user collaboration on one company · hosting/deployment/Launch · providers beyond Anthropic + mock · template marketplace · parallel Backend/Frontend execution (V1.1 is sequential) · implementing Designer/QA/DevOps/Security roles.
 
