@@ -6,7 +6,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ...deps import get_session_factory, get_workspace_manager
+from ...core.db_models import UserORM
+from ...core.ownership import project_owned_by
+from ...deps import get_current_user, get_session_factory, get_workspace_manager
 from . import service
 from .schemas import FileContentResponse, FileEntryResponse, MergeRecordResponse
 
@@ -19,8 +21,9 @@ async def get_tree(
     ref: str = "main",
     session_factory=Depends(get_session_factory),
     workspace_manager=Depends(get_workspace_manager),
+    user: UserORM = Depends(get_current_user),
 ):
-    if not await service.project_exists(session_factory, project_id):
+    if not await project_owned_by(session_factory, project_id, user.id):
         raise HTTPException(status_code=404, detail="Company not found")
     return await service.get_tree(session_factory, workspace_manager, project_id, ref)
 
@@ -32,8 +35,9 @@ async def get_file(
     ref: str = "main",
     session_factory=Depends(get_session_factory),
     workspace_manager=Depends(get_workspace_manager),
+    user: UserORM = Depends(get_current_user),
 ):
-    if not await service.project_exists(session_factory, project_id):
+    if not await project_owned_by(session_factory, project_id, user.id):
         raise HTTPException(status_code=404, detail="Company not found")
     content = await service.get_file(session_factory, workspace_manager, project_id, path, ref)
     if content is None:
@@ -47,7 +51,8 @@ async def get_merges(
     limit: int = 10,
     session_factory=Depends(get_session_factory),
     workspace_manager=Depends(get_workspace_manager),
+    user: UserORM = Depends(get_current_user),
 ):
-    if not await service.project_exists(session_factory, project_id):
+    if not await project_owned_by(session_factory, project_id, user.id):
         raise HTTPException(status_code=404, detail="Company not found")
     return await service.get_merges(session_factory, workspace_manager, project_id, limit)

@@ -1,4 +1,4 @@
-.PHONY: help install dev demo seed test sandbox-image db-up db-down db-upgrade db-downgrade verify-llm
+.PHONY: help install dev demo seed test sandbox-image db-up db-down db-upgrade db-downgrade verify-llm export-users
 
 .DEFAULT_GOAL := help
 
@@ -58,3 +58,6 @@ sandbox-image: ## Build the Docker image used by the execution sandbox (optional
 
 verify-llm: ## Run one real Mission against a live Anthropic key + throwaway DB
 	$(API_PY) scripts/verify_real_llm.py
+
+export-users: ## Export all CEO accounts to CSV (no plaintext passwords) on stdout
+	$(API_PY) scripts/export_users.py

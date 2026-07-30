@@ -26,18 +26,16 @@ async def _wait_for_pending_approval(harness, task_id: str, timeout: float = 30.
 
 @pytest.mark.asyncio
 async def test_project_exists(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     assert await workspace_service.project_exists(harness.session_factory, project.id) is True
     assert await workspace_service.project_exists(harness.session_factory, "no-such-project") is False
 
 
 @pytest.mark.asyncio
 async def test_get_tree_and_file_and_merges_after_a_code_mission(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory,
         harness.event_bus,
@@ -86,9 +84,8 @@ async def test_get_tree_and_file_and_merges_after_a_code_mission(harness):
 
 @pytest.mark.asyncio
 async def test_get_diff_is_none_for_document_missions(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory,
         harness.event_bus,

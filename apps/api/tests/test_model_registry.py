@@ -25,7 +25,7 @@ def test_options_for_role_anthropic_allows_any_model_for_any_role():
 
 @pytest.mark.asyncio
 async def test_list_catalog_defaults_to_recommended_with_no_override(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     catalog = await list_catalog(harness.session_factory, "mock", project.id)
     by_role = {entry["role"]: entry for entry in catalog}
     assert by_role["builder"]["current_model"] == "mock-builder-v1"
@@ -35,7 +35,7 @@ async def test_list_catalog_defaults_to_recommended_with_no_override(harness):
 
 @pytest.mark.asyncio
 async def test_set_role_model_rejects_unavailable_model(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     with pytest.raises(ValueError):
         await set_role_model(
             harness.session_factory, harness.event_bus, "mock", project.id, "reviewer", "mock-planner-v1"
@@ -44,9 +44,8 @@ async def test_set_role_model_rejects_unavailable_model(harness):
 
 @pytest.mark.asyncio
 async def test_set_role_model_persists_override_and_emits_event(harness):
-    project = await create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
-    )
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
+    , owner_id=harness.user.id)
     await set_role_model(
         harness.session_factory,
         harness.event_bus,
@@ -75,9 +74,8 @@ async def test_set_role_model_persists_override_and_emits_event(harness):
 
 @pytest.mark.asyncio
 async def test_set_role_model_to_same_value_does_not_emit_event(harness):
-    project = await create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
-    )
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
+    , owner_id=harness.user.id)
     recommended = await effective_model(harness.session_factory, "anthropic", project.id, "builder")
     await set_role_model(harness.session_factory, harness.event_bus, "anthropic", project.id, "builder", recommended)
 
@@ -87,9 +85,8 @@ async def test_set_role_model_to_same_value_does_not_emit_event(harness):
 
 @pytest.mark.asyncio
 async def test_gateway_resolve_model_honors_override(harness):
-    project = await create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
-    )
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
+    , owner_id=harness.user.id)
     await set_role_model(
         harness.session_factory,
         harness.event_bus,

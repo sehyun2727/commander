@@ -23,9 +23,8 @@ async def _wait_for_state(harness, task_id: str, *states, timeout: float = 30.0)
 
 @pytest.mark.asyncio
 async def test_situation_is_calm_for_a_freshly_founded_company(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     result = await situation_service.get_situation(harness.session_factory, harness.secrets, harness.event_bus, project.id)
     assert result is not None
     text, generated_at = result
@@ -35,9 +34,8 @@ async def test_situation_is_calm_for_a_freshly_founded_company(harness):
 
 @pytest.mark.asyncio
 async def test_situation_mentions_pending_decisions_once_a_mission_reaches_review(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Ship it", "desc", "normal"
     )

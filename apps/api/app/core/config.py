@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     commander_mission_max_tokens: int = 200_000
     commander_mission_max_usd: float = 5.0
     commander_mission_max_seconds: int = 900
+    # Session cookie `secure` flag (Sprint 9 §2.1) -- local dev serves http,
+    # so this stays False by default; a real deployment behind TLS must
+    # override it, or the browser silently drops the cookie.
+    commander_cookie_secure: bool = False
+    commander_demo_email: str = "ceo@commander.local"
+    commander_demo_password: str = "commander1234"
 
 
 settings = Settings()

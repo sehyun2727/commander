@@ -9,9 +9,8 @@ from app.modules.provider_gateway import build_gateway
 
 @pytest.mark.asyncio
 async def test_agent_override_wins_over_ceo_role_override_and_registry_default(harness):
-    project = await create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
-    )
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
+    , owner_id=harness.user.id)
     await set_role_model(
         harness.session_factory,
         harness.event_bus,
@@ -35,9 +34,8 @@ async def test_agent_override_wins_over_ceo_role_override_and_registry_default(h
 
 @pytest.mark.asyncio
 async def test_ceo_role_override_wins_when_no_agent_override(harness):
-    project = await create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
-    )
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
+    , owner_id=harness.user.id)
     await set_role_model(
         harness.session_factory,
         harness.event_bus,
@@ -59,9 +57,8 @@ async def test_ceo_role_override_wins_when_no_agent_override(harness):
 
 @pytest.mark.asyncio
 async def test_registry_default_when_no_overrides_at_either_tier(harness):
-    project = await create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
-    )
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "anthropic"
+    , owner_id=harness.user.id)
     gateway = build_gateway(
         "anthropic",
         harness.secrets,

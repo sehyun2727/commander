@@ -14,7 +14,7 @@ async def test_founding_matches_the_template_exactly(harness):
     """Sprint 4.7 §10.6: founding must read the trio/order/profiles from
     the template, byte-for-byte identical to the pre-refactor hardcoded
     values (see test_founding_profiles.py, which this complements)."""
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
 
     async with harness.session_factory() as session:
         result = await session.execute(select(AgentORM).where(AgentORM.project_id == project.id))

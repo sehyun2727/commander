@@ -57,9 +57,8 @@ async def _set_task_state(harness, task_id: str, state: TaskState) -> None:
 @pytest.mark.asyncio
 async def test_engine_iterates_arbitrary_stage_count(harness, monkeypatch):
     monkeypatch.setattr(engine_module, "TEMPLATE", _TEST_TEMPLATE)
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Four-stage mission", "", "normal"
     )
@@ -77,9 +76,8 @@ async def test_engine_supports_repeated_stage_kind(harness, monkeypatch):
     CodingStarted beat -- the engine dispatches per stage index, not once
     per distinct kind."""
     monkeypatch.setattr(engine_module, "TEMPLATE", _TEST_TEMPLATE)
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Repeated produce", "", "normal"
     )
@@ -101,9 +99,8 @@ async def test_resume_from_nonzero_index_does_not_replay_in_progress_transition(
     the `resume_from == 0` guard ever regressed, this mission would fail
     instead of reaching PENDING_APPROVAL."""
     monkeypatch.setattr(engine_module, "TEMPLATE", _TEST_TEMPLATE)
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Resume mid-pipeline", "", "normal"
     )
@@ -128,9 +125,8 @@ async def test_resume_from_stage_index_skips_earlier_stages_entirely(harness, mo
     first produce stage -- proving `resume_from` is positional (a stage
     index), not looked up by role_key or kind."""
     monkeypatch.setattr(engine_module, "TEMPLATE", _TEST_TEMPLATE)
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Resume from index 2", "", "normal"
     )

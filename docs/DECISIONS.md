@@ -1870,3 +1870,86 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     remaining stale sentence in the same edit was strictly cheaper than
     reopening the file a third time in Phase 5 for a single word change;
     Decision #142 is superseded by this entry, not contradicted by it.
+
+### Phase 3 — Auth backend
+
+153. **`fa793dce62cb_accounts_and_sessions` migration rewritten to use
+    `op.batch_alter_table` for `projects.owner_id`'s `add_column` +
+    `create_foreign_key`, instead of two bare top-level `op` calls.**
+    Smoke-testing the migration directly (`alembic upgrade head` against
+    a throwaway sqlite file — not just `Base.metadata.create_all`, which
+    is what `conftest.py` uses and never exercises Alembic at all) failed
+    with `NotImplementedError: No support for ALTER of constraints in
+    SQLite dialect`. `core/config.py`'s own comment documents sqlite as a
+    supported "zero-dependency fallback ... for tests and quick local
+    runs," not a test-only shim, so a migration that only works on
+    Postgres would silently break that documented path the moment
+    someone ran `db-upgrade` against a sqlite `DATABASE_URL`. Batch mode
+    is a no-op wrapper on Postgres (plain in-place `ALTER TABLE`) and
+    does the copy-and-move recreate strategy on sqlite — verified
+    upgrade → downgrade → re-upgrade all succeed against a throwaway
+    sqlite file. No other migration in `alembic/versions/` currently adds
+    a column + FK together, so this is the first time the gap surfaced.
+154. **`core/ownership.py` gained one generic `resource_owned_by(session_
+    factory, orm_class, resource_id, owner_id)` instead of a bespoke
+    ownership check per resource type (tasks, approvals, agents,
+    reports).** All four ORM classes carry a direct `project_id` column
+    (confirmed by reading `db_models.py`), so the check is identical
+    shape every time: load the row, load its project, compare
+    `project.owner_id`. `project_owned_by` (the direct project-id check)
+    stays separate since a `ProjectORM` has no `project_id` column to
+    read — the two helpers cover the two shapes that actually exist in
+    the schema, not a speculative third.
+155. **`approvals/service.py`'s `list_pending` gained an `owner_id: str |
+    None = None` third parameter rather than reordering `project_id` to
+    make room for it.** `list_pending` had ~18 existing positional call
+    sites (`list_pending(session_factory, project.id)`) across tests and
+    scripts; putting `owner_id` first would have silently rebound every
+    one of those calls to the wrong parameter and made `project_id`
+    newly-required, breaking them all with a `TypeError` rather than a
+    visible signature change. Caught by re-grepping every call site
+    before running tests, not by a test failure. This also fixed a real
+    cross-account data leak: `list_pending(project_id=None)` previously
+    returned pending approvals for *every* account's projects, not just
+    the caller's — the route now passes `owner_id=user.id` whenever no
+    `project_id` filter narrows the query, and the service JOINs through
+    `ProjectORM.owner_id` to scope it (Rule #15).
+156. **`auth/service.py`'s `resolve_session` normalizes `row.expires_at`
+    to timezone-aware before comparing against `datetime.now(timezone.
+    utc)`, using the same `tzinfo is None -> .replace(tzinfo=utc)` pattern
+    already established in `workflow_engine/engine.py` (Decision #146) and
+    `_check_budget`.** SQLite round-trips `DateTime(timezone=True)` as
+    naive; Postgres does not. Discovered via the new `tests/test_auth.py`
+    — 7 of 14 tests failed with `TypeError: can't compare offset-naive
+    and offset-aware datetimes` on every test that made a second
+    authenticated request after login (i.e. anything that exercised the
+    sliding-expiry read path). This is the third time this exact SQLite/
+    Postgres divergence has bitten a `datetime` comparison this sprint
+    (budget guard, workflow engine, now sessions) — worth flagging for
+    Sprint 10+ as a candidate for a single shared `_ensure_aware()`
+    helper instead of the pattern being copy-pasted a fourth time.
+157. **`realtime/routes.py`'s `/stream` (SSE) endpoint gained `session_
+    factory` and `user` dependencies in addition to the existing `event_
+    bus`, and checks `project_owned_by` before calling `event_bus.
+    register_stream`.** The brief's own §2.4 flags SSE explicitly ("쿠키가
+    자동 전송되므로 동작하지만, 반드시 테스트로 확인해라") because `EventSource`
+    can't set custom headers — auth here only works *because* it's a
+    cookie, confirming the Sprint 9 §2.1 cookie-over-JWT choice was load-
+    bearing for this specific route, not just a general preference.
+    Covered by `test_sse_stream_requires_auth` (401) and `test_sse_
+    stream_cross_account_returns_404` (404) in `tests/test_auth.py`.
+158. **`tests/conftest.py`'s new `api_client` fixture deliberately does
+    not override `get_current_user`**, unlike every other dependency
+    (`get_session_factory`, `get_event_bus`, etc., which read `request.
+    app.state.X` and only get populated by `main.py`'s real `lifespan`).
+    Every prior test in this codebase exercised the service layer
+    directly and never touched an HTTP route, so nothing previously
+    verified that a 401 or a cross-account 404 actually reaches the
+    client over real cookies. `api_client` wires a real `httpx.
+    AsyncClient` against the real FastAPI `app` via `ASGITransport`,
+    overriding only the *infra* singletons with the harness's own (no
+    Postgres/Docker needed), while leaving auth resolution — cookie in,
+    session lookup, `UserORM` out — running for real. `httpx`'s built-in
+    cookie jar persisting `Set-Cookie` across requests on the same client
+    instance is what makes the register→cookie→authenticated-request and
+    login→logout→401 flows testable in a handful of lines each.

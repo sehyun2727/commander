@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
-from ...deps import get_sandbox_runner, get_session_factory
+from ...core.db_models import UserORM
+from ...core.ownership import project_owned_by
+from ...deps import get_current_user, get_sandbox_runner, get_session_factory
 from .schemas import CapabilityResponse, ExecutionSettingsResponse, SetExecutionEnabledRequest
 from .settings import get_execution_enabled, set_execution_enabled
 
@@ -10,7 +12,10 @@ router = APIRouter(tags=["sandbox"])
 
 
 @router.get("/api/system/capabilities", response_model=CapabilityResponse)
-async def get_capabilities(sandbox_runner=Depends(get_sandbox_runner)):
+async def get_capabilities(
+    sandbox_runner=Depends(get_sandbox_runner),
+    user: UserORM = Depends(get_current_user),
+):
     capability = await sandbox_runner.capability()
     return CapabilityResponse(execution=capability.available, reason=capability.reason)
 
@@ -22,7 +27,10 @@ async def get_execution_settings(
     project_id: str,
     sandbox_runner=Depends(get_sandbox_runner),
     session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
 ):
+    if not await project_owned_by(session_factory, project_id, user.id):
+        raise HTTPException(status_code=404, detail="Company not found")
     capability = await sandbox_runner.capability()
     enabled = await get_execution_enabled(session_factory, project_id)
     return ExecutionSettingsResponse(
@@ -38,7 +46,10 @@ async def put_execution_settings(
     body: SetExecutionEnabledRequest,
     sandbox_runner=Depends(get_sandbox_runner),
     session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
 ):
+    if not await project_owned_by(session_factory, project_id, user.id):
+        raise HTTPException(status_code=404, detail="Company not found")
     await set_execution_enabled(session_factory, project_id, body.enabled)
     capability = await sandbox_runner.capability()
     return ExecutionSettingsResponse(

@@ -22,6 +22,7 @@ from .modules.agent_profiles import router as agent_profiles_router
 from .modules.agent_runtime import DBAgentRuntime
 from .modules.agent_runtime import router as agents_router
 from .modules.approvals import router as approvals_router
+from .modules.auth import router as auth_router
 from .modules.costs import router as costs_router
 from .modules.event_bus import InProcessEventBus
 from .modules.model_registry import router as models_router
@@ -95,6 +96,7 @@ app.add_middleware(
     allow_credentials=True,
 )
 
+app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(tasks_router)
 app.include_router(approvals_router)

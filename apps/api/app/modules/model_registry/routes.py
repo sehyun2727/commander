@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ...deps import get_event_bus, get_session_factory
+from ...core.db_models import UserORM
+from ...core.ownership import project_owned_by
+from ...deps import get_current_user, get_event_bus, get_session_factory
 from . import service
 from .schemas import ModelCatalogEntry, SetModelRequest
 
@@ -10,7 +12,13 @@ router = APIRouter(prefix="/api/projects/{project_id}/models", tags=["model_regi
 
 
 @router.get("", response_model=list[ModelCatalogEntry])
-async def get_models(project_id: str, session_factory=Depends(get_session_factory)):
+async def get_models(
+    project_id: str,
+    session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
+):
+    if not await project_owned_by(session_factory, project_id, user.id):
+        raise HTTPException(status_code=404, detail="Company not found")
     provider = await service.provider_for(session_factory, project_id)
     if provider is None:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -24,7 +32,10 @@ async def set_model(
     body: SetModelRequest,
     event_bus=Depends(get_event_bus),
     session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
 ):
+    if not await project_owned_by(session_factory, project_id, user.id):
+        raise HTTPException(status_code=404, detail="Company not found")
     provider = await service.provider_for(session_factory, project_id)
     if provider is None:
         raise HTTPException(status_code=404, detail="Company not found")

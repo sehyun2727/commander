@@ -17,9 +17,10 @@ async def create_project(
     agent_runtime: AgentRuntime,
     name: str,
     provider: str,
+    owner_id: str,
 ) -> ProjectORM:
     async with session_factory() as session:
-        project = ProjectORM(name=name, provider=provider)
+        project = ProjectORM(name=name, provider=provider, owner_id=owner_id)
         session.add(project)
         await session.commit()
         await session.refresh(project)
@@ -37,9 +38,11 @@ async def create_project(
     return project
 
 
-async def list_projects(session_factory) -> list[ProjectORM]:
+async def list_projects(session_factory, owner_id: str) -> list[ProjectORM]:
     async with session_factory() as session:
-        result = await session.execute(select(ProjectORM).order_by(ProjectORM.created_at.asc()))
+        result = await session.execute(
+            select(ProjectORM).where(ProjectORM.owner_id == owner_id).order_by(ProjectORM.created_at.asc())
+        )
         return list(result.scalars().all())
 
 

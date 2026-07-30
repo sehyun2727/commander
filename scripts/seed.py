@@ -37,6 +37,7 @@ from app.core.lifecycle.task_states import TaskState  # noqa: E402
 from app.core.secrets import DBSecretsProvider  # noqa: E402
 from app.modules.agent_runtime import DBAgentRuntime  # noqa: E402
 from app.modules.approvals import service as approvals_service  # noqa: E402
+from app.modules.auth import service as auth_service  # noqa: E402
 from app.modules.event_bus import InProcessEventBus  # noqa: E402
 from app.modules.projects import service as projects_service  # noqa: E402
 from app.modules.sandbox import DockerSandbox  # noqa: E402
@@ -97,8 +98,13 @@ async def main() -> None:
         session_factory, event_bus, agent_runtime, secrets, workspace_manager, sandbox_runner
     )
 
+    demo_user = await auth_service.register(
+        session_factory, settings.commander_demo_email, settings.commander_demo_password, "Demo CEO"
+    )
+    print(f"Created demo CEO account ({settings.commander_demo_email} / {settings.commander_demo_password})")
+
     project = await projects_service.create_project(
-        session_factory, event_bus, agent_runtime, name="Acme AI", provider="mock"
+        session_factory, event_bus, agent_runtime, name="Acme AI", provider="mock", owner_id=demo_user.id
     )
     print(f"Founded company 'Acme AI' ({project.id})")
 

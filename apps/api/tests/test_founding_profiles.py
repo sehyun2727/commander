@@ -10,7 +10,7 @@ from app.modules.projects.service import create_project
 
 @pytest.mark.asyncio
 async def test_create_project_founds_all_three_roles_with_default_profiles(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
 
     async with harness.session_factory() as session:
         result = await session.execute(select(AgentORM).where(AgentORM.project_id == project.id))

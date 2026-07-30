@@ -66,9 +66,8 @@ async def _wait_for_event(harness, project_id: str, event_type: EventType, timeo
 
 @pytest.mark.asyncio
 async def test_recover_orphaned_tasks_blocks_in_progress_mission(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Orphaned mission", "", "normal"
     )
@@ -83,9 +82,8 @@ async def test_recover_orphaned_tasks_blocks_in_progress_mission(harness):
 
 @pytest.mark.asyncio
 async def test_recover_orphaned_tasks_blocks_in_review_mission(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Orphaned mission", "", "normal"
     )
@@ -100,9 +98,8 @@ async def test_recover_orphaned_tasks_blocks_in_review_mission(harness):
 
 @pytest.mark.asyncio
 async def test_recover_orphaned_tasks_leaves_resting_states_untouched(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     pending = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Waiting on CEO", "", "normal"
     )
@@ -122,9 +119,8 @@ async def test_recover_orphaned_tasks_leaves_resting_states_untouched(harness):
 
 @pytest.mark.asyncio
 async def test_recover_orphaned_tasks_emits_task_recovered_event(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Orphaned mission", "", "normal"
     )
@@ -142,9 +138,8 @@ async def test_recover_orphaned_tasks_emits_task_recovered_event(harness):
 
 @pytest.mark.asyncio
 async def test_cancel_running_mission_transitions_to_cancelled_and_frees_agent(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Cancel me", "", "normal"
     )
@@ -170,9 +165,8 @@ async def test_cancel_running_mission_transitions_to_cancelled_and_frees_agent(h
 
 @pytest.mark.asyncio
 async def test_cancel_completed_mission_is_rejected(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Already done", "", "normal"
     )
@@ -195,9 +189,8 @@ async def test_cancel_mission_with_no_running_coroutine_uses_fallback(harness):
     """A mission in `pending_approval` has no live asyncio.Task (the
     pipeline already finished) -- cancel must still work via the direct
     DB-transition fallback path in `CommanderWorkflowEngine.cancel_task`."""
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Waiting on CEO", "", "normal"
     )
@@ -215,9 +208,8 @@ async def test_cancel_mission_with_no_running_coroutine_uses_fallback(harness):
 @pytest.mark.asyncio
 async def test_budget_exceeded_tokens_blocks_the_mission(harness, monkeypatch):
     monkeypatch.setattr(settings, "commander_mission_max_tokens", -1)
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Too expensive", "", "normal"
     )
@@ -232,9 +224,8 @@ async def test_budget_exceeded_tokens_blocks_the_mission(harness, monkeypatch):
 @pytest.mark.asyncio
 async def test_budget_exceeded_usd_blocks_the_mission(harness, monkeypatch):
     monkeypatch.setattr(settings, "commander_mission_max_usd", -1.0)
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Too expensive", "", "normal"
     )
@@ -249,9 +240,8 @@ async def test_budget_exceeded_usd_blocks_the_mission(harness, monkeypatch):
 @pytest.mark.asyncio
 async def test_budget_exceeded_seconds_blocks_the_mission(harness, monkeypatch):
     monkeypatch.setattr(settings, "commander_mission_max_seconds", -1)
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Too slow", "", "normal"
     )
@@ -266,9 +256,8 @@ async def test_budget_exceeded_seconds_blocks_the_mission(harness, monkeypatch):
 @pytest.mark.asyncio
 async def test_budget_exceeded_emits_event_with_limit_details(harness, monkeypatch):
     monkeypatch.setattr(settings, "commander_mission_max_tokens", -1)
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Too expensive", "", "normal"
     )
@@ -287,9 +276,8 @@ async def test_budget_exceeded_emits_event_with_limit_details(harness, monkeypat
 
 @pytest.mark.asyncio
 async def test_mission_completes_normally_when_under_budget(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Cheap mission", "", "normal"
     )

@@ -13,15 +13,21 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from ...core.db_models import ApprovalORM
+from ...core.db_models import ApprovalORM, ProjectORM
 from ...core.interfaces.workflow_engine import WorkflowEngine
 
 
-async def list_pending(session_factory, project_id: str | None) -> list[ApprovalORM]:
+async def list_pending(session_factory, project_id: str | None, owner_id: str | None = None) -> list[ApprovalORM]:
     async with session_factory() as session:
         stmt = select(ApprovalORM).where(ApprovalORM.status == "pending")
         if project_id:
             stmt = stmt.where(ApprovalORM.project_id == project_id)
+        else:
+            # No project_id means "across every one of my companies" -- must
+            # still be scoped to this account, never every account's (Rule #15).
+            stmt = stmt.join(ProjectORM, ProjectORM.id == ApprovalORM.project_id).where(
+                ProjectORM.owner_id == owner_id
+            )
         stmt = stmt.order_by(ApprovalORM.created_at.asc())
         result = await session.execute(stmt)
         return list(result.scalars().all())

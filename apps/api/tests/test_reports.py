@@ -13,7 +13,7 @@ CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
 
 @pytest.mark.asyncio
 async def test_generate_report_is_quiet_when_nothing_happened(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
 
     report = await generate_report(harness.session_factory, harness.secrets, harness.event_bus, project.id)
 
@@ -25,7 +25,7 @@ async def test_generate_report_is_quiet_when_nothing_happened(harness):
 
 @pytest.mark.asyncio
 async def test_generate_report_reflects_missions_and_decisions(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
 
     await harness.event_bus.publish(
         build_event(
@@ -55,7 +55,7 @@ async def test_generate_report_reflects_missions_and_decisions(harness):
 
 @pytest.mark.asyncio
 async def test_generate_report_ignores_events_outside_the_24h_window(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     event = build_event(
         type=EventType.TASK_COMPLETED,
         project_id=project.id,
@@ -88,7 +88,7 @@ async def test_generate_report_returns_none_for_unknown_project(harness):
 
 @pytest.mark.asyncio
 async def test_list_and_get_report(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     created = await generate_report(harness.session_factory, harness.secrets, harness.event_bus, project.id)
 
     reports = await list_reports(harness.session_factory, project.id)

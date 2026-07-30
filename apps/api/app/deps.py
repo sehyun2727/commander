@@ -4,8 +4,9 @@ DB session factory). Kept here so route modules don't import main.py."""
 
 from __future__ import annotations
 
-from fastapi import Request
+from fastapi import Depends, HTTPException, Request
 
+from .core.db_models import UserORM
 from .core.interfaces.agent_runtime import AgentRuntime
 from .core.interfaces.event_bus import EventBus
 from .core.interfaces.sandbox import SandboxRunner
@@ -40,3 +41,17 @@ def get_sandbox_runner(request: Request) -> SandboxRunner:
 
 def get_session_factory(request: Request):
     return request.app.state.session_factory
+
+
+async def get_current_user(request: Request, session_factory=Depends(get_session_factory)) -> UserORM:
+    # Imported here, not at module level: modules.auth.routes imports this
+    # module for get_session_factory, so a top-level `from .modules.auth
+    # import service` would cycle back into deps before it finishes
+    # defining itself.
+    from .modules.auth import service as auth_service
+
+    token = request.cookies.get(auth_service.SESSION_COOKIE_NAME)
+    user = await auth_service.resolve_session(session_factory, token) if token else None
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    return user

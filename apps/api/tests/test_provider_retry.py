@@ -75,9 +75,8 @@ async def test_retryable_status_5xx_is_retried():
 
 @pytest.mark.asyncio
 async def test_stream_retries_before_first_chunk_and_emits_retry_event(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     flaky = FlakyProvider(fail_times=1)
     gateway = RoutedProviderGateway(
         "mock", flaky, event_bus=harness.event_bus, project_id=project.id, max_retries=2

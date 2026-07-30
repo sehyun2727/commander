@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -28,6 +28,39 @@ class Base(DeclarativeBase):
     pass
 
 
+class UserORM(Base):
+    """A CEO account (Sprint 9, Rule #15). `password_hash` is NULL for
+    non-local providers -- schema shape, not code, is what keeps a plaintext
+    password column from ever existing."""
+
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("auth_provider", "provider_subject", name="uq_users_auth_provider_subject"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String, unique=True)
+    display_name: Mapped[str] = mapped_column(String)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    auth_provider: Mapped[str] = mapped_column(String, default="local")
+    provider_subject: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SessionORM(Base):
+    """A logged-in session. `id` is the SHA-256 hash of the bearer token
+    the CEO's browser holds in an HttpOnly cookie -- the raw token itself
+    is never persisted, so a DB leak alone can't be replayed as a session
+    (Sprint 9 §2.1)."""
+
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class ProjectORM(Base):
     __tablename__ = "projects"
 
@@ -35,6 +68,7 @@ class ProjectORM(Base):
     name: Mapped[str] = mapped_column(String)
     provider: Mapped[str] = mapped_column(String, default="mock")
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

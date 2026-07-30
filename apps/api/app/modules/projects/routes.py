@@ -3,7 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from ...core.config import settings
-from ...deps import get_agent_runtime, get_event_bus, get_secrets, get_session_factory
+from ...core.db_models import UserORM
+from ...core.ownership import project_owned_by
+from ...deps import get_agent_runtime, get_current_user, get_event_bus, get_secrets, get_session_factory
 from ...templates import TEMPLATE
 from . import service
 from .schemas import CompanySettingsRequest, ProjectCreateRequest, ProjectResponse, StarterResponse
@@ -17,23 +19,28 @@ async def create_project(
     event_bus=Depends(get_event_bus),
     agent_runtime=Depends(get_agent_runtime),
     session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
 ):
     project = await service.create_project(
-        session_factory, event_bus, agent_runtime, body.name, settings.commander_provider
+        session_factory, event_bus, agent_runtime, body.name, settings.commander_provider, user.id
     )
     return project
 
 
 @router.get("", response_model=list[ProjectResponse])
-async def list_projects(session_factory=Depends(get_session_factory)):
-    return await service.list_projects(session_factory)
+async def list_projects(session_factory=Depends(get_session_factory), user: UserORM = Depends(get_current_user)):
+    return await service.list_projects(session_factory, user.id)
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(project_id: str, session_factory=Depends(get_session_factory)):
-    project = await service.get_project(session_factory, project_id)
-    if project is None:
+async def get_project(
+    project_id: str,
+    session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
+):
+    if not await project_owned_by(session_factory, project_id, user.id):
         raise HTTPException(status_code=404, detail="Company not found")
+    project = await service.get_project(session_factory, project_id)
     return project
 
 
@@ -42,15 +49,22 @@ async def archive_project(
     project_id: str,
     event_bus=Depends(get_event_bus),
     session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
 ):
-    project = await service.archive_project(session_factory, event_bus, project_id)
-    if project is None:
+    if not await project_owned_by(session_factory, project_id, user.id):
         raise HTTPException(status_code=404, detail="Company not found")
+    project = await service.archive_project(session_factory, event_bus, project_id)
     return project
 
 
 @router.get("/{project_id}/starters", response_model=list[StarterResponse])
-async def list_starters(project_id: str):
+async def list_starters(
+    project_id: str,
+    session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
+):
+    if not await project_owned_by(session_factory, project_id, user.id):
+        raise HTTPException(status_code=404, detail="Company not found")
     # Static, template-owned onboarding suggestions (§6) -- no per-project
     # state, so no DB lookup; only one template exists (§10.4).
     return TEMPLATE.starters
@@ -63,10 +77,11 @@ async def update_settings(
     event_bus=Depends(get_event_bus),
     secrets=Depends(get_secrets),
     session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
 ):
+    if not await project_owned_by(session_factory, project_id, user.id):
+        raise HTTPException(status_code=404, detail="Company not found")
     project = await service.update_settings(
         session_factory, event_bus, secrets, project_id, body.name, body.provider, body.anthropic_api_key
     )
-    if project is None:
-        raise HTTPException(status_code=404, detail="Company not found")
     return project

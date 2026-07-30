@@ -40,3 +40,14 @@ def validate_boot_config() -> None:
             "sqlite or postgresql URL. Commander only supports sqlite+aiosqlite "
             "(tests/local) or postgresql+asyncpg (via `make db-up`)."
         )
+
+    # CORS runs with allow_credentials=True (main.py) so the session cookie
+    # rides along with dashboard requests -- but browsers silently refuse to
+    # send credentialed requests to a wildcard origin, so "*" here wouldn't
+    # error, it would just quietly break login for everyone (Sprint 9 §2.1).
+    if "*" in settings.cors_origins:
+        raise BootConfigError(
+            "CORS_ORIGINS contains a wildcard ('*'), which is incompatible with "
+            "credentialed requests (session cookies never get sent). List the "
+            "dashboard's real origin(s) instead, e.g. http://localhost:3000."
+        )

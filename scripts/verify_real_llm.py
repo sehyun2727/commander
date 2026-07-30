@@ -35,6 +35,7 @@ from app.core.lifecycle.task_states import TaskState  # noqa: E402
 from app.core.secrets import DBSecretsProvider  # noqa: E402
 from app.modules.agent_runtime import DBAgentRuntime  # noqa: E402
 from app.modules.approvals import service as approvals_service  # noqa: E402
+from app.modules.auth import service as auth_service  # noqa: E402
 from app.modules.costs import service as costs_service  # noqa: E402
 from app.modules.event_bus import InProcessEventBus  # noqa: E402
 from app.modules.projects import service as projects_service  # noqa: E402
@@ -86,9 +87,12 @@ async def main() -> int:
             session_factory, event_bus, agent_runtime, secrets, workspace_manager, sandbox_runner
         )
 
+        user = await auth_service.register(session_factory, "verify-llm@commander.local", "verifypassword123", "Verify LLM")
+
         print("Founding a throwaway company against the real Anthropic API...")
         project = await projects_service.create_project(
-            session_factory, event_bus, agent_runtime, name="Real-LLM Verification", provider="anthropic"
+            session_factory, event_bus, agent_runtime, name="Real-LLM Verification", provider="anthropic",
+            owner_id=user.id,
         )
 
         task = await tasks_service.create_task(

@@ -46,9 +46,8 @@ async def _wait_for_state(harness, task_id: str, *states: TaskState, timeout: fl
 
 
 async def _make_code_task(harness, title: str = "Add a function", description: str = "with a test"):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, title, description, "normal",
         deliverable_type="code",
@@ -161,9 +160,8 @@ async def test_full_pipeline_persists_check_results_on_the_task(harness):
     Engineer's deterministic output has no matching files, so this mainly
     guards that wiring `_run_checks` into `_run_pipeline` doesn't disturb
     the ordinary code-mission flow (item 2.8)."""
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Build landing page", "hero + tagline", "normal",
         deliverable_type="code",

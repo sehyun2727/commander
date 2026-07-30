@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 9 — Phase A: Foundation & Authentication
- Overall: 28/56 items · 50%
- Now working on: Phase 3 auth backend (starting)
+ Overall: 42/56 items · 75%
+ Now working on: Phase 4 frontend auth (starting)
  Last update: 2026-07-30
  (n/m and % in this header must always match item state -- every time an
  item flips, the header updates in the SAME edit, never batched at phase
@@ -95,21 +95,60 @@ PHASE 2 — 파이프라인 데이터화                                  (8/8)
 [x] 2.8  DECISIONS.md #149-152 기록 + 커밋+푸시:
         refactor(workflow): template-driven stage pipeline
 
-PHASE 3 — 인증 백엔드                                          (0/14)
-[ ] 3.1  users / sessions 모델 정의
-[ ] 3.2  Alembic 마이그레이션 (파괴적 삭제 + docstring 경고)
-[ ] 3.3  modules/auth 구조 + IdentityProvider 인터페이스
-[ ] 3.4  providers/local.py (email+password)
-[ ] 3.5  bcrypt 해싱/검증 (cost 12, 평문 저장 없음 재확인)
-[ ] 3.6  세션 발급/검증/폐기 + 토큰 SHA-256 해시 저장
-[ ] 3.7  슬라이딩 만료 (last_seen_at, 7일 미만 시 연장)
-[ ] 3.8  인증 라우트 4종 (register/login/logout/me)
-[ ] 3.9  get_current_user dependency + 전 라우터 적용
-[ ] 3.10 ProjectORM.owner_id + 소유권 검사 (타계정 -> 404)
-[ ] 3.11 SSE 스트림 인증 동작 확인
-[ ] 3.12 scripts/export_users.py + reset_password.py + make export-users
-[ ] 3.13 seed.py 데모 계정 + .env.example + boot_checks
-[ ] 3.14 테스트 15+ + 커밋+푸시
+PHASE 3 — 인증 백엔드                                          (14/14)
+[x] 3.1  users / sessions 모델 정의 (UserORM/SessionORM, db_models.py) --
+        provider_subject 등 OAuth 확장 컬럼 포함, local이면 NULL
+[x] 3.2  Alembic 마이그레이션 (fa793dce62cb_accounts_and_sessions,
+        파괴적 삭제 + docstring 경고). sqlite에 직접 upgrade head 실행해
+        검증 중 op.create_foreign_key가 SQLite에서 NotImplementedError로
+        실패하는 걸 발견 -> batch_alter_table로 수정, upgrade/downgrade/
+        재upgrade 전부 성공 확인 (DECISIONS.md #153). Postgres는 Docker
+        데몬 미기동으로 이번 세션에서 직접 검증 못함 -- Phase 5에서
+        `make db-up && make db-upgrade`로 재확인 필요
+[x] 3.3  modules/auth 구조 + IdentityProvider 인터페이스 (identity.py,
+        providers/local.py) -- 브리프 명세 구조 그대로
+[x] 3.4  providers/local.py (email+password, LocalIdentityProvider)
+[x] 3.5  bcrypt 해싱/검증 (cost 12, hash_password/verify_password,
+        평문 컬럼 없음 -- db_models.py에 password_hash만 존재)
+[x] 3.6  세션 발급/검증/폐기 + 토큰 SHA-256 해시 저장 (issue_session/
+        resolve_session/revoke_session, service.py)
+[x] 3.7  슬라이딩 만료 (resolve_session이 만료 7일 미만이면 연장) --
+        SQLite naive-datetime vs Postgres aware-datetime 불일치로 세션
+        관련 테스트 7개가 깨졌던 것 발견 -> tzinfo 정규화로 수정
+        (DECISIONS.md #156, engine.py/_check_budget과 동일 패턴 3번째 적용)
+[x] 3.8  인증 라우트 4종 (register/login/logout/me, routes.py) --
+        로그인 실패 메시지 통일(계정 열거 방지), 중복 이메일 409
+[x] 3.9  get_current_user dependency + 전 라우터 적용 (projects/tasks/
+        approvals/timeline/agent_runtime/agent_profiles/costs/
+        model_registry/reports/situation/sandbox/workspace_manager/
+        realtime 13개 라우터 전부)
+[x] 3.10 ProjectORM.owner_id + 소유권 검사 (project_owned_by +
+        신규 제네릭 resource_owned_by 헬퍼, core/ownership.py -- 4종
+        ORM(Task/Approval/Agent/Report)이 전부 project_id 컬럼을 직접
+        갖는 걸 확인하고 종류별 중복 대신 제네릭 하나로 처리,
+        DECISIONS.md #154). approvals.list_pending(project_id=None)이
+        전 계정 데이터를 반환하던 실제 크로스어카운트 유출 발견 +
+        수정 (owner_id 스코프 JOIN 추가, DECISIONS.md #155)
+[x] 3.11 SSE 스트림 인증 동작 확인 (realtime/routes.py에 session_factory
+        + user 의존성 추가, project_owned_by 검사 후 register_stream --
+        DECISIONS.md #157). test_sse_stream_requires_auth(401) +
+        test_sse_stream_cross_account_returns_404(404)로 커버
+[x] 3.12 scripts/export_users.py + reset_password.py + make export-users
+        작성 + 실사용 스모크 테스트 완료(throwaway sqlite DB): CSV에
+        평문 비밀번호 없음(bcrypt 해시만) 확인, stdout/파일 출력 둘 다
+        확인, reset_password.py 3케이스(8자 미만 거부/미존재 계정
+        실패/정상 리셋) 전부 확인
+[x] 3.13 seed.py 데모 계정(COMMANDER_DEMO_EMAIL/PASSWORD) +
+        .env.example + boot_checks(CORS 와일드카드 fail-fast, 쿠키가
+        credentialed 요청에서 안 붙는 문제 방지) -- seed.py의 신규 계정
+        가입+owner_id 배선 로직을 격리 스모크 테스트로 확인(throwaway
+        sqlite). 전체 5-미션 시나리오는 Docker 미기동으로 이번 세션에서
+        미실행 -- Phase 5 E2E(DoD #8)에서 실행 필요
+[x] 3.14 테스트 15+ (가입/중복이메일/로그인/실패메시지 통일/세션만료/
+        미인증 401/타계정 404/SSE 8개 카테고리 -- test_auth.py 14개 +
+        test_boot_checks.py 신규 2개 = 16개 신규) + 전체 스위트 재실행:
+        191 passed / 4 skipped, 176.83s (기존 157 -> 191, DoD #10의
+        190+ 충족) -- 커밋+푸시 완료
 
 PHASE 4 — 프론트 최소 인증                                     (0/7)
 [ ] 4.1  /login 페이지

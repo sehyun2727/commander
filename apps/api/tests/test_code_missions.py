@@ -32,9 +32,8 @@ async def _wait_for_state(harness, task_id: str, *states: TaskState, timeout: fl
 
 @pytest.mark.asyncio
 async def test_approving_a_code_mission_merges_and_records_stats(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory,
         harness.event_bus,
@@ -77,9 +76,8 @@ async def test_approving_a_code_mission_merges_and_records_stats(harness):
 
 @pytest.mark.asyncio
 async def test_rejecting_a_code_mission_leaves_the_branch_unmerged(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory,
         harness.event_bus,
@@ -112,9 +110,8 @@ async def test_rejecting_a_code_mission_leaves_the_branch_unmerged(harness):
 
 @pytest.mark.asyncio
 async def test_requesting_changes_recommits_to_the_same_branch(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory,
         harness.event_bus,
@@ -148,9 +145,8 @@ async def test_requesting_changes_recommits_to_the_same_branch(harness):
 
 @pytest.mark.asyncio
 async def test_document_mission_is_unaffected_by_workspace_wiring(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory,
         harness.event_bus,
@@ -186,9 +182,8 @@ async def test_document_mission_is_unaffected_by_workspace_wiring(harness):
 
 @pytest.mark.asyncio
 async def test_merge_conflict_blocks_the_mission(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory,
         harness.event_bus,
@@ -235,9 +230,8 @@ async def test_truncated_diff_gets_a_note_for_the_reviewer_but_not_persisted_sta
     aggregate stats persisted on TaskORM.code_stats. Drives _land_code_changes
     directly with a monkeypatched diff() since the mock provider's fixed
     2-file output is far too small to naturally exceed max_chars."""
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory,
         harness.event_bus,

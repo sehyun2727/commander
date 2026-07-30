@@ -26,9 +26,8 @@ async def _wait_for_state(harness, task_id: str, *states: TaskState, timeout: fl
 
 @pytest.mark.asyncio
 async def test_approving_a_mission_completes_it(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Add search bar", "basic search", "normal"
     )
@@ -53,9 +52,8 @@ async def test_approving_a_mission_completes_it(harness):
 
 @pytest.mark.asyncio
 async def test_rejecting_a_mission_cancels_it(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Delete prod DB", "bad idea", "high"
     )
@@ -77,9 +75,8 @@ async def test_rejecting_a_mission_cancels_it(harness):
 
 @pytest.mark.asyncio
 async def test_requesting_changes_sends_the_mission_back_for_rework(harness):
-    project = await projects_service.create_project(
-        harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
-    )
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Build login page", "email/password", "normal"
     )

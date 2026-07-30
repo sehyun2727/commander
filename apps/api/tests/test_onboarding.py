@@ -10,7 +10,7 @@ from app.templates import TEMPLATE
 async def test_founding_posts_an_intro_conversation_event_per_employee(harness):
     """Sprint 4.7 §6: each Employee introduces themself in the Timeline
     right after founding, using the template's own intro line."""
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
 
     events, _ = await harness.event_bus.page(project.id, cursor=None, limit=50, kind="conversation")
     intro_texts = {event.payload["text"] for event in events}

@@ -21,7 +21,7 @@ async def _pm_agent_id(harness, project_id: str) -> str:
 
 @pytest.mark.asyncio
 async def test_get_profile_returns_founding_default(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     agent_id = await _pm_agent_id(harness, project.id)
 
     profile = await agent_profiles.get_profile(harness.session_factory, agent_id)
@@ -32,7 +32,7 @@ async def test_get_profile_returns_founding_default(harness):
 
 @pytest.mark.asyncio
 async def test_update_profile_persists_and_emits_event_with_changed_fields(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     agent_id = await _pm_agent_id(harness, project.id)
 
     updated = await agent_profiles.update_profile(
@@ -59,7 +59,7 @@ async def test_update_profile_persists_and_emits_event_with_changed_fields(harne
 
 @pytest.mark.asyncio
 async def test_update_profile_with_no_actual_change_emits_no_event(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     agent_id = await _pm_agent_id(harness, project.id)
 
     await agent_profiles.update_profile(
@@ -86,7 +86,7 @@ async def test_get_profile_unknown_agent_raises(harness):
 
 @pytest.mark.asyncio
 async def test_update_profile_accepts_a_known_model_ref_for_the_role(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     agent_id = await _pm_agent_id(harness, project.id)
 
     updated = await agent_profiles.update_profile(
@@ -97,7 +97,7 @@ async def test_update_profile_accepts_a_known_model_ref_for_the_role(harness):
 
 @pytest.mark.asyncio
 async def test_update_profile_rejects_a_model_ref_not_valid_for_the_role(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     agent_id = await _pm_agent_id(harness, project.id)
 
     with pytest.raises(InvalidModelRefError):
@@ -108,7 +108,7 @@ async def test_update_profile_rejects_a_model_ref_not_valid_for_the_role(harness
 
 @pytest.mark.asyncio
 async def test_update_profile_rejects_a_completely_unknown_model_ref(harness):
-    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock")
+    project = await create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, "Acme", "mock", owner_id=harness.user.id)
     agent_id = await _pm_agent_id(harness, project.id)
 
     with pytest.raises(InvalidModelRefError):

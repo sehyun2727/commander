@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
-from ...deps import get_event_bus
+from ...core.db_models import UserORM
+from ...core.ownership import project_owned_by
+from ...deps import get_current_user, get_event_bus, get_session_factory
 
 router = APIRouter(prefix="/api/events", tags=["realtime"])
 
@@ -20,7 +22,15 @@ HEARTBEAT_SECONDS = 15
 
 
 @router.get("/stream")
-async def stream(project_id: str, request: Request, event_bus=Depends(get_event_bus)):
+async def stream(
+    project_id: str,
+    request: Request,
+    event_bus=Depends(get_event_bus),
+    session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
+):
+    if not await project_owned_by(session_factory, project_id, user.id):
+        raise HTTPException(status_code=404, detail="Company not found")
     queue = event_bus.register_stream(project_id)
 
     async def event_generator():

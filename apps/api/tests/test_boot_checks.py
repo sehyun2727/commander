@@ -32,6 +32,19 @@ def test_unsupported_database_scheme_fails_fast(monkeypatch: pytest.MonkeyPatch)
         validate_boot_config()
 
 
+def test_wildcard_cors_origin_fails_fast(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "commander_provider", "mock")
+    monkeypatch.setattr(settings, "cors_origins", ["*"])
+    with pytest.raises(BootConfigError, match="CORS_ORIGINS"):
+        validate_boot_config()
+
+
+def test_non_wildcard_cors_origins_pass(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "commander_provider", "mock")
+    monkeypatch.setattr(settings, "cors_origins", ["http://localhost:3000"])
+    validate_boot_config()  # must not raise
+
+
 def test_redact_database_url_strips_credentials():
     assert (
         redact_database_url("postgresql+asyncpg://commander:s3cret@localhost:5432/commander")
