@@ -22,6 +22,8 @@ class EventType(str, Enum):
     TASK_RETRIED = "task.retried"
     TASK_CANCELLED = "task.cancelled"
     TASK_STATE_CHANGED = "task.state_changed"
+    TASK_RECOVERED = "task.recovered"  # Sprint 9: orphaned by an unclean restart
+    BUDGET_EXCEEDED = "task.budget_exceeded"  # Sprint 9: mission budget guard
 
     # Agents (Employees)
     AGENT_CREATED = "agent.created"

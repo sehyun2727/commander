@@ -13,6 +13,8 @@ export enum EventType {
   TASK_RETRIED = "task.retried",
   TASK_CANCELLED = "task.cancelled",
   TASK_STATE_CHANGED = "task.state_changed",
+  TASK_RECOVERED = "task.recovered",
+  BUDGET_EXCEEDED = "task.budget_exceeded",
   AGENT_CREATED = "agent.created",
   AGENT_STARTED = "agent.started",
   AGENT_STOPPED = "agent.stopped",
@@ -165,6 +167,19 @@ export interface TaskStateChangedPayload {
   task_id: string;
   previous_state: TaskState;
   new_state: TaskState;
+}
+
+export interface TaskRecoveredPayload {
+  task_id: string;
+  previous_state: TaskState;
+}
+
+export interface BudgetExceededPayload {
+  task_id: string;
+  limit_kind: "tokens" | "usd" | "seconds";
+  limit_value: number;
+  observed_value: number;
+  stage: string;
 }
 
 export interface AgentCreatedPayload {
@@ -328,6 +343,8 @@ export interface EventPayloadMap {
   "task.retried": TaskRetriedPayload;
   "task.cancelled": TaskCancelledPayload;
   "task.state_changed": TaskStateChangedPayload;
+  "task.recovered": TaskRecoveredPayload;
+  "task.budget_exceeded": BudgetExceededPayload;
   "agent.created": AgentCreatedPayload;
   "agent.started": AgentStartedPayload;
   "agent.stopped": AgentStoppedPayload;

@@ -18,8 +18,11 @@ from ..costs import record_usage
 from ..provider_gateway import build_gateway
 
 CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
+SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
 
 _PM_KEY = TEMPLATE.roles[0].key
+
+_ORPHANABLE_STATES = (TaskState.IN_PROGRESS.value, TaskState.IN_REVIEW.value)
 
 
 async def create_task(
@@ -116,6 +119,59 @@ async def assign_task(
     )
     await workflow_engine.start_task(task_id)
     return task
+
+
+async def recover_orphaned_tasks(session_factory, event_bus: EventBus) -> list[str]:
+    """Startup sweep (Sprint 9): any Mission still `in_progress`/`in_review`
+    when the process last stopped had its background pipeline coroutine
+    die with it -- nothing will ever move it again, so this marks it
+    `blocked` and tells the CEO via TaskRecovered rather than leaving it
+    silently stuck forever. A clean shutdown never leaves a task in either
+    state, so this is safe to run unconditionally on every boot."""
+    async with session_factory() as session:
+        result = await session.execute(select(TaskORM).where(TaskORM.state.in_(_ORPHANABLE_STATES)))
+        rows = list(result.scalars().all())
+        recovered: list[tuple[str, str, str]] = []
+        for row in rows:
+            previous = TaskState(row.state)
+            transition(previous, TaskState.BLOCKED, TASK_TRANSITIONS)
+            row.state = TaskState.BLOCKED.value
+            recovered.append((row.id, row.project_id, previous.value))
+        await session.commit()
+
+    for task_id, project_id, previous_state in recovered:
+        await event_bus.publish(
+            build_event(
+                type=EventType.TASK_RECOVERED,
+                project_id=project_id,
+                actor=SYSTEM_ACTOR,
+                payload={"task_id": task_id, "previous_state": previous_state},
+                reason="Mission was mid-pipeline when Commander last restarted; no coroutine survived to finish it",
+            )
+        )
+        await event_bus.publish(
+            build_event(
+                type=EventType.TASK_STATE_CHANGED,
+                project_id=project_id,
+                actor=SYSTEM_ACTOR,
+                payload={
+                    "task_id": task_id,
+                    "previous_state": previous_state,
+                    "new_state": TaskState.BLOCKED.value,
+                },
+                reason="Orphan recovery on restart",
+            )
+        )
+    return [task_id for task_id, _, _ in recovered]
+
+
+async def cancel_task(
+    workflow_engine: WorkflowEngine, task_id: str, reason: str
+) -> bool:
+    """CEO-initiated cancel (Sprint 9); delegates the state transition and
+    any in-flight asyncio.Task cancellation to the engine, which is the
+    only place that knows what's currently running."""
+    return await workflow_engine.cancel_task(task_id, reason)
 
 
 async def list_messages(event_bus: EventBus, project_id: str, task_id: str) -> list[Event]:

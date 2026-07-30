@@ -22,12 +22,19 @@ class TaskState(str, Enum):
 TASK_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.CREATED: {TaskState.ASSIGNED, TaskState.CANCELLED},
     TaskState.ASSIGNED: {TaskState.IN_PROGRESS, TaskState.CANCELLED},
-    TaskState.IN_PROGRESS: {TaskState.IN_REVIEW, TaskState.FAILED, TaskState.CANCELLED},
+    TaskState.IN_PROGRESS: {
+        TaskState.IN_REVIEW,
+        TaskState.FAILED,
+        TaskState.CANCELLED,
+        TaskState.BLOCKED,  # Sprint 9: orphan recovery on restart, budget guard
+    },
     TaskState.IN_REVIEW: {
         TaskState.PENDING_APPROVAL,
         TaskState.COMPLETED,
         TaskState.IN_PROGRESS,  # changes requested -> rework
         TaskState.FAILED,  # rejected beyond rework limit
+        TaskState.CANCELLED,  # Sprint 9: CEO can cancel mid-review
+        TaskState.BLOCKED,  # Sprint 9: orphan recovery on restart, budget guard
     },
     TaskState.PENDING_APPROVAL: {
         TaskState.COMPLETED,

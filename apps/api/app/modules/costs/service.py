@@ -70,6 +70,20 @@ async def summary_for_task(session_factory, task_id: str) -> float:
     return round(total or 0.0, 6)
 
 
+async def usage_for_task(session_factory, task_id: str) -> tuple[int, float]:
+    """Cumulative (tokens, USD) spent on a Mission so far -- feeds the
+    budget guard's per-stage check (Rule #13, Sprint 9)."""
+    async with session_factory() as session:
+        result = await session.execute(
+            select(
+                func.sum(CostEntryORM.input_tokens + CostEntryORM.output_tokens),
+                func.sum(CostEntryORM.cost_usd),
+            ).where(CostEntryORM.task_id == task_id)
+        )
+        tokens, usd = result.one()
+    return int(tokens or 0), round(usd or 0.0, 6)
+
+
 async def summary_since(session_factory, project_id: str, since: datetime) -> float:
     """Total spend for a Company from `since` to now — used by the Daily
     Report, which needs a fixed 24h window rather than Payroll's

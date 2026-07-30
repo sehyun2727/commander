@@ -12,7 +12,14 @@ from ...deps import (
     get_workspace_manager,
 )
 from . import service
-from .schemas import DiffResponse, MessageCreateRequest, TaskAssignRequest, TaskCreateRequest, TaskResponse
+from .schemas import (
+    DiffResponse,
+    MessageCreateRequest,
+    TaskAssignRequest,
+    TaskCancelRequest,
+    TaskCreateRequest,
+    TaskResponse,
+)
 
 router = APIRouter(prefix="/api", tags=["tasks"])
 
@@ -76,6 +83,24 @@ async def assign_task(
     if task is None:
         raise HTTPException(status_code=404, detail="Mission not found")
     return task
+
+
+@router.post("/tasks/{task_id}/cancel", response_model=TaskResponse)
+async def cancel_task(
+    task_id: str,
+    body: TaskCancelRequest,
+    session_factory=Depends(get_session_factory),
+    workflow_engine=Depends(get_workflow_engine),
+):
+    task = await service.get_task(session_factory, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    ok = await service.cancel_task(
+        workflow_engine, task_id, body.reason or "CEO cancelled the mission"
+    )
+    if not ok:
+        raise HTTPException(status_code=409, detail="Mission cannot be cancelled from its current state")
+    return await service.get_task(session_factory, task_id)
 
 
 @router.get("/tasks/{task_id}/messages", response_model=list[Event])

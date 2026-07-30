@@ -74,6 +74,19 @@ class TaskStateChangedPayload(Payload):
     new_state: TaskState
 
 
+class TaskRecoveredPayload(Payload):
+    task_id: str
+    previous_state: TaskState
+
+
+class BudgetExceededPayload(Payload):
+    task_id: str
+    limit_kind: Literal["tokens", "usd", "seconds"]
+    limit_value: float
+    observed_value: float
+    stage: str
+
+
 # --- Agents (Employees) -------------------------------------------------------
 
 class AgentCreatedPayload(Payload):
@@ -256,6 +269,8 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.TASK_RETRIED: TaskRetriedPayload,
     EventType.TASK_CANCELLED: TaskCancelledPayload,
     EventType.TASK_STATE_CHANGED: TaskStateChangedPayload,
+    EventType.TASK_RECOVERED: TaskRecoveredPayload,
+    EventType.BUDGET_EXCEEDED: BudgetExceededPayload,
     EventType.AGENT_CREATED: AgentCreatedPayload,
     EventType.AGENT_STARTED: AgentStartedPayload,
     EventType.AGENT_STOPPED: AgentStoppedPayload,

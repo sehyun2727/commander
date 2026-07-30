@@ -31,6 +31,7 @@ from .modules.reports import router as reports_router
 from .modules.sandbox import DockerSandbox
 from .modules.sandbox import router as sandbox_router
 from .modules.situation import router as situation_router
+from .modules.tasks import recover_orphaned_tasks
 from .modules.tasks import router as tasks_router
 from .modules.timeline import router as timeline_router
 from .modules.workflow_engine import CommanderWorkflowEngine
@@ -74,6 +75,12 @@ async def lifespan(app: FastAPI):
     app.state.workspace_manager = workspace_manager
     app.state.sandbox_runner = sandbox_runner
     app.state.workflow_engine = workflow_engine
+
+    # Orphan mission recovery (Sprint 9): any Mission still mid-pipeline
+    # when the process last stopped had its background asyncio.Task die
+    # with it -- nothing in this fresh process will ever move it again, so
+    # it gets recovered to `blocked` before the API starts serving traffic.
+    await recover_orphaned_tasks(session_factory, event_bus)
 
     yield
 

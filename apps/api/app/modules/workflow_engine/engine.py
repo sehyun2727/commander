@@ -15,14 +15,17 @@ scope — see docs/DECISIONS.md.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import random
+from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
 from ...core.contracts import AgentProfile
 from ...core.db_models import AgentORM, ApprovalORM, TaskORM
-from ...core.errors import WorkspaceConflictError
+from ...core.errors import BudgetExceededError, WorkspaceConflictError
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
 from ...core.interfaces.event_bus import EventBus
@@ -37,7 +40,7 @@ from ...core.secrets import SecretsProvider
 from ...core.config import settings
 from ...templates import TEMPLATE
 from .. import prompt_builder
-from ..costs import record_usage
+from ..costs import record_usage, usage_for_task
 from ..model_registry import RECOMMENDED_PROVIDER
 from ..provider_gateway import build_gateway
 from ..sandbox import detect_checks, get_execution_enabled
@@ -53,6 +56,38 @@ CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
 # *identity* (key, model ref) comes from the template (§10.6). See
 # docs/DECISIONS.md "Sprint 4.7".
 _PM, _ENGINEER, _REVIEWER = TEMPLATE.roles
+
+
+@dataclass(frozen=True)
+class TaskSnapshot:
+    """Immutable point-in-time view of a `TaskORM`, threaded through the
+    pipeline stages instead of the ORM row itself. Each stage opens its own
+    session (see module docstring); holding the row across those sessions
+    let a stage read fields another stage had already changed in the DB but
+    not on this object -- `dataclasses.replace` after each mutating stage
+    keeps the two in sync explicitly instead of by accident (Sprint 9)."""
+
+    id: str
+    project_id: str
+    title: str
+    description: str
+    deliverable_type: str
+    branch_name: str | None
+    attempt: int
+    created_at: datetime
+
+    @classmethod
+    def from_orm(cls, task: TaskORM) -> "TaskSnapshot":
+        return cls(
+            id=task.id,
+            project_id=task.project_id,
+            title=task.title,
+            description=task.description,
+            deliverable_type=task.deliverable_type,
+            branch_name=task.branch_name,
+            attempt=task.attempt,
+            created_at=task.created_at,
+        )
 
 
 def _pause() -> "asyncio.Future[None]":
@@ -85,11 +120,55 @@ class CommanderWorkflowEngine(WorkflowEngine):
         self._secrets = secrets
         self._workspace_manager = workspace_manager
         self._sandbox_runner = sandbox_runner
+        # Execution registry (Sprint 9): the in-memory asyncio.Task backing
+        # each running mission, so `cancel_task` has something concrete to
+        # cancel and orphan recovery (main.py lifespan) knows this process
+        # never has any of these running right after a restart. Reason
+        # strings for a cancel-in-flight are handed off here because the
+        # CancelledError that `.cancel()` raises inside `_run_pipeline`
+        # carries no payload of its own.
+        self._running: dict[str, asyncio.Task] = {}
+        self._cancel_reasons: dict[str, str] = {}
 
     # --- public API -----------------------------------------------------
 
     async def start_task(self, task_id: str) -> None:
-        asyncio.create_task(self._run_pipeline(task_id, resume_from=_PM.key))
+        self._spawn(task_id, resume_from=_PM.key)
+
+    def _spawn(self, task_id: str, resume_from: str, ceo_comment: str | None = None) -> None:
+        async def _runner() -> None:
+            try:
+                await self._run_pipeline(task_id, resume_from=resume_from, ceo_comment=ceo_comment)
+            finally:
+                self._running.pop(task_id, None)
+
+        self._running[task_id] = asyncio.create_task(_runner())
+
+    async def cancel_task(self, task_id: str, reason: str) -> bool:
+        """CEO-initiated cancel (Sprint 9). Returns False if the mission
+        isn't in a cancellable state. A running pipeline is cancelled via
+        its asyncio.Task -- `_run_pipeline`'s own CancelledError handler
+        does the state transition + agent release, so the DB write happens
+        exactly once no matter how many times this is called. If nothing
+        is running in this process (mission already ended, or this is a
+        second process after a restart with no in-memory task), fall back
+        to finishing it directly."""
+        async with self._session_factory() as session:
+            task_row = await session.get(TaskORM, task_id)
+            if task_row is None:
+                return False
+            current = TaskState(task_row.state)
+            if TaskState.CANCELLED not in TASK_TRANSITIONS.get(current, set()):
+                return False
+
+        running = self._running.get(task_id)
+        if running is not None and not running.done():
+            self._cancel_reasons[task_id] = reason
+            running.cancel()
+            return True
+
+        await self._finish_task(task_id, TaskState.CANCELLED, reason, EventType.TASK_CANCELLED)
+        return True
 
     async def resume_after_decision(
         self, task_id: str, decision: str, comment: str | None
@@ -134,9 +213,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     reason=comment or "CEO requested changes",
                 )
             )
-            asyncio.create_task(
-                self._run_pipeline(task_id, resume_from=_ENGINEER.key, ceo_comment=comment)
-            )
+            self._spawn(task_id, resume_from=_ENGINEER.key, ceo_comment=comment)
 
     # --- internals --------------------------------------------------------
 
@@ -263,7 +340,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
     async def _run_role(
         self,
         agent: AgentORM,
-        task: TaskORM,
+        task: TaskSnapshot,
         gateway: ProviderGateway,
         model_ref: str,
         context: str,
@@ -271,39 +348,89 @@ class CommanderWorkflowEngine(WorkflowEngine):
     ) -> tuple[str, dict[str, int]]:
         """Cycle one Employee through Assigned->Planning->Working->
         WaitingReview->Completed->Idle while it produces one message, and
-        return the text it produced plus the usage it consumed."""
+        return the text it produced plus the usage it consumed.
+
+        A cancel or an unhandled failure anywhere in this cycle is caught
+        here (not by the caller) and always ends with the Employee back at
+        Idle -- `_release_agent_to_idle` walks whatever multi-step path
+        AGENT_TRANSITIONS requires from wherever this got interrupted
+        (Sprint 9)."""
         project_id = task.project_id
-        await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
-        await _pause()
-        await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing the mission brief")
-        await _pause()
-        await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing output")
+        try:
+            await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
+            await _pause()
+            await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing the mission brief")
+            await _pause()
+            await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing output")
 
-        extra = f"\n\nCEO feedback to address: {ceo_comment}" if ceo_comment else ""
-        text, usage = await self._stream_say(
-            project_id,
-            agent,
-            task.id,
-            gateway,
-            model_ref,
-            system=prompt_builder.build(
-                AgentProfile.model_validate(agent.profile), agent.role, task.deliverable_type
-            ),
-            messages=[{"role": "user", "content": f"Mission: {task.title}\n{task.description}{extra}"}],
-            task_title=task.title,
-            task_description=task.description,
-            context=context + extra,
-        )
-        await _pause()
+            extra = f"\n\nCEO feedback to address: {ceo_comment}" if ceo_comment else ""
+            text, usage = await self._stream_say(
+                project_id,
+                agent,
+                task.id,
+                gateway,
+                model_ref,
+                system=prompt_builder.build(
+                    AgentProfile.model_validate(agent.profile), agent.role, task.deliverable_type
+                ),
+                messages=[{"role": "user", "content": f"Mission: {task.title}\n{task.description}{extra}"}],
+                task_title=task.title,
+                task_description=task.description,
+                context=context + extra,
+            )
+            await _pause()
 
-        await self._agent_runtime.transition(agent.id, AgentState.WAITING_REVIEW, "Output ready for handoff")
-        await _pause()
-        await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Handed off successfully")
-        await self._agent_runtime.transition(agent.id, AgentState.IDLE, "Back to the bench")
-        return text, usage
+            await self._agent_runtime.transition(agent.id, AgentState.WAITING_REVIEW, "Output ready for handoff")
+            await _pause()
+            await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Handed off successfully")
+            await self._agent_runtime.transition(agent.id, AgentState.IDLE, "Back to the bench")
+            return text, usage
+        except asyncio.CancelledError:
+            await self._release_agent_to_idle(agent.id, "Mission cancelled")
+            raise
+        except Exception:
+            await self._release_agent_to_idle(agent.id, "Mission failed")
+            raise
+
+    async def _release_agent_to_idle(self, agent_id: str, reason: str) -> None:
+        """Force an Employee back onto the bench no matter which state a
+        cancelled/failed mission left it in. AGENT_TRANSITIONS has no
+        direct edge from most working states to Idle, so this walks the
+        two-step path a state actually allows (Sprint 9)."""
+        current = await self._agent_runtime.get_state(agent_id)
+        if current == AgentState.IDLE:
+            return
+        if current == AgentState.WAITING_REVIEW:
+            await self._agent_runtime.transition(agent_id, AgentState.COMPLETED, reason)
+        elif current not in (AgentState.COMPLETED, AgentState.FAILED):
+            await self._agent_runtime.transition(agent_id, AgentState.FAILED, reason)
+        current = await self._agent_runtime.get_state(agent_id)
+        if current != AgentState.IDLE:
+            await self._agent_runtime.transition(agent_id, AgentState.IDLE, reason)
+
+    async def _check_budget(self, task: TaskSnapshot, stage: str) -> None:
+        """Mission budget guard (Rule #13, Sprint 9): checked before each
+        pipeline stage starts. Exceeding any one cap raises rather than
+        blocking directly, so the caller can decide when it's safe to
+        transition the Mission to `blocked` (i.e. only once it's back in a
+        state BLOCKED is reachable from)."""
+        tokens, usd = await usage_for_task(self._session_factory, task.id)
+        # SQLite (tests) hands back a naive datetime even though the column
+        # is DateTime(timezone=True); Postgres (prod) always returns one
+        # with tzinfo. Normalize rather than let the two backends disagree.
+        created_at = task.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - created_at).total_seconds()
+        if tokens > settings.commander_mission_max_tokens:
+            raise BudgetExceededError("tokens", settings.commander_mission_max_tokens, tokens, stage)
+        if usd > settings.commander_mission_max_usd:
+            raise BudgetExceededError("usd", settings.commander_mission_max_usd, usd, stage)
+        if elapsed > settings.commander_mission_max_seconds:
+            raise BudgetExceededError("seconds", settings.commander_mission_max_seconds, elapsed, stage)
 
     async def _land_code_changes(
-        self, task: TaskORM, engineer_agent: AgentORM, deliverable: str
+        self, task: TaskSnapshot, engineer_agent: AgentORM, deliverable: str
     ) -> tuple[str, dict | None]:
         """Parse the Engineer's FILE-block output and land it on the
         mission's branch (validated write + commit). Returns
@@ -371,7 +498,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
         return change_summary, {**stats, "diff_text": diff_text}
 
     async def _run_checks(
-        self, task: TaskORM, branch_name: str
+        self, task: TaskSnapshot, branch_name: str
     ) -> tuple[str, list[dict] | None]:
         """Run every template-detected check (Sprint 6) against the
         mission branch's files, between the Engineer's commit and the
@@ -446,9 +573,10 @@ class CommanderWorkflowEngine(WorkflowEngine):
     ) -> None:
         try:
             async with self._session_factory() as session:
-                task = await session.get(TaskORM, task_id)
-                project_id = task.project_id
-                title = task.title
+                task_row = await session.get(TaskORM, task_id)
+                task = TaskSnapshot.from_orm(task_row)
+            project_id = task.project_id
+            title = task.title
 
             agents = await self._agents_for(project_id)
             gateway = await self._gateway_for(project_id)
@@ -457,6 +585,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 await self._set_task_state(
                     task_id, TaskState.IN_PROGRESS, "PM began planning", SYSTEM_ACTOR
                 )
+                await self._check_budget(task, _PM.key)
                 pm_agent = agents[_PM.key]
                 await self._event_bus.publish(
                     build_event(
@@ -472,6 +601,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
             else:
                 plan, pm_usage = "", {}
 
+            await self._check_budget(task, _ENGINEER.key)
             engineer_agent = agents[_ENGINEER.key]
             await self._event_bus.publish(
                 build_event(
@@ -501,6 +631,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     code_stats = {k: v for k, v in code_stats.items() if k != "diff_text"}
 
                     branch_name = task.branch_name or self._branch_name_for(task.id)
+                    task = dataclasses.replace(task, branch_name=branch_name)
                     check_summary, check_results = await self._run_checks(task, branch_name)
                     if check_results is not None:
                         reviewer_context = f"{reviewer_context}\n\n{check_summary}"
@@ -512,6 +643,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
             await self._set_task_state(
                 task_id, TaskState.IN_REVIEW, "Engineer finished; handing to Reviewer", SYSTEM_ACTOR
             )
+            await self._check_budget(task, _REVIEWER.key)
             reviewer_agent = agents[_REVIEWER.key]
             await self._event_bus.publish(
                 build_event(
@@ -541,9 +673,9 @@ class CommanderWorkflowEngine(WorkflowEngine):
             )
 
             async with self._session_factory() as session:
-                task = await session.get(TaskORM, task_id)
-                task.result_markdown = change_summary if code_stats is not None else deliverable
-                self._apply_task_transition(task, TaskState.PENDING_APPROVAL)
+                task_row = await session.get(TaskORM, task_id)
+                task_row.result_markdown = change_summary if code_stats is not None else deliverable
+                self._apply_task_transition(task_row, TaskState.PENDING_APPROVAL)
                 approval = ApprovalORM(
                     project_id=project_id,
                     task_id=task_id,
@@ -581,9 +713,52 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     reason=f"'{title}' is ready for a CEO Decision (Reviewer verdict: {outcome})",
                 )
             )
+        except asyncio.CancelledError:
+            logger.info("pipeline for task %s cancelled", task_id)
+            reason = self._cancel_reasons.pop(task_id, "Cancelled by CEO")
+            await self._finish_task(task_id, TaskState.CANCELLED, reason, EventType.TASK_CANCELLED)
+            raise
+        except BudgetExceededError as exc:
+            logger.info("mission %s blocked: %s", task_id, exc)
+            await self._block_task_on_budget(task_id, exc)
         except Exception as exc:  # noqa: BLE001 - convert any pipeline failure into TaskFailed
             logger.exception("workflow pipeline failed for task %s", task_id)
             await self._fail_task(task_id, str(exc))
+
+    async def _block_task_on_budget(self, task_id: str, exc: BudgetExceededError) -> None:
+        async with self._session_factory() as session:
+            task_row = await session.get(TaskORM, task_id)
+            previous = self._apply_task_transition(task_row, TaskState.BLOCKED)
+            await session.commit()
+            project_id = task_row.project_id
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.BUDGET_EXCEEDED,
+                project_id=project_id,
+                actor=SYSTEM_ACTOR,
+                payload={
+                    "task_id": task_id,
+                    "limit_kind": exc.limit_kind,
+                    "limit_value": exc.limit_value,
+                    "observed_value": exc.observed_value,
+                    "stage": exc.stage,
+                },
+                reason=str(exc),
+            )
+        )
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.TASK_STATE_CHANGED,
+                project_id=project_id,
+                actor=SYSTEM_ACTOR,
+                payload={
+                    "task_id": task_id,
+                    "previous_state": previous.value,
+                    "new_state": TaskState.BLOCKED.value,
+                },
+                reason=f"Budget guard blocked the mission before '{exc.stage}'",
+            )
+        )
 
     async def _fail_task(self, task_id: str, reason: str) -> None:
         async with self._session_factory() as session:

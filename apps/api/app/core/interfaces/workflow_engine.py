@@ -29,3 +29,9 @@ class WorkflowEngine(ABC):
     ) -> None:
         """React to a CEO Decision on a task's approval: complete it,
         cancel it, or send it back to the Engineer for rework."""
+
+    @abstractmethod
+    async def cancel_task(self, task_id: str, reason: str) -> bool:
+        """CEO-initiated cancel (Sprint 9). Returns False if the mission is
+        not currently in a cancellable state; otherwise stops it (mid-run
+        or already-idle) and transitions it to `cancelled`."""

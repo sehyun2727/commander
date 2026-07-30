@@ -16,6 +16,10 @@ class TaskAssignRequest(BaseModel):
     agent_id: str | None = None
 
 
+class TaskCancelRequest(BaseModel):
+    reason: str | None = None
+
+
 class MessageCreateRequest(BaseModel):
     text: str
 

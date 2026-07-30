@@ -7,5 +7,6 @@ workflow_engine.start_task to run the PM -> Engineer -> Reviewer pipeline.
 """
 
 from .routes import router
+from .service import recover_orphaned_tasks
 
-__all__ = ["router"]
+__all__ = ["router", "recover_orphaned_tasks"]

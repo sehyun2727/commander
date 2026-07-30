@@ -1753,3 +1753,72 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     written as target-state) before the sprint's own Phase 5 As-Built
     sync pass. Left as a tracked item for Phase 5.4 rather than patched
     piecemeal, so the whole section updates once, consistently.
+
+### Phase 1 — Operational reliability
+
+143. **`TaskSnapshot` frozen dataclass replaces the `TaskORM` row inside
+    the pipeline coroutine.** `_run_role`/`_land_code_changes`/
+    `_run_checks` previously held a `TaskORM` fetched in one session and
+    read its attributes across later `await`s on the provider — a
+    detached-instance read that only worked by accident (SQLite's lax
+    session semantics) and would break louder on Postgres under load.
+    `TaskSnapshot.from_orm()` is built once per pipeline run from a row
+    read inside its own session block; every later stage reads the
+    snapshot, never the row. The one field that legitimately changes
+    mid-run (`branch_name`, set once code lands) is threaded forward via
+    `dataclasses.replace()` rather than re-fetching the whole row.
+144. **`asyncio.CancelledError` is caught inside `_run_role` itself, not
+    only at the outer `_run_pipeline` handler.** `CancelledError` is a
+    `BaseException` since Python 3.8, so a bare `except Exception` at any
+    level silently misses it. `_run_role` needs its own catch because the
+    Agent must be released back to `idle` (via `_release_agent_to_idle`,
+    which walks the real `AGENT_TRANSITIONS` graph — e.g.
+    `WAITING_REVIEW` has no direct edge to `FAILED`, only via
+    `COMPLETED`) before the cancellation propagates; the outer handler in
+    `_run_pipeline` is only responsible for the Mission's own state
+    (→ `cancelled`) and the `TASK_CANCELLED` event. Both handlers
+    re-raise `CancelledError` rather than swallowing it, per correct
+    cancellation semantics.
+145. **The three `_check_budget()` call sites were chosen so a raised
+    `BudgetExceededError` always lands on a Mission state from which
+    `blocked` is a legal transition** (`TASK_TRANSITIONS` allows
+    `blocked` from `in_progress`, `in_review`, and `pending_approval`,
+    not from `created`) — checks sit right after the state has already
+    moved into `in_progress` (before PM), immediately before the Engineer
+    stage (still `in_progress`), and right after the `in_review`
+    transition (before Reviewer). This keeps `_block_task_on_budget`'s own
+    transition call simple: it never needs to special-case which state
+    it's blocking from.
+146. **`_check_budget`'s elapsed-time calculation normalizes
+    `task.created_at` to UTC-aware before subtracting.** SQLite/aiosqlite
+    (the test harness's DB) returns a naive `datetime` for a
+    `DateTime(timezone=True)` column; Postgres (production) returns a
+    tz-aware one. Subtracting a naive value from
+    `datetime.now(timezone.utc)` raised `TypeError` and broke 12
+    previously-green tests the moment the budget guard's per-stage checks
+    were wired into `_run_pipeline`. Fixed by attaching `timezone.utc` to
+    a naive `created_at` before the subtraction, with the discrepancy
+    documented inline rather than switching the test DB engine (SQLite
+    remains the deliberate fast-test choice per existing convention).
+147. **Orphan-mission recovery runs once at API boot, inside `lifespan`
+    right after `init_db`, using a synthetic `SYSTEM_ACTOR`** (not a real
+    Employee) as the event author. Recovery isn't triggered by a
+    schedule or a request — a Mission can only be "orphaned" (stuck
+    `in_progress`/`in_review` with no live coroutine) because the
+    previous process died mid-pipeline, and the only reliable moment to
+    detect that is the next process's own startup, before it starts
+    accepting traffic that could race a fresh assignment onto the same
+    row.
+148. **Mission cancel has two paths in `CommanderWorkflowEngine.cancel_task`,
+    not one.** If the task still has a live entry in the new `_running`
+    registry (`dict[str, asyncio.Task]`), cancel calls `.cancel()` on the
+    coroutine and lets the pipeline's own `CancelledError` handler finish
+    the transition to `cancelled` (so the Agent gets released correctly
+    per #144). If there's no live coroutine (e.g. `pending_approval`,
+    where the pipeline already exited normally and is just waiting on a
+    CEO decision), cancel falls back to a direct DB transition via
+    `_finish_task`. Collapsing these into one code path would have meant
+    either spawning a no-op coroutine just to cancel it, or duplicating
+    the transition-and-event logic outside the pipeline — the two-path
+    design keeps the pipeline coroutine as the single writer of its own
+    Mission's terminal state whenever one is running.

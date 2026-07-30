@@ -7,6 +7,6 @@ through `record_usage`/`summary_for_*` here.
 """
 
 from .routes import router
-from .service import record_usage, summary_since
+from .service import record_usage, summary_since, usage_for_task
 
-__all__ = ["router", "record_usage", "summary_since"]
+__all__ = ["router", "record_usage", "summary_since", "usage_for_task"]

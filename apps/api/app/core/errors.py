@@ -30,3 +30,14 @@ class ReviewRejectedError(CommanderError):
 
 class ApprovalRejectedError(CommanderError):
     """The CEO rejected an approval request."""
+
+
+class BudgetExceededError(CommanderError):
+    """A Mission exceeded one of its token/USD/wall-time budget caps (Rule #13)."""
+
+    def __init__(self, limit_kind: str, limit_value: float, observed_value: float, stage: str) -> None:
+        self.limit_kind = limit_kind
+        self.limit_value = limit_value
+        self.observed_value = observed_value
+        self.stage = stage
+        super().__init__(f"{limit_kind} budget exceeded before '{stage}': {observed_value} > {limit_value}")

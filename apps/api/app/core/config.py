@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # device that makes the Timeline feel alive. Production keeps it on;
     # tests turn it off via conftest.py to avoid ~230s of pure sleep time.
     commander_pacing_enabled: bool = True
+    # Mission budget guard (Rule #13) -- checked before each pipeline stage
+    # starts; exceeding any one of these blocks the mission rather than
+    # erroring, see modules/workflow_engine/engine.py._check_budget.
+    commander_mission_max_tokens: int = 200_000
+    commander_mission_max_usd: float = 5.0
+    commander_mission_max_seconds: int = 900
 
 
 settings = Settings()
