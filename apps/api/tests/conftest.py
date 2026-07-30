@@ -4,6 +4,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.config import settings
 from app.core.db_models import Base
 from app.core.secrets import DBSecretsProvider
 from app.modules.agent_runtime import DBAgentRuntime
@@ -11,6 +12,12 @@ from app.modules.event_bus import InProcessEventBus
 from app.modules.sandbox import FakeSandbox
 from app.modules.workflow_engine import CommanderWorkflowEngine
 from app.modules.workspace_manager import LocalGitWorkspaceManager
+
+# Narrative pacing sleeps (0.5-1.5s per pipeline beat) are a production UX
+# device with no test value -- they were solely responsible for a single
+# full-pipeline test taking 15.7s and the suite taking ~230s. Flipped once
+# at collection time since `settings` is a process-wide singleton.
+settings.commander_pacing_enabled = False
 
 
 class Harness:

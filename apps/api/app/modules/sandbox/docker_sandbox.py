@@ -122,6 +122,17 @@ class DockerSandbox(SandboxRunner):
                 "--cpus", "1",
                 "--pids-limit", "256",
                 "--user", f"{_SANDBOX_UID}:{_SANDBOX_GID}",
+                # Drop every Linux capability and forbid regaining any via
+                # setuid/setgid binaries -- the container has no legitimate
+                # use for any of them. Deliberately NOT --read-only: check
+                # commands (pytest, node --test, ...) write artifacts
+                # (__pycache__, coverage files, node_modules/.cache) into
+                # /workspace as part of normal, non-malicious operation, and
+                # --read-only would make every such check fail closed. The
+                # command itself is still trusted template data (Rule #9),
+                # not AI output, so write access here isn't an escalation.
+                "--cap-drop", "ALL",
+                "--security-opt", "no-new-privileges",
                 "--workdir", "/workspace",
                 self._image,
                 *command,

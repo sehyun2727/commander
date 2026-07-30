@@ -1691,3 +1691,65 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     own merits — they start long-lived servers and mutate the local
     Postgres volume, neither of which belongs in a documentation-only
     sprint. Flagged as a carryover limitation, not glossed over.
+
+## Sprint 9 — Phase A: Foundation & Authentication
+
+139. **Headquarters absorption made concrete, not just asserted.** Sprint
+    8.5 (#137c) flagged that no document actually said what happens to
+    Headquarters in V1.1. The Sprint 9 brief §2.12(a) resolved this:
+    Headquarters does not become a Sidebar page, it is absorbed into the
+    CEO Workspace at the same route. Implemented as: (1) `CLAUDE.md`
+    terminology table row changed from `Dashboard | Headquarters` to
+    `Dashboard | CEO Workspace`, while §8's "CEO surface:" sentence was
+    deliberately left saying "Headquarters" because that sentence
+    describes V1 as-built reality, not the V1.1 target — conflating the
+    two would misdescribe what's actually shipping today; (2) a new
+    paragraph in §9's V1/V1.1 boundary section states the absorption
+    explicitly as a roadmap decision, not an open question; (3)
+    `docs/ARCHITECTURE.md` §8 gained the four-row block-to-widget mapping
+    table (Decision strip → Pending Approvals widget, Situation Report →
+    PM Report, Vitals → Progress/Employees/Risks/Costs widgets, Timeline
+    excerpt → Timeline widget) plus a one-line rationale (the widget dock
+    already replicates Headquarters, so keeping both duplicates surface
+    and forces the CEO to guess which screen to check); (4) `UX_SPEC.md`
+    §7's intro paragraph now states the absorption inline rather than
+    leaving Headquarters's absence from the Sidebar-page list unexplained
+    silence. §2's IA tree was left untouched per the brief — it was
+    already correct.
+
+140. **Pacing switch implemented as a module-level mutation in
+    `conftest.py`, not a fixture.** `Settings` (`core/config.py`) is a
+    single process-wide singleton (`settings = Settings()`), so a
+    session-scoped autouse fixture would have worked but adds
+    indirection for no benefit — setting
+    `settings.commander_pacing_enabled = False` once at conftest import
+    time (before any test collects) is simpler and has identical effect,
+    since nothing re-reads `Settings` fresh per test. Measured effect:
+    157 passed / 4 skipped in 109.59s with pacing off vs. the recorded
+    349-369s pacing-on baseline from Sprint 8.5's own `make test` runs —
+    about a 3.2x reduction, consistent with removing 0.5-1.5s sleeps from
+    4 pipeline beats across the full-pipeline-style tests. Production
+    default stays `True`; only the test environment flips it.
+
+141. **`--read-only` deliberately not added to the sandbox `docker
+    create` call, matching the brief's explicit instruction.** Check
+    commands (pytest, `node --test`, etc.) write ordinary artifacts into
+    `/workspace` during normal operation (`__pycache__`, coverage files,
+    node_modules caches) — `--read-only` would fail every such check
+    closed, not just malicious writes. `--cap-drop ALL` and
+    `--security-opt no-new-privileges` were added instead, which remove
+    privilege-escalation surface without blocking legitimate writes; the
+    command itself remains trusted template data per Rule #9, never AI
+    output, so write access inside the sandbox isn't an escalation path.
+    Reasoning recorded inline in `docker_sandbox.py` per the brief's
+    instruction to comment the omission, not just note it here.
+
+142. **`ARCHITECTURE.md` §7.1's "*Sprint 9 adds `--cap-drop ALL`...*"
+    sentence was left unchanged in Phase 0** even though the feature it
+    describes is now implemented as of this phase. Sprint 8.5 (#136b)
+    already judged this sentence correctly-future-tense; updating it to
+    present tense mid-sprint would desync it from the rest of §7.1's
+    still-forward-looking Sprint 9 authorization-section content (§7.2,
+    written as target-state) before the sprint's own Phase 5 As-Built
+    sync pass. Left as a tracked item for Phase 5.4 rather than patched
+    piecemeal, so the whole section updates once, consistently.

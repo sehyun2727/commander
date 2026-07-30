@@ -355,7 +355,16 @@ Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark, Render-ins
 
 **V1.1 target layout** (detailed in UX_SPEC §3–§4): entering a company presents **the PM conversation as the primary surface**, with a customizable **Widget Dock** beside it and a thin sidebar for deeper pages. New CEO-facing capability lands as a Widget or a Sidebar page (Rule #17) — never bolted onto the conversation.
 
-**V1 as-built surfaces** (all real, all shipping today): My Companies · Headquarters · Missions kanban + detail · Employees + profile · Timeline (CEO/Technical toggle, filters, digest grouping) · Decisions (Pending/History) · Reports · Workspace browser · Company Settings. These are not discarded in V1.1 — most become Sidebar pages, and their summaries become Widgets.
+**V1 as-built surfaces** (all real, all shipping today): My Companies · Headquarters · Missions kanban + detail · Employees + profile · Timeline (CEO/Technical toggle, filters, digest grouping) · Decisions (Pending/History) · Reports · Workspace browser · Company Settings. Most of these are not discarded in V1.1 — they become Sidebar pages, and their summaries become Widgets. **Headquarters is the one exception: it is absorbed into the CEO Workspace rather than surviving as its own page.** Same route (`/company/[id]`), same purpose, different shape — a conversation-plus-widget-dock replaces a standalone dashboard. Its four blocks map as:
+
+| V1 Headquarters block | V1.1 destination |
+|---|---|
+| Decision strip (hero) | Pending Approvals widget + the "needs your decision" section of the PM Report |
+| Situation Report | PM Report (UX_SPEC §3.2) |
+| Vitals (4 tiles) | Progress · Employees · Risks · Costs widgets |
+| Timeline excerpt | Timeline widget |
+
+Rationale: the widget dock already replicates everything Headquarters does; keeping both would be a direct duplication and would force the CEO to guess which screen to check.
 
 Cross-cutting: one SSE connection per company, events dedup by id and invalidate queries; generated event types only; `ApiStatusBanner` polls health; SSE connection status surfaces as a "Reconnecting…" pill; a persistent "Simulation mode" badge whenever the company runs on mock.
 

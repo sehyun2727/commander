@@ -261,7 +261,7 @@ Onboarding must reach step 3 in under two minutes and step 5 in under five, with
 
 ## 7. Sidebar Pages (V1 surfaces, retained)
 
-These already exist and continue to; most also project a Widget into the dock.
+These already exist and continue to; most also project a Widget into the dock. One V1 surface is *not* on this list on purpose: **Headquarters is absorbed into the CEO Workspace**, not carried forward as its own Sidebar page. Its Decision strip becomes the Pending Approvals widget (plus the PM Report's decision section), its Situation Report becomes the PM Report itself, its four Vitals tiles become the Progress / Employees / Risks / Costs widgets, and its Timeline excerpt becomes the Timeline widget — see `docs/ARCHITECTURE.md` §8 for the full mapping.
 
 - **Projects `/`** — Render's Overview applied to companies: name, status word, milestone bar, Employee avatar stack, latest activity line, decision badge. Empty state is the founding invitation.
 - **Missions** — kanban (Backlog / Developing / Needs your decision / Done) + Mission detail: Meeting transcript, deliverable, decision history. Code missions render the **Change Summary Card** (summary → files → diff, strictly that order) with check results as plain verdict chips. The diff is never the landing view.

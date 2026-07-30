@@ -34,6 +34,7 @@ from ...core.lifecycle.agent_states import AgentState
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
+from ...core.config import settings
 from ...templates import TEMPLATE
 from .. import prompt_builder
 from ..costs import record_usage
@@ -55,6 +56,8 @@ _PM, _ENGINEER, _REVIEWER = TEMPLATE.roles
 
 
 def _pause() -> "asyncio.Future[None]":
+    if not settings.commander_pacing_enabled:
+        return asyncio.sleep(0)
     return asyncio.sleep(random.uniform(0.5, 1.5))
 
 

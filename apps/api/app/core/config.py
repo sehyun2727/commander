@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     provider_max_retries: int = 2
     commander_workspace_root: str = "./workspaces"
     commander_sandbox_image: str = "commander-sandbox"
+    # Narrative pacing (the 0.5-1.5s sleeps between pipeline beats) is a UX
+    # device that makes the Timeline feel alive. Production keeps it on;
+    # tests turn it off via conftest.py to avoid ~230s of pure sleep time.
+    commander_pacing_enabled: bool = True
 
 
 settings = Settings()

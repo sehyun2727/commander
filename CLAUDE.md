@@ -65,8 +65,9 @@ Two different axes. Drawing them as one chart produces a contradiction — keep 
 - **One role can hold many Employees**, each on a different model:
   ```
   Backend Engineer
-    ├── Kim (Claude Sonnet)
-    ├── Lee (GPT-5.5)
+    ├── Kim  (Claude Sonnet)
+    └── Lee  (GPT-5.5)
+  Frontend Engineer
     └── Park (Gemini)
   ```
   The PM assigns a Mission to a specific Employee, not to a role.
@@ -88,7 +89,7 @@ Code/DB/API use internal terms. UI labels, page titles, toasts, empty states use
 | Chat | Meeting |
 | Agent | Employee |
 | Agent Group | Department |
-| Dashboard | Headquarters |
+| Dashboard | CEO Workspace |
 | Log | Timeline |
 | Configuration | Company Settings |
 | Deployment | Launch |
@@ -232,6 +233,8 @@ Shipped and working today:
 ### V1 / V1.1 boundary
 
 Everything in §8 is V1. Everything in §9 is V1.1 and **must not be added "while you're in there."** The Engineer stays single-shot until the Sprint 16 brief says otherwise. Roles stay as they are until Sprint 10. Do not blur this line — sprint boundaries are what make the roadmap mean anything.
+
+One exception the roadmap itself makes: **Headquarters is absorbed into the CEO Workspace, not retained as a separate page.** §8's "CEO surface" list is a V1 as-built description and correctly still says Headquarters — that page is real today. But it does not survive into V1.1 as a Sidebar page; its four blocks (Decision strip, Situation Report, Vitals, Timeline excerpt) map onto the Pending Approvals widget, the PM Report, the Progress/Employees/Risks/Costs widgets, and the Timeline widget respectively (see `docs/ARCHITECTURE.md` §8 for the full mapping). This absorption is decided, not open for re-litigation in a later sprint brief.
 
 ## 10. Known Accepted Tradeoffs
 

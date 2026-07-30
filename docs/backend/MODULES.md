@@ -1,5 +1,8 @@
 # Backend Module Responsibilities
 
+> **HISTORICAL (Sprint 2).** 이 문서는 초기 모듈 경계 설계 기록이며 현재 구현과 일치하지 않는다.
+> 현재의 진실의 원천은 `docs/ARCHITECTURE.md`다. 참고용 이력으로만 읽어라.
+
 Status: Sprint 2 — boundaries and contracts only, no implementation.
 Source of truth: `../ARCHITECTURE.md`. This document must stay in sync with
 `apps/api/app/modules/*/__init__.py`.
