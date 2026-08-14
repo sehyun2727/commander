@@ -41,6 +41,7 @@ from .modules.reports import router as reports_router
 from .modules.sandbox import DockerSandbox
 from .modules.sandbox import router as sandbox_router
 from .modules.situation import router as situation_router
+from .modules.skill_templates import router as skill_templates_router
 from .modules.tasks import recover_orphaned_tasks
 from .modules.tasks import router as tasks_router
 from .modules.timeline import router as timeline_router
@@ -155,6 +156,7 @@ app.include_router(costs_router)
 app.include_router(models_router)
 app.include_router(reports_router)
 app.include_router(situation_router)
+app.include_router(skill_templates_router)
 app.include_router(workspace_router)
 app.include_router(sandbox_router)
 

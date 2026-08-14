@@ -15,7 +15,7 @@ async def test_founding_posts_an_intro_conversation_event_per_employee(harness):
     events, _ = await harness.event_bus.page(project.id, cursor=None, limit=50, kind="conversation")
     intro_texts = {event.payload["text"] for event in events}
 
-    assert intro_texts == {role.intro for role in TEMPLATE.roles}
+    assert intro_texts == {role.intro for role in TEMPLATE.roles if role.founding}
     for event in events:
         assert event.kind == "conversation"
         assert event.payload["task_id"] is None

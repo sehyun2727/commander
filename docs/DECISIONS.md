@@ -2372,3 +2372,47 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     test files are mechanical `AgentORM.role -> role_key` fixture renames
     plus additive new tests, matching the brief's "동작 변화 0" requirement
     (§21).
+
+## Sprint 11 — Build the Company: CTO, Hiring, Employee Configuration
+
+### Phase 1 — CTO RoleSpec and canonical configuration data
+
+178. **CTO is a vacant, hireable Role at founding, not auto-seeded** — added
+    `RoleSpec.founding: bool = True` rather than a second engine-owned
+    founding-roster list. `create_department` now filters
+    `TEMPLATE.roles` by `role.founding` instead of iterating every Role,
+    which stays Rule #16-compliant (a data attribute check, not a role-key
+    branch) and requires zero engine changes. CTO is the only Role with
+    `founding=False`; PM/Engineer/Reviewer keep their existing founding
+    behavior byte-for-byte (verified by
+    `test_founding_matches_the_template_exactly` and
+    `test_founding_posts_an_intro_conversation_event_per_employee`, both
+    updated to filter by `role.founding` -- classified as intentional
+    behavior change per the brief's testing-discipline categories, not
+    implementation-detail coupling). This satisfies brief §6.9's stated
+    preference (CTO "visibly available to hire rather than silently
+    auto-hired") without inventing a parallel founding-roster concept.
+179. **CTO reuses the `"planner-default"` model_registry slot rather than
+    introducing a new one** — `model_registry`'s role vocabulary
+    (`planner`/`builder`/`reviewer`) is a distinct axis from `RoleSpec.key`,
+    and CTO has no pipeline stage this sprint (no PM<->CTO planning yet,
+    brief §4.1/§9), so nothing would ever resolve a `"cto-default"` ref.
+    Adding an unused registry slot would be speculative scope the brief
+    explicitly warns against ("do not enlarge... merely because a cleaner
+    theoretical design exists," CLAUDE.md §16.3). Reusing `planner-default`
+    costs nothing today (CTO's model choice in the hiring form comes from
+    `options_for_role(provider, "planner")`, same list the CEO already
+    sees for PM) and is a one-line change to introduce a real `cto-default`
+    slot the day CTO actually joins a pipeline stage.
+180. **Skill templates are a new, minimal, presentation-only registry**
+    (`app/modules/skill_templates/`) — three entries (`generalist`,
+    `research_focused`, `speed_focused`), frozen dataclass, each carrying
+    an inert `capabilities: tuple[str, ...]` field deliberately excluded
+    from the public API response (only `key`/`title`/`description` are
+    exposed, mirroring the Roles API's own `contract`/`tools`/
+    `permissions` exclusion). No skill template grants any runtime
+    capability yet -- `RoleSpec.tools` remains the only whitelist that
+    would ever do that (currently empty for every Role), so selecting a
+    skill template today only changes what displays on an Employee, never
+    what it can execute. This keeps Sprint 11 clearly on the presentation
+    side of the Sprint 16 Agent Harness boundary the brief draws (§4.6).

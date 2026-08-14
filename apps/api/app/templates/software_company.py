@@ -74,6 +74,13 @@ _REVIEWER_CONTRACT = (
     "present."
 )
 
+_CTO_CONTRACT = (
+    "You are the CTO for this company. You are not yet part of the "
+    "mission pipeline -- a later sprint defines how you plan alongside "
+    "the PM. If you are ever prompted directly before that exists, "
+    "answer plainly and defer any mission-shaping decision to the PM."
+)
+
 
 @dataclass(frozen=True)
 class RoleSpec:
@@ -98,6 +105,12 @@ class RoleSpec:
     harness: Literal["one_shot"]  # execution shape; Sprint 16+ may add "tool_loop"
     tools: tuple[str, ...]  # whitelist granted by the template (Rule #12); none yet
     permissions: tuple[str, ...]  # organizational actions this Role may take
+    # Sprint 11 §6.9: whether `create_department` auto-seeds an Employee for
+    # this Role when a company is founded. False means the Role exists and
+    # is hireable (Roles API, hiring form) from day one, but starts vacant
+    # -- distinguishes "the position exists" from "someone occupies it"
+    # even at t=0, without a second engine-side founding-roster list.
+    founding: bool = True
 
     @property
     def default_profile(self) -> Mapping[str, str]:
@@ -126,6 +139,7 @@ PM = RoleSpec(
     harness="one_shot",
     tools=(),
     permissions=("assign_mission", "request_ceo_decision"),
+    founding=True,
 )
 
 ENGINEER = RoleSpec(
@@ -145,6 +159,7 @@ ENGINEER = RoleSpec(
     harness="one_shot",
     tools=(),
     permissions=("produce_deliverable",),
+    founding=True,
 )
 
 REVIEWER = RoleSpec(
@@ -164,11 +179,37 @@ REVIEWER = RoleSpec(
     harness="one_shot",
     tools=(),
     permissions=("request_ceo_decision",),
+    founding=True,
+)
+
+CTO = RoleSpec(
+    key="cto",
+    title="CTO",
+    category="leadership",
+    singleton=True,
+    description="Owns technical direction for the company and partners with the PM on how work gets built.",
+    founding_name="Morgan Lee",
+    avatar_color="#f97316",
+    # Sprint 11: CTO has no pipeline stage yet (no PM<->CTO planning this
+    # sprint), so it reuses the PM's model slot rather than the template
+    # introducing an unused new logical ref -- see docs/DECISIONS.md.
+    model_ref="planner-default",
+    contract=_CTO_CONTRACT,
+    intro=(
+        "Hi, I'm your CTO. I set technical direction and will partner "
+        "with your PM once mission planning brings me into the loop."
+    ),
+    harness="one_shot",
+    tools=(),
+    permissions=("advise_technical_direction",),
+    founding=False,
 )
 
 # Tuple order IS the founding roster order (display / onboarding only —
 # the *pipeline* order is a separate, explicit sequence below, PIPELINE).
-ROLES: tuple[RoleSpec, ...] = (PM, ENGINEER, REVIEWER)
+# CTO is listed last and starts vacant (RoleSpec.founding=False) -- it is
+# hireable from day one but never auto-seeded (Sprint 11 §6.9).
+ROLES: tuple[RoleSpec, ...] = (PM, ENGINEER, REVIEWER, CTO)
 ROLES_BY_KEY: dict[str, RoleSpec] = {role.key: role for role in ROLES}
 
 

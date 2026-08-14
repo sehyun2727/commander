@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.core.contracts import AgentProfile
 from app.core.db_models import AgentORM
+from app.modules.model_registry.registry import resolve as resolve_model
 from app.modules.projects.service import create_project
 from app.templates import TEMPLATE
 from app.templates.software_company import PM, RoleSpec
@@ -23,8 +24,9 @@ async def test_founding_matches_the_template_exactly(harness):
         result = await session.execute(select(AgentORM).where(AgentORM.project_id == project.id))
         rows = {row.role_key: row for row in result.scalars().all()}
 
-    assert set(rows.keys()) == {role.key for role in TEMPLATE.roles}
-    for role in TEMPLATE.roles:
+    founding_roles = [role for role in TEMPLATE.roles if role.founding]
+    assert set(rows.keys()) == {role.key for role in founding_roles}
+    for role in founding_roles:
         row = rows[role.key]
         assert row.name == role.founding_name
         assert row.avatar_color == role.avatar_color
@@ -32,8 +34,28 @@ async def test_founding_matches_the_template_exactly(harness):
         assert profile == AgentProfile(**role.default_profile)
 
 
-def test_role_order_is_pm_then_engineer_then_reviewer():
-    assert [role.key for role in TEMPLATE.roles] == ["pm", "engineer", "reviewer"]
+def test_role_order_is_pm_engineer_reviewer_then_cto():
+    """Sprint 11: CTO is appended last and is the only non-founding Role."""
+    assert [role.key for role in TEMPLATE.roles] == ["pm", "engineer", "reviewer", "cto"]
+
+
+def test_cto_is_a_vacant_leadership_singleton_not_founded():
+    cto = TEMPLATE.roles_by_key["cto"]
+    assert cto.category == "leadership"
+    assert cto.singleton is True
+    assert cto.founding is False
+
+
+def test_only_cto_is_excluded_from_founding():
+    assert {role.key for role in TEMPLATE.roles if not role.founding} == {"cto"}
+
+
+@pytest.mark.parametrize("provider", ["mock", "anthropic"])
+def test_every_role_model_ref_resolves_through_the_canonical_registry(provider: str):
+    """Sprint 11 §4.5: model options come from the existing model_registry --
+    a Role never needs a second, duplicated model list, including CTO."""
+    for role in TEMPLATE.roles:
+        assert resolve_model(provider, role.model_ref)
 
 
 def test_reviewer_contract_requires_sections_before_verdict():
@@ -57,6 +79,8 @@ def test_leadership_roles_are_singletons_worker_roles_are_not():
     assert TEMPLATE.roles_by_key["pm"].category == "leadership"
     assert TEMPLATE.roles_by_key["reviewer"].singleton is True
     assert TEMPLATE.roles_by_key["reviewer"].category == "leadership"
+    assert TEMPLATE.roles_by_key["cto"].singleton is True
+    assert TEMPLATE.roles_by_key["cto"].category == "leadership"
     assert TEMPLATE.roles_by_key["engineer"].singleton is False
     assert TEMPLATE.roles_by_key["engineer"].category == "worker"
 
@@ -100,7 +124,7 @@ async def test_roles_api_exposes_only_the_ceo_facing_fields(api_client, harness)
     assert resp.status_code == 200
     roles = resp.json()
 
-    assert {role["key"] for role in roles} == {"pm", "engineer", "reviewer"}
+    assert {role["key"] for role in roles} == {"pm", "engineer", "reviewer", "cto"}
     for role in roles:
         assert set(role.keys()) == {"key", "title", "category", "singleton", "description"}
 

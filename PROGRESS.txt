@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 11 — Build the Company: CTO, Hiring, Employee Configuration
- Overall: 4/70 · 6%
- Now working on: Phase 0 close-out, starting Phase 1
+ Overall: 22/70 · 31%
+ Now working on: Phase 1 complete, starting Phase 2 (persistence + atomic hiring)
  Last update: 2026-08-14
 ================================================
 
@@ -20,21 +20,31 @@ PHASE 0 — Baseline and Sprint State                 (9/10)
         tool available in this environment (confirmed via ToolSearch in Sprint 10);
         Employees UI browser verification remains UNVERIFIED, same for Sprint 11
 [x] 0.9 PROGRESS.txt replaced with Sprint 11 live checklist (this file)
-[ ] 0.10 commit + push Phase 0 checkpoint
+[x] 0.10 commit + push Phase 0 checkpoint (c75dc76)
 
-PHASE 1 — CTO and Canonical Configuration Data       (0/12)
-[ ] 1.1 add CTO RoleSpec (key=cto, leadership, singleton=True)
-[ ] 1.2 CTO title/category/singleton/description/contract/permissions/model default
-[ ] 1.3 verify RoleSpec immutability (frozen dataclass, existing test pattern)
-[ ] 1.4 confirm CTO surfaces via role-derived APIs/UI with zero hardcoded branches
-[ ] 1.5 add canonical typed skill-template registry (new, minimal)
-[ ] 1.6 skill metadata immutable + server-owned
-[ ] 1.7 model choices sourced from existing model_registry (no duplication)
-[ ] 1.8 safe read APIs/schemas for model + skill options
-[ ] 1.9 tests: CTO metadata, singleton classification, RoleSpec canonicality,
+PHASE 1 — CTO and Canonical Configuration Data       (12/12)
+[x] 1.1 add CTO RoleSpec (key=cto, leadership, singleton=True)
+[x] 1.2 CTO title/category/singleton/description/contract/permissions/model default
+[x] 1.3 verify RoleSpec immutability (frozen dataclass, existing test pattern)
+[x] 1.4 confirm CTO surfaces via role-derived APIs/UI with zero hardcoded branches
+        (added RoleSpec.founding: bool; create_department filters by role.founding
+        instead of a role-name list -- data-driven, guard stays green)
+[x] 1.5 add canonical typed skill-template registry (app/modules/skill_templates/,
+        3 entries: generalist/research_focused/speed_focused)
+[x] 1.6 skill metadata immutable + server-owned (frozen dataclass, GET-only route)
+[x] 1.7 model choices sourced from existing model_registry (no duplication --
+        CTO reuses "planner-default" logical ref rather than adding a new
+        model_registry slot; see DECISIONS.md)
+[x] 1.8 safe read APIs/schemas for model + skill options (new GET
+        /api/projects/{id}/skill-templates; existing /models and /roles reused)
+[x] 1.9 tests: CTO metadata, singleton classification, RoleSpec canonicality,
         skill-template immutability, safe registry serialization, no dup sources
-[ ] 1.10 run targeted + full relevant tests
-[ ] 1.11 update PROGRESS.txt
+        (tests/test_template.py, tests/test_skill_templates.py)
+[x] 1.10 run targeted + full relevant tests -- 225 passed / 4 skipped (was
+         218/4; +7 net: 1 test renamed not counted, updated test_onboarding.py
+         intro-set assertion for non-founding CTO -- classification: intentional
+         behavior change)
+[x] 1.11 update PROGRESS.txt
 [ ] 1.12 commit + push Phase 1
 
 PHASE 2 — Persistence and Atomic Hiring Domain       (0/17)

@@ -65,10 +65,14 @@ class DBAgentRuntime(AgentRuntime):
         # The founding roster, role order, and default profiles all come
         # from the active company template's RoleSpecs -- founding never
         # hardcodes a role name the template doesn't already provide.
+        # Sprint 11 §6.9: only RoleSpec.founding=True Roles are auto-seeded;
+        # others (e.g. CTO) exist as vacant, hireable positions from day one.
         agent_ids: list[str] = []
         async with self._session_factory() as session:
             rows = []
             for role in TEMPLATE.roles:
+                if not role.founding:
+                    continue
                 profile = AgentProfile(**role.default_profile)
                 row = AgentORM(
                     project_id=project_id,
