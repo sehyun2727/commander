@@ -8,7 +8,7 @@ from ...core.ownership import project_owned_by
 from ...deps import get_agent_runtime, get_current_user, get_event_bus, get_secrets, get_session_factory
 from ...templates import TEMPLATE
 from . import service
-from .schemas import CompanySettingsRequest, ProjectCreateRequest, ProjectResponse, StarterResponse
+from .schemas import CompanySettingsRequest, ProjectCreateRequest, ProjectResponse, RoleResponse, StarterResponse
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -68,6 +68,20 @@ async def list_starters(
     # Static, template-owned onboarding suggestions (§6) -- no per-project
     # state, so no DB lookup; only one template exists (§10.4).
     return TEMPLATE.starters
+
+
+@router.get("/{project_id}/roles", response_model=list[RoleResponse])
+async def list_roles(
+    project_id: str,
+    session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
+):
+    if not await project_owned_by(session_factory, project_id, user.id):
+        raise HTTPException(status_code=404, detail="Company not found")
+    # Static, template-owned Role data (§18) -- no per-project state, so no
+    # DB lookup; only one template exists (§10.4). `contract`/`tools`/
+    # `permissions` are deliberately not exposed here.
+    return TEMPLATE.roles
 
 
 @router.patch("/{project_id}/settings", response_model=ProjectResponse)

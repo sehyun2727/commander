@@ -24,6 +24,7 @@ export const keys = {
   report: (reportId: string) => ["report", reportId] as const,
   situation: (companyId: string) => ["situation", companyId] as const,
   starters: (companyId: string) => ["starters", companyId] as const,
+  roles: (companyId: string) => ["roles", companyId] as const,
   workspaceTree: (companyId: string, ref: string) => ["workspaceTree", companyId, ref] as const,
   workspaceFile: (companyId: string, path: string, ref: string) =>
     ["workspaceFile", companyId, path, ref] as const,
@@ -58,6 +59,12 @@ export function useCompany(id: string) {
 
 export function useEmployees(companyId: string) {
   return useQuery({ queryKey: keys.employees(companyId), queryFn: () => api.listEmployees(companyId) });
+}
+
+// Role data is template-owned and effectively static per company (Sprint 10
+// §18) -- no polling needed, unlike Employees which change state constantly.
+export function useRoles(companyId: string) {
+  return useQuery({ queryKey: keys.roles(companyId), queryFn: () => api.listRoles(companyId) });
 }
 
 export function useMissions(companyId: string) {

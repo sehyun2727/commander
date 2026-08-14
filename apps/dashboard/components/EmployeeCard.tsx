@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { StatusWord, agentStatusWord } from "@/components/StatusWord";
-import type { Agent, Task } from "@/lib/types";
+import type { Agent, Role, Task } from "@/lib/types";
 import { formatUsd, roleLabel, styleSummary } from "@/lib/utils";
 
 export function EmployeeCard({
@@ -9,11 +9,13 @@ export function EmployeeCard({
   companyId,
   currentMission,
   spendUsd,
+  roles,
 }: {
   employee: Agent;
   companyId: string;
   currentMission?: Task;
   spendUsd?: number;
+  roles?: Role[];
 }) {
   return (
     <div className="rounded-xl border border-base-border bg-base-card p-4 shadow-panel transition hover:border-accent/50">
@@ -22,7 +24,7 @@ export function EmployeeCard({
           <AgentAvatar name={employee.name} color={employee.avatar_color} size={44} />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-text">{employee.name}</p>
-            <p className="text-xs uppercase tracking-wide text-text-faint">{roleLabel(employee.role)}</p>
+            <p className="text-xs uppercase tracking-wide text-text-faint">{roleLabel(roles, employee.role)}</p>
           </div>
         </div>
         <p className="mt-2 truncate text-xs text-text-faint">{styleSummary(employee.profile)}</p>

@@ -42,13 +42,24 @@ export interface User {
 export interface Agent {
   id: string;
   project_id: string;
-  role: "pm" | "engineer" | "reviewer";
+  // Sprint 10 Rule #16: Roles are template-owned data, not a fixed set the
+  // frontend hardcodes -- the Roles API (`Role` below) is the source of
+  // truth for which keys currently exist and how to present them.
+  role: string;
   name: string;
   profile: AgentProfile;
   avatar_color: string;
   state: string;
   current_task_id: string | null;
   created_at: string;
+}
+
+export interface Role {
+  key: string;
+  title: string;
+  category: "leadership" | "worker";
+  singleton: boolean;
+  description: string;
 }
 
 export interface CodeStats {

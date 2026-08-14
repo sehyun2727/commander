@@ -89,6 +89,7 @@ class RoleSpec:
     title: str  # UI-facing role label
     category: Literal["leadership", "worker"]  # leadership roles are singletons
     singleton: bool  # at most one Employee may occupy this Role at a time
+    description: str  # third-person position summary; Roles API (Sprint 10 §18)
     founding_name: str
     avatar_color: str
     model_ref: str  # logical ref resolved by model_registry
@@ -113,6 +114,7 @@ PM = RoleSpec(
     title="PM",
     category="leadership",
     singleton=True,
+    description="Turns each mission brief into a concrete plan before any work begins.",
     founding_name="Priya Shah",
     avatar_color="#8b5cf6",
     model_ref="planner-default",
@@ -131,6 +133,7 @@ ENGINEER = RoleSpec(
     title="Engineer",
     category="worker",
     singleton=False,
+    description="Builds the deliverable a mission calls for, from the PM's plan.",
     founding_name="Devon Cole",
     avatar_color="#3b82f6",
     model_ref="builder-default",
@@ -149,6 +152,7 @@ REVIEWER = RoleSpec(
     title="Reviewer",
     category="leadership",
     singleton=True,
+    description="Audits every deliverable against the plan and mission brief before it reaches the CEO.",
     founding_name="Ari Kim",
     avatar_color="#14b8a6",
     model_ref="reviewer-default",

@@ -24,18 +24,15 @@ const APPROVAL_STATUS_LABEL: Record<string, string> = {
   changes_requested: "Changes Requested",
 };
 
-const ROLE_LABEL: Record<string, string> = {
-  pm: "PM",
-  engineer: "Engineer",
-  reviewer: "Reviewer",
-};
-
 export function approvalStatusLabel(status: string): string {
   return APPROVAL_STATUS_LABEL[status] ?? status;
 }
 
-export function roleLabel(role: string): string {
-  return ROLE_LABEL[role] ?? role;
+// Sprint 10 Rule #16: a Role's display title is template-owned data (the
+// Roles API's `title` field), not a frontend-hardcoded lookup -- callers
+// pass in the `Role[]` they already fetched via `useRoles`.
+export function roleLabel(roles: { key: string; title: string }[] | undefined, roleKey: string): string {
+  return roles?.find((role) => role.key === roleKey)?.title ?? roleKey;
 }
 
 const PERSONALITY_LABEL: Record<string, string> = {

@@ -29,3 +29,17 @@ class ProjectResponse(BaseModel):
 class StarterResponse(BaseModel):
     title: str
     description: str
+
+
+class RoleResponse(BaseModel):
+    """Sprint 10 §18: the Roles API's read-only, CEO-facing view of a
+    Role -- deliberately excludes `contract`/`tools`/`permissions`, which
+    are internal execution details, not organizational facts."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    title: str
+    category: Literal["leadership", "worker"]
+    singleton: bool
+    description: str

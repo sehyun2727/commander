@@ -2239,3 +2239,82 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     template would duplicate Sprint 10's actual template shape for no
     behavioral gain (CLAUDE.md §16.3). Full suite: 211 passed, 4 skipped
     (204/4 after Phase 2, plus this phase's 7 new tests).
+
+### Phase 4 — #16 enforcement + UI
+
+170. **Added a real `RoleSpec.description: str` field rather than reusing
+    `intro` for the Roles API (brief §18)** — `intro` is a first-person
+    onboarding line spoken as a founding conversation event ("Hi, I'm
+    Priya, your PM..."), not a third-person position summary suitable for
+    a CEO-facing role list; reusing it would leak onboarding voice/tense
+    into an API meant to describe the *position*, not introduce the
+    person occupying it. `description` is populated for all three
+    existing Roles and is a required field like every other `RoleSpec`
+    attribute, so a future Role (Sprint 11's CTO) cannot be added without
+    also supplying one.
+171. **The Rule #16 guard (brief §17) is an AST walk over `app/`, registered
+    as `tests/test_role_hardcoding_guard.py` so it runs under `make
+    test`/pytest rather than as a separate script** — the brief explicitly
+    warns a substring search (`"engineer" not in source`) false-positives
+    on comments/docstrings/fixtures/log text. The guard instead parses
+    every `.py` file under `app/` (except `app/templates/`, the one place
+    Rule #16 permits role-name constants, since that's the template
+    *assembling its own data*) and flags three concrete AST shapes: (a) an
+    `ast.Compare` with `==`/`!=` against a string constant that is a real
+    role key -- "role-specific behavioral branch"; (b) an `ast.Compare`
+    with `in`/`not in` against a literal list/tuple/set of role-key
+    constants -- same category; (c) an `ast.Subscript` that either indexes
+    a "roles"-named collection by integer position ("position-based
+    access") or indexes any mapping with a literal role-key string
+    ("hardcoded role dependency"). The set of "real role keys" is read
+    from the live `TEMPLATE.roles_by_key`, not hand-copied into the test,
+    so the guard automatically covers a role the template adds later. A
+    companion test (`test_the_guard_actually_detects_a_real_violation`)
+    feeds the checker four inline snippets shaped exactly like CLAUDE.md's
+    forbidden-pattern examples and asserts each one is caught -- proving
+    the guard actually fires rather than vacuously passing. Confirmed
+    empirically that `prompt_builder/builder.py`'s `if role ==
+    ENGINEER_ROLE_KEY:` does *not* trip the guard: `ENGINEER_ROLE_KEY` is
+    a module-level value derived via `first_stage_role_key(TEMPLATE.pipeline,
+    "produce")` (a Sprint 9 pattern CLAUDE.md's Rule #16 explicitly
+    permits, "stage kinds... are allowed to drive behavior"), not a
+    string literal in the `Compare` node itself, so the AST shape the
+    guard looks for genuinely isn't present.
+172. **`SituationReport.tsx`'s `employees?.find((e) => e.role === "pm")` was
+    kept, not rewritten to be data-driven** — Rule #11 ("the CEO has
+    exactly one conversational counterpart: the PM") makes the PM's
+    identity a fixed architectural invariant, not Role data a future
+    template could reassign; the Situation Report is specifically framed
+    as spoken in the PM's voice, so this lookup is finding *the* CEO
+    counterpart Rule #11 already hardwires, not branching on a swappable
+    worker Role. There is also no data-driven way to do this today without
+    widening scope: the Roles API deliberately excludes `permissions`
+    (§18), which is the only field that would otherwise distinguish PM
+    from the other `category: "leadership"` singleton (Reviewer) without a
+    literal role-key string. Revisit only if a later sprint exposes an
+    explicit "CEO counterpart" flag.
+173. **Frontend Rule #16 cleanup**: `Agent.role` narrowed from a hardcoded
+    `"pm" | "engineer" | "reviewer"` union to `string` (a closed union
+    silently breaks the moment Sprint 11 adds a `"cto"` role key, which is
+    exactly the kind of engine-adjacent hardcoding #16 targets even though
+    it's a type annotation, not a runtime branch); `lib/utils.ts`'s
+    `ROLE_LABEL`/`roleLabel()` static lookup table was replaced with a
+    `roleLabel(roles, roleKey)` that reads `title` from the new Roles API
+    response, added via a new `useRoles()` hook. The Employees page
+    (`app/company/[id]/employees/page.tsx`) was rewritten per brief §19 /
+    UX_SPEC §5.4 to group Employees by `Role.category` (Leadership first,
+    then Engineering) with a per-Role subheading listing every Employee
+    currently holding that Role -- the section-heading copy
+    (`{leadership: "Leadership", worker: "Engineering"}`) is UI text keyed
+    off the two `category` enum values the API returns, not a per-Role
+    hardcode, and a category section only renders once it actually holds
+    a hired Employee (hidden means absent, §10.4). No "+ Add Employee"
+    affordance was built (out of scope this sprint per brief §19); the
+    existing Employee profile-edit page/flow is untouched aside from its
+    `roleLabel` call site. `app/company/[id]/settings/page.tsx`'s own
+    `ROLE_LABEL = { planner: "PM", builder: "Engineer", reviewer:
+    "Reviewer" }` was left as-is -- it labels `model_registry`'s
+    "planner"/"builder"/"reviewer" model-slot vocabulary (a distinct,
+    pre-existing axis for per-function AI model overrides, unrelated to
+    `RoleSpec.key`), not an organizational Role identity, so it's outside
+    this phase's scope. `pnpm typecheck` and `pnpm build` both pass.

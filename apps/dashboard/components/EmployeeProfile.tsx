@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { ErrorState } from "@/components/ErrorState";
-import { useEmployeeProfile, useEmployees, useModels, useUpdateEmployeeProfile } from "@/lib/hooks";
+import { useEmployeeProfile, useEmployees, useModels, useRoles, useUpdateEmployeeProfile } from "@/lib/hooks";
 import { DecisionStyle, Personality, WorkingStyle } from "@/lib/types";
 import { decisionStyleLabel, personalityLabel, roleLabel, workingStyleLabel } from "@/lib/utils";
 
@@ -20,6 +20,7 @@ export function EmployeeProfile({ companyId, agentId }: { companyId: string; age
   const { data: employees, isError: employeesError } = useEmployees(companyId);
   const { data: profile, isLoading, isError: profileError } = useEmployeeProfile(agentId);
   const { data: models } = useModels(companyId);
+  const { data: roles } = useRoles(companyId);
   const updateProfile = useUpdateEmployeeProfile(companyId, agentId);
 
   const employee = employees?.find((e) => e.id === agentId);
@@ -95,7 +96,7 @@ export function EmployeeProfile({ companyId, agentId }: { companyId: string; age
         <div>
           <h1 className="text-2xl font-semibold text-text">{employee.name}</h1>
           <p className="text-xs uppercase tracking-wide text-text-faint">
-            {roleLabel(employee.role)}
+            {roleLabel(roles, employee.role)}
             {effectiveModel ? ` · ${effectiveModel}` : ""}
           </p>
         </div>

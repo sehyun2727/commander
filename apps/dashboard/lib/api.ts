@@ -11,6 +11,7 @@ import type {
   Project,
   ProjectCostSummary,
   Report,
+  Role,
   Situation,
   Starter,
   Task,
@@ -131,6 +132,9 @@ export const api = {
       body: JSON.stringify({ reason: reason ?? null }),
     }),
   listStarters: (companyId: string) => request<Starter[]>(`/api/projects/${companyId}/starters`),
+
+  // Roles (Sprint 10 §18) — read-only Role positions; no write route.
+  listRoles: (companyId: string) => request<Role[]>(`/api/projects/${companyId}/roles`),
 
   // Meetings (Mission-scoped chat)
   listMessages: (taskId: string) => request<Event[]>(`/api/tasks/${taskId}/messages`),

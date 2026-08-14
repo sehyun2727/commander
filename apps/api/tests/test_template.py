@@ -82,3 +82,44 @@ def test_default_profile_reflects_role_identity_not_a_stored_copy():
     clone = dataclasses.replace(PM, title="Duplicate PM")
     assert clone.default_profile == PM.default_profile
     assert isinstance(clone, RoleSpec)
+
+
+# --- Sprint 10 Phase 4 §18: Roles API -----------------------------------
+
+
+@pytest.mark.asyncio
+async def test_roles_api_exposes_only_the_ceo_facing_fields(api_client, harness):
+    login = await api_client.post(
+        "/api/auth/login", json={"email": harness.user.email, "password": "testpassword123"}
+    )
+    assert login.status_code == 200
+    project = await api_client.post("/api/projects", json={"name": "Roles Co", "provider": "mock"})
+    assert project.status_code == 200
+
+    resp = await api_client.get(f"/api/projects/{project.json()['id']}/roles")
+    assert resp.status_code == 200
+    roles = resp.json()
+
+    assert {role["key"] for role in roles} == {"pm", "engineer", "reviewer"}
+    for role in roles:
+        assert set(role.keys()) == {"key", "title", "category", "singleton", "description"}
+
+
+@pytest.mark.asyncio
+async def test_roles_api_cross_account_returns_404(api_client, harness):
+    login = await api_client.post(
+        "/api/auth/login", json={"email": harness.user.email, "password": "testpassword123"}
+    )
+    assert login.status_code == 200
+    project = await api_client.post("/api/projects", json={"name": "Roles Co 2", "provider": "mock"})
+    assert project.status_code == 200
+    project_id = project.json()["id"]
+
+    other = await api_client.post(
+        "/api/auth/register",
+        json={"email": "other-roles-ceo@test.local", "password": "otherpassword1", "display_name": "Other CEO"},
+    )
+    assert other.status_code == 200
+
+    resp = await api_client.get(f"/api/projects/{project_id}/roles")
+    assert resp.status_code == 404

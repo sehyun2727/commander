@@ -1,7 +1,7 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 10 — Phase B: Role / Employee 분리
- Overall: 28/45 items · 62%
+ Overall: 34/45 items · 76%
  Now working on: Phase 4
  Last update: 2026-08-14
 ================================================
@@ -42,13 +42,13 @@ PHASE 3 — Role -> Employee resolution               (6/6)
 [x] 3.5 deterministic selection tests (tests/test_employee_resolution.py: idle-first, assignment-age, no-idle fallback, tie-break, determinism, event emission -- 7 new tests)
 [x] 3.6 commit + push
 
-PHASE 4 — #16 enforcement + UI                      (0/7)
-[ ] 4.1 engine / prompt hardcoding removal
-[ ] 4.2 frontend role presentation data-driven
-[ ] 4.3 automated behavioral hardcoding guard
-[ ] 4.4 Roles API
-[ ] 4.5 Employees grouping
-[ ] 4.6 typecheck + build
+PHASE 4 — #16 enforcement + UI                      (6/7)
+[x] 4.1 engine / prompt hardcoding removal (audited via AST guard -- zero violations in app/ outside app/templates/; prompt_builder's ENGINEER_ROLE_KEY check confirmed stage-kind-derived, not a literal)
+[x] 4.2 frontend role presentation data-driven (Agent.role: string not a hardcoded union; lib/utils.roleLabel reads Role.title from the new Roles API instead of a static map; Employees page + EmployeeCard + EmployeeProfile updated)
+[x] 4.3 automated behavioral hardcoding guard (tests/test_role_hardcoding_guard.py -- AST walk, not substring search; flags role-key ==/!=/in comparisons, position-based roles[N] indexing, hardcoded-key subscripts; role-key set read live from TEMPLATE; self-test proves the guard actually fires -- 5 new tests)
+[x] 4.4 Roles API (GET /api/projects/{id}/roles; RoleSpec.description field added since intro is first-person onboarding voice, not a position summary; exposes key/title/category/singleton/description only -- 2 new tests)
+[x] 4.5 Employees grouping (app/company/[id]/employees/page.tsx groups by Role.category via useRoles(); Leadership/Engineering section headings; no Add Employee UI this sprint per brief §19)
+[x] 4.6 typecheck + build (pnpm typecheck clean; pnpm build succeeds, all routes compile)
 [ ] 4.7 commit + push
 
 PHASE 5 — verification / docs / report              (0/10)
