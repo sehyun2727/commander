@@ -13,23 +13,53 @@
 > This philosophy outranks any individual feature.
 
 **Status: V1 released (`v1.0.0`, Sprint 8). V1.1 in development.**
-This file describes both what exists today and what V1.1 is building toward. Sections marked **[V1.1 — not built]** must not be implemented without an explicit sprint brief.
+
+This file describes the project's **stable architecture, invariants, terminology, and working rules**.
+
+Sprint-specific implementation detail belongs in the sprint brief.
+Do not turn this file into a copy of a sprint brief.
+
+Sections marked **[V1.1 — not built]** describe intended architecture and must not be implemented without an explicit sprint brief.
 
 ---
 
-## 1. What Commander Is
+# 1. What Commander Is
 
-A solo operator becomes the **CEO of an AI software company**. AI Employees do the work; the CEO sets direction, reads reports, and decides.
+A solo operator becomes the **CEO of an AI software company**.
 
-The competitive claim is not a better coding agent. It's the **organization layer** sitting on top of replaceable workers: a full company workflow (CEO → PM ⇄ CTO → Employees → Reviewer) with accountability, memory, and delegation. Cursor and Claude Code are tools you drive — they stop when you stop, and the artifact is a diff. Commander is an organization you govern — it keeps working while you're away, and the artifact is an explained, accountable result.
+AI Employees perform the work. The CEO sets direction, reads reports, and makes decisions.
 
-## 2. Organization Model
+The competitive claim is not simply a better coding agent. It is the **organization layer sitting above replaceable AI workers**:
 
-Two different axes. Drawing them as one chart produces a contradiction — keep them separate.
-
-**Decision axis (planning).** PM and CTO are peers.
-
+```text
+CEO
+ ↓
+PM ⇄ CTO
+ ↓
+Employees
+ ↓
+Reviewer
+ ↓
+PM judgment
+ ↓
+CEO only when required
 ```
+
+Cursor and Claude Code are tools you drive. They stop when you stop, and the artifact is a diff.
+
+Commander is an organization you govern. It keeps working while you are away, and the artifact is an explained, accountable result.
+
+---
+
+# 2. Organization Model
+
+Two different axes must remain separate.
+
+## 2.1 Decision axis — planning
+
+PM and CTO are peers.
+
+```text
                 CEO
                  │
             (one channel)
@@ -42,216 +72,1355 @@ Two different axes. Drawing them as one chart produces a contradiction — keep 
            CEO approval
 ```
 
-**Delegation axis (execution).** After approval, work descends.
+## 2.2 Delegation axis — execution
 
+After approval, work descends through the organization.
+
+```text
+        PM
+         │
+      assigns
+         ▼
+        CTO
+         │
+      assigns
+         ▼
+     Employees
+         │
+     Reviewer
+         │
+     PM judgment
+         │
+ Minor / Major / Critical
+         │
+    CEO only if Critical
 ```
-        PM  ──assigns──▶  CTO  ──assigns──▶  Employees
-                                                 │
-                                             Reviewer
-                                                 │
-                                          PM judgment
-                             Minor / Major / Critical → CEO only if Critical
+
+## 2.3 Roles vs Employees — the central V1.1 distinction [Sprint 10 ✅ structural separation shipped]
+
+Role and Employee are different concepts.
+
+Sprint 10 shipped the structural split described below: `RoleSpec` as
+frozen, template-owned data; `Employee` (`AgentORM.role_key`) as a CEO-owned
+instance; singleton enforcement; idle-first Role → Employee resolution; a
+read-only Roles API; and an automated guard against hardcoded role-identity
+branches (Rule #16). Still pending later sprints: the CTO role, the
+Backend/Frontend Engineer split, and any CEO-facing "Add Employee" / hiring
+flow (Sprint 11).
+
+|              | Owned by | Defines                                                                                | Count             |
+| ------------ | -------- | -------------------------------------------------------------------------------------- | ----------------- |
+| **Role**     | Template | prompt contract · tools · permissions · workflow position · harness · default behavior | fixed by template |
+| **Employee** | CEO      | name · model · personal profile                                                        | unlimited         |
+
+### Leadership roles
+
+Leadership roles are singletons:
+
+```text
+PM        → exactly one
+CTO       → exactly one
+Reviewer  → exactly one
 ```
 
-### Roles vs Employees — the central V1.1 distinction **[V1.1 — not built]**
+They are permanent organizational positions.
 
-| | Owned by | Defines | Count |
-|---|---|---|---|
-| **Role** | the Template (immutable) | prompt contract · tool grants · permissions · workflow position · harness · default behavior | fixed by template |
-| **Employee** | the CEO | name · AI model · individual profile | unlimited |
+### Worker roles
 
-- **Leadership roles are singletons and permanent:** exactly one PM, one CTO, one Reviewer. Never zero, never two.
-- **Worker roles are unlimited.** V1.1 ships Backend Engineer and Frontend Engineer. Designer / QA / DevOps / Security / ML Engineer / Data Analyst / Technical Writer are future roles the architecture must already accommodate — as *data*, not as code changes.
-- **One role can hold many Employees**, each on a different model:
-  ```
-  Backend Engineer
+Worker roles are unlimited.
+
+V1.1 ships:
+
+```text
+Backend Engineer
+Frontend Engineer
+```
+
+The architecture must already accommodate future roles as **data**, not as engine branches:
+
+```text
+Designer
+QA
+DevOps
+Security
+ML Engineer
+Data Analyst
+Technical Writer
+...
+```
+
+### Multiple employees per role
+
+A role may hold multiple employees.
+
+```text
+Backend Engineer
     ├── Kim  (Claude Sonnet)
     └── Lee  (GPT-5.5)
-  Frontend Engineer
+
+Frontend Engineer
     └── Park (Gemini)
-  ```
-  The PM assigns a Mission to a specific Employee, not to a role.
-- **Employee creation flow:** Add Employee → select Role → select AI model → select skill template → create.
-
-Pricing tiers may cap employee count later. The architecture must never assume a cap.
-
-## 3. Product Terminology (MANDATORY in all UI text)
-
-Code/DB/API use internal terms. UI labels, page titles, toasts, empty states use Commander terms. Never leak engineering jargon to the CEO.
-
-| Internal (code) | UI (Commander) |
-|---|---|
-| Project | Company |
-| User | CEO |
-| Repository | Workspace |
-| Task | Mission |
-| Issue | Risk |
-| Chat | Meeting |
-| Agent | Employee |
-| Agent Group | Department |
-| Dashboard | CEO Workspace |
-| Log | Timeline |
-| Configuration | Company Settings |
-| Deployment | Launch |
-| Review | Audit |
-| Approval | CEO Decision |
-| Role definition | Position |
-| Specification | Project Specification |
-| Discussion | Meeting / 협의 |
-| Memory | Company Knowledge |
-| Budget | Resource Limit |
-| Stage | 업무 단계 |
-| Widget | Widget (CEO-facing term as-is) |
-
-## 4. Hard Architecture Rules (never violate)
-
-**#1–#10 are V1 rules, unchanged and non-negotiable. #11–#17 are added by V1.1.**
-
-1. Modules never import each other's internals — cross-module communication goes through the **EventBus**.
-2. Agents never talk to each other directly — only via events.
-3. Every significant action emits an event; every agent action carries a `reason` string (observable + explainable).
-4. AI providers are never hard-coded. All model calls go through **ProviderGateway**; logical model refs resolve via `model_registry`.
-5. Layering: Events → Domain Modules → Workflow → API. No circular deps.
-6. The product must fully work with `COMMANDER_PROVIDER=mock` and **zero API keys**. Never break mock mode.
-7. Secrets are read only through `SecretsProvider`. Never log secret values, never echo keys back through the API.
-8. Timeline is a **single event stream**; `kind: "system" | "conversation"` distinguishes rendering, not storage.
-9. **No AI-generated code is ever executed outside the sandbox, and AI never chooses the command.** Commands are trusted template data; AI output is only ever input files.
-10. Any architecture change updates **CLAUDE.md and ARCHITECTURE.md in the same commit.** Desync is an architecture violation.
-
-**#11 — The CEO has exactly one conversational counterpart: the PM.**
-There is no route through which the CEO messages an Engineer, the CTO, or the Reviewer. Not disabled — *absent*. The CEO's observation channel is the Timeline; the CEO's intervention channel is a CEO Decision. Everything else reaches the CEO through the PM.
-
-**#12 — Tools are granted by the Template to a Role. Nobody else grants tools.**
-Neither an Employee, nor the CEO, nor an agent's own output can add a tool. A Role's tool grants are a whitelist in template data. Even inside an autonomous loop, the only execution tool that exists is `run_checks` (template-defined commands, sandboxed). `execute_command` or any free shell is permanently rejected — blocklists always leak; only whitelists hold. This is rule #9 extended to the harness era.
-
-**#13 — Every autonomous loop runs under a budget.**
-Any looping subject — agent tool loops, PM↔CTO discussion, self-correction retries — has caps on iterations, tokens, wall time, and cost. Budget exhaustion is not an error; it is an organizational event: the Mission goes `blocked` with a reason, and the CEO is informed. Never silently stop, never retry forever.
-
-**#14 — Project Memory is derived from the event stream.**
-No second source of truth. Memory is an index/projection over events that already exist. If a fact isn't in the event stream, it isn't in the company's memory.
-
-**#15 — Every data access is account-scoped.**
-The only routes reachable without authentication are the health checks and the auth endpoints themselves. Every Company has an owner. Another account's data returns **404, not 403** — existence itself is not disclosed.
-
-**#16 — Roles are data; Employees are instances.**
-No component, prompt, or engine branch may test a hardcoded role name (`role == "engineer"`). Behavior comes from the Role definition the template supplies. Adding a role must never require touching the engine.
-
-**#17 — New CEO-facing capability lands as either a Widget or a Sidebar page.**
-Nothing new gets bolted onto the PM conversation area. This keeps the conversation the stable center of the experience and makes the surface predictable as the product grows.
-
-## 5. Repo Layout
-
-```
-apps/api/          FastAPI backend (Python 3.11+, async SQLAlchemy, Postgres default/SQLite tests)
-  app/core/        events (schemas), interfaces (ports), lifecycle (state machines), db, secrets,
-                   config, boot_checks (fail-fast startup validation)
-  app/templates/   software_company.py — the only shipped template. Owns: role definitions
-                   (contract, tools, permissions, workflow position), pipeline stage sequence,
-                   founding roster, default profiles, onboarding intros/starters, CheckSpecs.
-  app/modules/     projects, tasks, approvals, timeline, agent_runtime, agent_profiles,
-                   prompt_builder, workflow_engine, event_bus, provider_gateway, model_registry,
-                   costs, reports, situation, realtime (SSE), workspace_manager, sandbox
-                   [V1.1 adds] auth, roles, employees, specifications, memory, widgets
-  alembic/         async migration environment; alembic/versions/ holds the schema history
-  tests/           pytest suite
-apps/dashboard/    Next.js App Router + TS + Tailwind + TanStack Query (dark Render-style theme)
-packages/event-schemas/ts/   generated TS event types — DO NOT hand-edit; regenerate
-scripts/           generate_ts_schemas.py, seed.py, verify_real_llm.py
-docs/              ARCHITECTURE.md (target + as-built), DECISIONS.md (judgment log), backend/ specs
-docs/design/UX_SPEC.md   product experience source of truth — ALL frontend work follows it
-docs/prompts/      sprint briefs
 ```
 
-## 6. Commands
+The role describes the position. The Employee is the person occupying it.
+
+The PM ultimately assigns work to a **specific Employee**, not merely to a Role.
+
+### Employee creation
+
+The intended flow is:
+
+```text
+Add Employee
+    ↓
+Select Role
+    ↓
+Select AI model
+    ↓
+Select skill template
+    ↓
+Create
+```
+
+Pricing tiers may cap the number of Employees later. The architecture must never assume a fixed employee-count limit.
+
+---
+
+# 3. Product Terminology
+
+UI text must use Commander terminology.
+
+Do not leak engineering terminology into CEO-facing surfaces.
+
+| Internal        | UI                    |
+| --------------- | --------------------- |
+| Project         | Company               |
+| User            | CEO                   |
+| Repository      | Workspace             |
+| Task            | Mission               |
+| Issue           | Risk                  |
+| Chat            | Meeting               |
+| Agent           | Employee              |
+| Agent Group     | Department            |
+| Dashboard       | CEO Workspace         |
+| Log             | Timeline              |
+| Configuration   | Company Settings      |
+| Deployment      | Launch                |
+| Review          | Audit                 |
+| Approval        | CEO Decision          |
+| Role definition | Position              |
+| Specification   | Project Specification |
+| Discussion      | Meeting / 협의          |
+| Memory          | Company Knowledge     |
+| Budget          | Resource Limit        |
+| Stage           | 업무 단계                 |
+| Widget          | Widget                |
+
+---
+
+# 4. Hard Architecture Rules
+
+These rules are non-negotiable.
+
+Rules #1–#10 are V1 foundations.
+Rules #11 onward define the V1.1 direction.
+
+## #1 — Modules do not import each other's internals
+
+Cross-module communication goes through the approved interface/event boundaries.
+
+The EventBus is the cross-module event boundary.
+
+Do not import another module's private implementation merely because it is convenient.
+
+---
+
+## #2 — Agents do not talk to each other directly
+
+Employees communicate through system-mediated events and workflow state.
+
+Do not create ad-hoc direct Agent-to-Agent calls.
+
+---
+
+## #3 — Significant actions are observable and explainable
+
+Every significant action emits an event.
+
+Every agent action carries a `reason` string.
+
+The system must be able to answer:
+
+```text
+Who acted?
+What did they do?
+Why did they do it?
+What happened afterward?
+```
+
+---
+
+## #4 — Providers are replaceable
+
+AI providers are never hard-coded into workflow logic.
+
+All model calls go through:
+
+```text
+ProviderGateway
+    ↓
+model_registry
+    ↓
+provider implementation
+```
+
+Logical model references must remain provider-independent.
+
+---
+
+## #5 — Layering must remain explicit
+
+The intended dependency direction is:
+
+```text
+Events
+  ↓
+Domain Modules
+  ↓
+Workflow
+  ↓
+API
+```
+
+Avoid circular dependencies.
+
+---
+
+## #6 — Mock mode must always work
+
+The entire product must work with:
+
+```text
+COMMANDER_PROVIDER=mock
+```
+
+and zero API keys.
+
+Mock mode is not a degraded developer-only feature.
+
+It is part of the product's verification model.
+
+Never break mock mode while implementing a real-provider feature.
+
+---
+
+## #7 — Secrets are isolated
+
+Secrets are read only through `SecretsProvider`.
+
+Never:
+
+* log secret values
+* return secret values through the API
+* echo secrets into prompts
+* commit secrets
+* store plaintext provider keys in ordinary domain models
+
+---
+
+## #8 — Timeline is one event stream
+
+Timeline is derived from the same event stream used by the system.
+
+`kind: "system" | "conversation"` affects rendering, not storage.
+
+Do not create separate competing sources of timeline truth.
+
+---
+
+## #9 — AI-generated code is never freely executed
+
+AI output is data.
+
+Only trusted template-defined commands may execute.
+
+Those commands execute only inside the sandbox.
+
+AI must never choose an arbitrary command.
+
+Free shell execution is permanently rejected.
+
+---
+
+## #10 — Architecture changes require synchronized documentation
+
+Any architecture change must update:
+
+```text
+CLAUDE.md
+docs/ARCHITECTURE.md
+```
+
+in the same commit.
+
+Desynchronization is an architecture violation.
+
+---
+
+## #11 — The CEO has exactly one conversational counterpart: the PM
+
+There is no CEO route to:
+
+```text
+Engineer
+CTO
+Reviewer
+```
+
+The CEO's observation channel is the Timeline and CEO Workspace.
+
+The CEO's intervention channel is a CEO Decision.
+
+All organizational communication reaches the CEO through the PM unless the product explicitly defines a critical decision path.
+
+This is not merely a disabled UI feature.
+
+The route itself should not exist.
+
+---
+
+## #12 — Tools are granted by the Template to a Role
+
+Nobody else grants tools.
+
+Not:
+
+```text
+Employee
+CEO
+Agent output
+LLM
+Workflow state
+```
+
+A Role's tools are a whitelist defined by the company template.
+
+Even autonomous loops must use only template-approved tools.
+
+Free shell execution is permanently forbidden.
+
+The security model is whitelist-based, not blocklist-based.
+
+---
+
+## #13 — Autonomous loops are budgeted
+
+Any potentially looping system must have explicit resource limits.
+
+Examples:
+
+```text
+Agent tool loop
+PM ↔ CTO discussion
+Self-correction
+Retry loop
+```
+
+Budgets may include:
+
+```text
+iterations
+tokens
+wall time
+cost
+```
+
+Budget exhaustion is an organizational event, not a silent stop.
+
+The affected Mission becomes blocked with an explicit reason and the CEO is informed.
+
+Never retry forever.
+
+Never silently stop.
+
+---
+
+## #14 — Project Memory is derived from events
+
+There is no second source of truth for company history.
+
+Project Memory is a projection/index over existing events.
+
+If a fact is not represented in the event stream, it cannot become authoritative company memory.
+
+---
+
+## #15 — All data access is account-scoped
+
+The only unauthenticated routes are:
+
+```text
+health checks
+authentication endpoints
+```
+
+Every Company has an owner.
+
+Cross-account access returns:
+
+```text
+404
+```
+
+rather than:
+
+```text
+403
+```
+
+because resource existence itself must not be disclosed.
+
+---
+
+## #16 — Roles are data; Employees are instances
+
+No engine, prompt builder, component, or workflow branch may depend on a hardcoded role name.
+
+Forbidden patterns include:
+
+```python
+if role == "engineer":
+if role_key == "pm":
+if role == "reviewer":
+```
+
+Behavior must come from the Role definition supplied by the template.
+
+Adding a new Role must not require modifying the workflow engine.
+
+Allowed role-specific constants are limited to the template itself when assembling its own data.
+
+Stage kinds such as:
+
+```text
+plan
+produce
+review
+```
+
+are allowed to drive behavior because they represent workflow semantics rather than organizational role identities.
+
+---
+
+## #17 — New CEO-facing capabilities enter through Widgets or Sidebar pages
+
+Do not bolt new capabilities onto the PM conversation surface.
+
+The conversation is the stable center of the CEO experience.
+
+New functionality belongs in:
+
+```text
+Widget
+Sidebar page
+```
+
+unless a later architecture decision explicitly changes this rule.
+
+---
+
+## #18 — CEO actions never fail silently
+
+Every CEO-triggered mutation must have an observable result.
+
+The action must either:
+
+```text
+succeed
+```
+
+or:
+
+```text
+fail with a visible explanation
+```
+
+Silent failure is forbidden.
+
+A mutation must not:
+
+* fail without user feedback
+* swallow an API error
+* leave the UI permanently unchanged without explanation
+* rely only on console logging
+
+The trust model of Commander depends on:
+
+> **The CEO decides, therefore the organization moves.**
+
+A button that appears to do nothing is one of the worst possible product failures.
+
+---
+
+# 5. Repository Layout
+
+```text
+apps/api/
+  FastAPI backend
+  Python 3.11+
+  async SQLAlchemy
+  Postgres default / SQLite tests
+
+  app/core/
+    events
+    interfaces
+    lifecycle
+    db
+    secrets
+    config
+    boot_checks
+
+  app/templates/
+    software_company.py
+    shipped company template
+    owns role definitions, pipeline, roster,
+    profiles, onboarding data, CheckSpecs
+
+  app/modules/
+    projects
+    tasks
+    approvals
+    timeline
+    agent_runtime
+    agent_profiles
+    prompt_builder
+    workflow_engine
+    event_bus
+    provider_gateway
+    model_registry
+    costs
+    reports
+    situation
+    realtime
+    workspace_manager
+    sandbox
+
+    [V1.1 adds as needed]
+    auth
+    roles
+    employees
+    specifications
+    memory
+    widgets
+
+  alembic/
+    migration environment
+    alembic/versions/
+
+  tests/
+
+apps/dashboard/
+  Next.js App Router
+  TypeScript
+  Tailwind
+  TanStack Query
+
+packages/event-schemas/ts/
+  generated TypeScript event contracts
+  DO NOT hand-edit
+
+scripts/
+  generate_ts_schemas.py
+  seed.py
+  verify_real_llm.py
+
+docs/
+  ARCHITECTURE.md
+  DECISIONS.md
+  backend specifications
+
+docs/design/
+  UX_SPEC.md
+  frontend experience source of truth
+
+docs/prompts/
+  sprint briefs
+```
+
+---
+
+# 6. Repository Documentation Is the Source of Project Context
+
+Claude Code does not need the entire project re-explained inside every sprint prompt.
+
+The repository itself is the persistent context.
+
+Before implementing a sprint, inspect the documents relevant to that sprint.
+
+At minimum:
+
+```text
+CLAUDE.md
+docs/ARCHITECTURE.md
+docs/DECISIONS.md
+docs/design/UX_SPEC.md
+PROGRESS.txt
+```
+
+Then inspect the code paths named or implied by the sprint brief.
+
+Do not ask the CEO/developer to paste repository documents into the prompt when those documents already exist in the repository.
+
+The sprint brief should describe:
+
+```text
+what to change
+why it matters
+constraints
+definition of done
+scope boundaries
+```
+
+The repository documents describe:
+
+```text
+what already exists
+why previous decisions were made
+how the current architecture works
+```
+
+Do not duplicate the same information unnecessarily.
+
+This keeps implementation prompts compact without reducing architectural context.
+
+---
+
+# 7. Working Model for Sprint Execution
+
+Commander is intentionally developed using **large autonomous sprint runs**.
+
+The expected working pattern is:
+
+```text
+One large sprint brief
+        ↓
+Claude Code reads the repository context
+        ↓
+Claude implements autonomously
+        ↓
+Tests / build / browser verification
+        ↓
+Commits + push
+        ↓
+Human review
+        ↓
+Next sprint brief
+```
+
+A sprint brief may run for a long session.
+
+Do **not** artificially split a sprint into many tiny prompt-response cycles unless the brief itself requires an independent checkpoint.
+
+## 7.1 Do not stop for routine confirmation
+
+When a sprint brief says to work autonomously:
+
+* do not stop after every phase
+* do not ask whether to continue
+* do not ask permission for routine refactors
+* do not wait for confirmation when the correct engineering choice is reasonably clear
+
+When ambiguity exists:
+
+1. choose the most reasonable engineering decision
+2. implement it
+3. record the judgment in `docs/DECISIONS.md`
+4. continue
+
+Only stop when:
+
+* the sprint is complete, or
+* a genuine hard blocker makes further progress impossible.
+
+---
+
+## 7.2 Large prompts are intentional
+
+A large sprint brief is not a reason to restate the entire project.
+
+The preferred pattern is:
+
+```text
+Sprint brief
+  = mission + constraints + required outcomes
+```
+
+not:
+
+```text
+Sprint brief
+  = mission + copied repository documentation + copied architecture
+```
+
+Use the repository as the persistent knowledge base.
+
+---
+
+## 7.3 Work for the full sprint, not just the first phase
+
+If the sprint brief contains:
+
+```text
+Phase 0
+Phase 1
+Phase 2
+Phase 3
+Phase 4
+Phase 5
+```
+
+and the brief author has explicitly requested autonomous execution, continue through the phases.
+
+Do not treat each phase as a mandatory conversation boundary.
+
+Use commits and `PROGRESS.txt` as internal checkpoints.
+
+---
+
+## 7.4 Keep changes reviewable
+
+Although a sprint may run as one long autonomous session, implementation must remain structured.
+
+Use:
+
+```text
+phase-sized commits
+clear commit messages
+PROGRESS.txt updates
+targeted tests
+```
+
+This preserves reviewability without requiring many interactive prompts.
+
+---
+
+## 7.5 Verify before reporting completion
+
+A green unit-test suite is not automatically proof of product behavior.
+
+When the sprint brief requires UI or end-to-end behavior:
+
+```text
+run the application
+exercise the relevant path
+observe the result
+```
+
+Do not claim browser verification when only a test or curl command was run.
+
+---
+
+# 8. Commands
 
 ```bash
-make install      # api deps (pip -e) + dashboard deps (pnpm)
-make db-up        # start Postgres (docker compose), wait for healthy
-make db-down      # stop Postgres
-make db-upgrade   # run Alembic migrations to head
-make db-downgrade # roll back one migration
-make seed         # db-up + db-upgrade, then reset DB, found demo company "Acme AI"
-make dev          # db-up + db-upgrade, then api :8000 + dashboard :3000
-make demo         # seed + dev, one command
-make test         # pytest (apps/api) + dashboard typecheck + dashboard build
-make verify-llm   # one real Mission against a live Anthropic key + throwaway DB
-make export-users # export all CEO accounts to CSV on stdout (bcrypt hashes only, no plaintext)
-python scripts/generate_ts_schemas.py   # after ANY event schema change
-python scripts/reset_password.py <email> <new-password>   # admin password reset, min 8 chars
+make install
+make db-up
+make db-down
+make db-upgrade
+make db-downgrade
+make seed
+make dev
+make demo
+make test
+make verify-llm
+make export-users
 ```
 
-## 7. Conventions
+Detailed meanings:
 
-- Event contracts: single Pydantic v2 `Event` envelope + per-type payload models in `PAYLOAD_MODELS`, validated by `build_event()`. Adding an event type = enum entry + payload model + regenerate TS.
-- State machines: `core/lifecycle/` owns Agent/Task states and legal transitions. Never mutate state fields directly — go through `transition()`.
-- Each workflow step opens its own DB session; never hold an ORM object across an await on the provider. Pass immutable snapshots between stages, not detached ORM rows.
-- Frontend: server data via TanStack Query; SSE events dedup by `event.id` and invalidate queries. Generated types only — never redeclare event shapes.
-- Reviewer verdicts parse from a trailing `**Verdict:** ...` line — provider-agnostic; workflow never branches on provider.
-- Code missions: one real git repo per company, branch-per-mission (`mission/{task_id[:8]}`). Engineer output is parsed for `===== FILE: path =====` blocks; zero valid blocks falls back to a document mission rather than failing. The only code that ever runs is the template's trusted `CheckSpec` commands inside the sandbox — read ARCHITECTURE.md's Security Model before touching `modules/sandbox`.
-- Commit style: `feat(scope): ...` / `fix(scope): ...` / `docs: ...` / `chore: ...`.
-- Every non-obvious judgment gets one entry in `docs/DECISIONS.md`.
+```text
+make install
+  API + dashboard dependencies
 
-## 8. Current Status — V1 As-Built (`v1.0.0`)
+make db-up
+  start Postgres and wait for health
 
-Shipped and working today:
+make db-upgrade
+  apply Alembic migrations to head
 
-- **Company + org:** company CRUD; founding auto-creates a Department with 3 Employees (PM / Engineer / Reviewer) from the internal `software_company` template, each with a default `AgentProfile` and an intro line posted to the Timeline. One-click starter Missions.
-- **Pipeline:** PM → Engineer → (sandbox checks) → Reviewer, running as background asyncio tasks, publishing every beat. Streaming replies, retry-with-backoff.
-- **Workspace:** a real git repo per company; code missions land the Engineer's FILE-block output on a mission branch; CEO reviews Change Summary + real (truncatable) diff, never raw deliverable text; approve merges the branch.
-- **Execution sandbox:** template-defined `CheckSpec` commands run in an isolated Docker container (no network, resource-capped, non-root, 120s hard kill, always destroyed) against the landed file tree. Degrades to a silent no-op without Docker.
-- **CEO surface:** Headquarters, Decisions (Pending/History, full DecisionCard anatomy), Missions kanban, Mission detail with Meeting transcript, Employees + profiles, Timeline (CEO/Technical toggle, filters, digest grouping, cursor pagination), Reports, Workspace browser, Company Settings.
-- **Money & models:** real token usage → USD (Payroll per company / Employee / Mission); three-tier model resolution (Employee override > CEO per-role override > registry default).
-- **Infra:** Postgres via Docker Compose with Alembic-owned schema (SQLite for tests), `/api/health` + `/api/health/db`, fail-fast boot validation, API-down banner, SSE reconnect indicator.
-- **Honesty:** persistent "Simulation mode" badge whenever a company runs on mock; mock output states outright that it's scripted.
+make db-downgrade
+  roll back one migration
 
-157 tests passing / 4 skipped as of `v1.0.0`.
+make seed
+  start DB, upgrade schema, reset DB,
+  create demo Company "Acme AI"
 
-### V1's deliberate limits (the reason V1.1 exists)
+make dev
+  DB + API :8000 + dashboard :3000
 
-1. **The Engineer is a one-shot generator.** It does not read the existing repo, does not iterate, and does not fix itself when a check fails. Mission #2 does not know Mission #1 happened.
-2. **The CEO's input is the development input.** There is no step that turns a vague instruction into a structured specification.
-3. **The CEO stands inside the pipeline.** Every mission ends at a CEO Decision, and the CEO has three separate conversational counterparts.
-4. **No memory, no learning, no accounts.**
+make demo
+  seed + dev
 
-## 9. V1.1 Scope **[not built — sprint brief required for every item]**
+make test
+  pytest + dashboard typecheck + dashboard build
 
-| Phase | Sprint | Delivers |
-|---|---|---|
-| A | 9 ✅ | Reliability foundation (orphan recovery, cancel, budget guard, snapshot pipeline) + accounts/auth |
-| B | 10 | Role/Employee separation; roles become template data |
-| B | 11 | CTO role; unlimited employees; multi-employee-per-role; employee creation flow |
-| C | 12 | PM↔CTO discussion; Project Specification; Requirement Discovery; CEO pre-approval |
-| D | 13 | CEO↔PM conversation backend; PM Report; decision authority classification |
-| D | 14 | Render-benchmark UI shell; conversation-left / widget-dock-right layout |
-| D | 15 | Widget system (add / remove / reorder) + initial widget set |
-| E | 16 | Agent Harness (repo-aware tool loop under budget) |
-| E | 17 | Self-correction loop |
-| F | 18 | Project Memory + Sprint Learning |
-| G | 19 | Mission Tree; remaining widgets; template registry cleanup |
-| H | 20 | V1.1 release |
+make verify-llm
+  one real Anthropic Mission against a throwaway DB
 
-**Sprint 9 (Phase A) delivered:** local email+password accounts (`modules/auth`, HttpOnly session cookies, bcrypt cost 12, `get_current_user` on every non-health/non-auth route, cross-account access returns 404 per Rule #15) · a minimal login/register/logout frontend (`AuthProvider`, `RequireAuth`, a single click-to-sign-out `AccountBadge` — no dropdown, per brief) · orphan-mission recovery on boot (frees both the Mission and the Employee that was working it — the Employee-side gap was found live during this sprint's own DoD verification, see `docs/DECISIONS.md` #162) + a CEO cancel path · a per-mission budget guard (Rule #13) with a new `BUDGET_EXCEEDED` event, plus `TASK_RECOVERED` for the recovery path · the workflow engine now iterates `TEMPLATE.pipeline: tuple[StageSpec, ...]` instead of positionally unpacking PM/Engineer/Reviewer, so stage order and repetition are template data, not engine code. See `docs/ARCHITECTURE.md` §4.1, §6.1, §7.2 for the as-built detail and `docs/DECISIONS.md` #143–162 for the judgment calls.
+make export-users
+  export CEO accounts to CSV using password hashes only
+```
 
-**Out of scope for all of V1.1:** shipping a second company template (the architecture must support it; only Software Company ships) · multi-user collaboration on one company · hosting/deployment/Launch · providers beyond Anthropic + mock · template marketplace · parallel Backend/Frontend execution (V1.1 is sequential) · implementing Designer/QA/DevOps/Security roles.
+After event schema changes:
 
-### V1 / V1.1 boundary
+```bash
+python scripts/generate_ts_schemas.py
+```
 
-Everything in §8 is V1. Everything in §9 is V1.1 and **must not be added "while you're in there."** The Engineer stays single-shot until the Sprint 16 brief says otherwise. Roles stay as they are until Sprint 10. Do not blur this line — sprint boundaries are what make the roadmap mean anything.
+Password reset:
 
-One exception the roadmap itself makes: **Headquarters is absorbed into the CEO Workspace, not retained as a separate page.** §8's "CEO surface" list is a V1 as-built description and correctly still says Headquarters — that page is real today. But it does not survive into V1.1 as a Sidebar page; its four blocks (Decision strip, Situation Report, Vitals, Timeline excerpt) map onto the Pending Approvals widget, the PM Report, the Progress/Employees/Risks/Costs widgets, and the Timeline widget respectively (see `docs/ARCHITECTURE.md` §8 for the full mapping). This absorption is decided, not open for re-litigation in a later sprint brief.
+```bash
+python scripts/reset_password.py <email> <new-password>
+```
 
-## 10. Known Accepted Tradeoffs
+---
 
-Plaintext secrets · in-process event bus (single worker) · inline subscriber execution in `publish` · Python-side conversation filtering · no connection pooling / read replicas / backup tooling (single local Postgres assumed) · mock-mode Payroll figures are fabricated-but-labeled.
+# 9. Engineering Conventions
 
-Read `docs/DECISIONS.md` before "fixing" any of these.
+## 9.1 Events
 
-## 11. Working Style
+Use a single Pydantic v2 `Event` envelope.
 
-- Work autonomously; when a brief leaves something open, make the reasonable call, log it in `docs/DECISIONS.md`, keep moving.
-- Spec wins over legacy skeleton code — refactor, don't work around.
-- Prefer boring, reliable choices. If a library fights you for >10 minutes, replace it.
-- Self-verify before finishing: `make test`, `pnpm build`, and boot the slice when behavior changed.
-- Keep CLAUDE.md and ARCHITECTURE.md in sync in the same commit as any architecture change.
-- Maintain PROGRESS.txt per the live progress discipline — update per item, never batched.
-- Every sprint's final phase commit must be followed by `git push`; a sprint is not complete until remote HEAD matches.
+Each event type requires:
+
+```text
+enum/type registration
+payload model
+generated TypeScript contract
+```
+
+Call:
+
+```python
+build_event()
+```
+
+rather than constructing ad-hoc event dictionaries.
+
+After event schema changes:
+
+```bash
+python scripts/generate_ts_schemas.py
+```
+
+Never hand-edit generated event types.
+
+---
+
+## 9.2 State machines
+
+`core/lifecycle/` owns Agent and Task state transitions.
+
+Never directly mutate state fields when a transition API exists.
+
+Use:
+
+```text
+transition()
+```
+
+and preserve legal transition rules.
+
+---
+
+## 9.3 Database sessions
+
+Each workflow step opens its own DB session.
+
+Never hold an ORM object across an `await` on the provider.
+
+Pass immutable snapshots between stages.
+
+---
+
+## 9.4 Frontend
+
+Use TanStack Query for server state.
+
+SSE events are deduplicated by:
+
+```text
+event.id
+```
+
+Then invalidate/refetch the appropriate queries.
+
+Use generated event types.
+
+Never redeclare event contracts manually.
+
+Every mutation must surface failure visibly.
+
+---
+
+## 9.5 Reviewer verdicts
+
+Reviewer output ends with:
+
+```text
+**Verdict:** ...
+```
+
+Parsing is provider-agnostic.
+
+Workflow logic must not branch on provider-specific response formatting.
+
+---
+
+## 9.6 Code missions
+
+There is one real Git repository per Company.
+
+Each Mission gets:
+
+```text
+mission/{task_id[:8]}
+```
+
+Engineer output is parsed from:
+
+```text
+===== FILE: path =====
+```
+
+blocks.
+
+Zero valid file blocks falls back to a document Mission instead of silently failing.
+
+Only trusted template `CheckSpec` commands execute.
+
+Read the Security Model in `docs/ARCHITECTURE.md` before modifying sandbox behavior.
+
+---
+
+## 9.7 Commits
+
+Use conventional commit style:
+
+```text
+feat(scope): ...
+fix(scope): ...
+refactor(scope): ...
+docs: ...
+test(scope): ...
+chore: ...
+```
+
+A non-obvious architectural judgment should receive a `docs/DECISIONS.md` entry.
+
+---
+
+# 10. Current Status — V1 As-Built
+
+V1 shipped as:
+
+```text
+v1.0.0
+```
+
+and the V1 pipeline is functional.
+
+Current V1 capabilities include:
+
+* Company CRUD
+* founding roster
+* PM / Engineer / Reviewer
+* Agent profiles
+* Timeline events
+* starter Missions
+* PM → Engineer → Reviewer pipeline
+* background workflow execution
+* provider retry/backoff
+* Git workspace
+* mission branches
+* real diffs
+* CEO approval/merge
+* sandbox checks
+* token/cost tracking
+* model resolution
+* Postgres
+* Alembic
+* health endpoints
+* auth foundation
+* SSE reconnect behavior
+* mock mode
+* Reports
+* Workspace browser
+* Employees page
+* company settings
+* Timeline filters and pagination
+
+At the V1 baseline:
+
+```text
+157 tests
+4 skipped
+```
+
+---
+
+# 11. V1 Deliberate Limits
+
+V1 intentionally remains limited.
+
+## 11.1 Engineer is one-shot
+
+The Engineer:
+
+```text
+does not inspect the existing repository
+does not iterate
+does not self-correct
+```
+
+Mission #2 does not automatically learn from Mission #1.
+
+This remains true until the Sprint 16 brief explicitly changes it.
+
+---
+
+## 11.2 CEO input is the development input
+
+V1 has no complete requirements-discovery layer.
+
+Structured specification is introduced later.
+
+---
+
+## 11.3 CEO remains inside the pipeline
+
+V1 still depends heavily on CEO decisions.
+
+The organization is not yet fully autonomous.
+
+---
+
+## 11.4 No project memory
+
+Historical learning does not yet exist.
+
+---
+
+# 12. V1.1 Roadmap
+
+V1.1 is built through explicit sprint briefs.
+
+| Phase | Sprint | Deliverable                                           |
+| ----- | -----: | ----------------------------------------------------- |
+| A     |    9 ✅ | Reliability + auth                                    |
+| B     |   10 ✅ | Role / Employee separation                            |
+| B     |     11 | CTO + multi-employee + hiring                         |
+| C     |     12 | PM↔CTO planning + Project Specification               |
+| D     |     13 | CEO↔PM conversation + PM reports + decision authority |
+| D     |     14 | CEO Workspace UI shell                                |
+| D     |     15 | Widget system                                         |
+| E     |     16 | Agent Harness                                         |
+| E     |     17 | Self-correction                                       |
+| F     |     18 | Project Memory + Sprint Learning                      |
+| G     |     19 | Mission Tree + remaining widgets                      |
+| H     |     20 | V1.1 release                                          |
+
+V1.1 is complete only when the architecture, product surface, and real LLM flow all work together.
+
+---
+
+# 13. V1 / V1.1 Boundary
+
+Do not blur sprint boundaries.
+
+Everything already shipped in V1 remains stable unless an explicit sprint brief changes it.
+
+Everything marked V1.1 must wait for its sprint.
+
+Do not implement future roadmap items "while you're in there."
+
+For example:
+
+```text
+Sprint 10
+→ Role / Employee structure
+
+NOT:
+→ CTO
+→ hiring
+→ autonomous tool loop
+→ memory
+```
+
+Those belong to later sprints.
+
+An implementation may prepare extension points for future work, but must not quietly implement the future feature itself.
+
+---
+
+# 14. V1.1 Out of Scope
+
+Unless a later roadmap revision explicitly changes this:
+
+* second company template shipment
+* multi-user collaboration on one Company
+* hosting/cloud deployment
+* providers beyond Anthropic + mock
+* template marketplace
+* parallel Backend/Frontend execution
+* implementation of Designer / QA / DevOps / Security roles
+
+The architecture may support these things.
+
+V1.1 does not ship them.
+
+---
+
+# 15. Known Accepted Tradeoffs
+
+Do not "fix" these merely because they are theoretically improvable:
+
+```text
+plaintext secrets
+in-process EventBus
+single worker assumptions
+inline EventBus subscriber execution
+Python-side conversation filtering
+no connection pooling
+no read replicas
+no backup tooling
+single local Postgres assumptions
+fabricated-but-labeled mock Payroll figures
+```
+
+Read `docs/DECISIONS.md` before changing any accepted tradeoff.
+
+---
+
+# 16. Working Style
+
+## 16.1 Autonomous by default
+
+When a sprint brief says to work autonomously:
+
+```text
+read → decide → implement → verify → continue
+```
+
+Do not ask routine questions.
+
+---
+
+## 16.2 Spec wins over legacy code
+
+If existing code conflicts with the approved sprint architecture:
+
+```text
+refactor toward the spec
+```
+
+Do not create unnecessary compatibility layers solely to avoid touching legacy code.
+
+---
+
+## 16.3 Prefer boring technology
+
+Prefer:
+
+```text
+simple
+explicit
+testable
+reliable
+```
+
+over clever abstractions.
+
+If a library fights the implementation for a sustained period and a simpler solution exists, replace it.
+
+---
+
+## 16.4 Do not duplicate repository knowledge inside prompts
+
+Sprint briefs should reference files rather than copy large portions of them.
+
+For example:
+
+Good:
+
+```text
+Read:
+CLAUDE.md
+docs/ARCHITECTURE.md §4.1
+docs/DECISIONS.md
+```
+
+Bad:
+
+```text
+paste the entire contents of those documents
+```
+
+This reduces context duplication and leaves the repository as the durable source of truth.
+
+---
+
+## 16.5 Large sprint brief, one long implementation run
+
+The intended development rhythm is:
+
+```text
+GPT / human
+    ↓
+large sprint brief
+    ↓
+Claude Code
+    ↓
+long autonomous implementation run
+    ↓
+verification
+    ↓
+human / GPT review
+    ↓
+next sprint
+```
+
+This is intentional.
+
+Do not force the developer into dozens of tiny implementation prompts.
+
+Claude Code should be capable of reading repository context and carrying the sprint through independently.
+
+---
+
+## 16.6 Use progress and commits as internal checkpoints
+
+Long autonomous work must remain observable through:
+
+```text
+PROGRESS.txt
+git commits
+tests
+build results
+browser verification
+```
+
+Update `PROGRESS.txt` per completed item.
+
+Do not batch all progress updates at the end.
+
+---
+
+## 16.7 Never fake verification
+
+These are different claims:
+
+```text
+"unit test passed"
+"API endpoint passed"
+"browser behavior verified"
+"real LLM E2E passed"
+```
+
+Report the strongest claim that was actually observed.
+
+Do not call something browser-verified if only curl was used.
+
+Do not call something real-LLM verified if mock mode was used.
+
+---
+
+# 17. Final Sprint Completion Rule
+
+A sprint is not complete merely because the implementation exists.
+
+Completion requires, as applicable:
+
+```text
+tests
+typecheck
+build
+runtime verification
+browser verification
+documentation
+PROGRESS.txt
+commit
+push
+remote HEAD confirmation
+```
+
+Every sprint's final implementation commit must be pushed.
+
+The sprint is complete only when:
+
+```text
+remote HEAD == intended final commit
+```
+
+and the completion report truthfully states:
+
+```text
+passed
+failed
+unverified
+```
+
+for the relevant Definition of Done items.
+
+---
+
+# 18. What Not to Do
+
+Never:
+
+* invent architecture without checking repository documentation
+* duplicate existing project knowledge unnecessarily in prompts
+* silently broaden sprint scope
+* add future roadmap features early
+* bypass EventBus boundaries
+* bypass ProviderGateway
+* grant tools outside template data
+* execute arbitrary AI-generated shell commands
+* silently swallow mutation errors
+* claim verification that was not performed
+* rewrite large portions of the system merely because a cleaner theoretical design exists
+
+When uncertain:
+
+```text
+inspect
+decide
+record the decision
+continue
+```
+
+The objective is not maximum code.
+
+The objective is a coherent AI company operating system.
+
+---
+
+# 19. Final Principle
+
+Commander should feel less like:
+
+```text
+"Ask an AI to code."
+```
+
+and more like:
+
+```text
+"Run a company whose employees happen to be AI."
+```
+
+Every architecture decision, workflow, UI decision, event, and implementation should move toward that distinction.
+
+**The system is the company.
+The AI models are replaceable workers.
+The CEO governs the organization.**
