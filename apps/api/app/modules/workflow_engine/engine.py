@@ -294,20 +294,29 @@ class CommanderWorkflowEngine(WorkflowEngine):
             project_id=project_id,
             task_id=task_id,
             agent_id=agent.id,
-            role=agent.role,
+            role=agent.role_key,
             provider=gateway.provider_name,
             model=await gateway.resolve_model(model_ref, _agent_model_override(agent)),
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
         )
 
-    async def _agents_for(self, project_id: str) -> dict[str, AgentORM]:
+    async def _agents_for(self, project_id: str) -> dict[str, list[AgentORM]]:
+        """Every Employee for this Company, grouped by Role -- a Role may
+        hold more than one Employee (Sprint 10 §9.2), so this returns a
+        list per role_key rather than assuming exactly one. *Which*
+        Employee of a multi-Employee Role actually runs a stage is a
+        separate policy question, resolved at the call site (Sprint 10
+        Phase 3's resolver)."""
         async with self._session_factory() as session:
             result = await session.execute(
                 select(AgentORM).where(AgentORM.project_id == project_id)
             )
             rows = list(result.scalars().all())
-        return {row.role: row for row in rows}
+        by_role: dict[str, list[AgentORM]] = {}
+        for row in rows:
+            by_role.setdefault(row.role_key, []).append(row)
+        return by_role
 
     async def _stream_say(
         self, project_id: str, agent: AgentORM, task_id: str, gateway: ProviderGateway, model_ref: str, **opts
@@ -374,7 +383,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 gateway,
                 model_ref,
                 system=prompt_builder.build(
-                    AgentProfile.model_validate(agent.profile), agent.role, task.deliverable_type
+                    AgentProfile.model_validate(agent.profile), agent.role_key, task.deliverable_type
                 ),
                 messages=[{"role": "user", "content": f"Mission: {task.title}\n{task.description}{extra}"}],
                 task_title=task.title,
@@ -617,7 +626,12 @@ class CommanderWorkflowEngine(WorkflowEngine):
                         task_id, TaskState.IN_REVIEW, "Handing off for review", SYSTEM_ACTOR
                     )
 
-                agent = agents[stage.role_key]
+                # Sprint 10 Phase 2 stops assuming one Employee per role at
+                # the query layer (_agents_for); this sprint's founding
+                # roster still only ever has one Employee per role, so [0]
+                # is behaviorally identical until Phase 3's resolver
+                # replaces this line with a real selection policy.
+                agent = agents[stage.role_key][0]
                 role_spec = TEMPLATE.roles_by_key[stage.role_key]
                 model_ref = role_spec.model_ref
                 role_title = role_spec.title

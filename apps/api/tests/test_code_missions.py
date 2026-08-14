@@ -244,7 +244,7 @@ async def test_truncated_diff_gets_a_note_for_the_reviewer_but_not_persisted_sta
     async with harness.session_factory() as session:
         engineer_agent = (
             await session.execute(
-                select(AgentORM).where(AgentORM.project_id == project.id, AgentORM.role == "engineer")
+                select(AgentORM).where(AgentORM.project_id == project.id, AgentORM.role_key == "engineer")
             )
         ).scalar_one()
 

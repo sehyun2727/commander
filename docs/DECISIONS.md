@@ -2128,3 +2128,59 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     `RoleSpec`s built with the same identity fields via
     `dataclasses.replace` produce equal `default_profile`s). Full suite:
     199 passed, 4 skipped (was 194/4 before this phase's 5 new tests).
+
+### Phase 2 — Employee schema (`role_key`, singleton enforcement)
+
+166. **`AgentORM.role` renamed to `role_key` via a pure Alembic rename
+    (`batch_alter_table`, no data loss), scoped to `AgentORM` only** —
+    brief §9.1 asks specifically for `agents.role` -> `agents.role_key`
+    so the column visibly references `RoleSpec.key` rather than reading
+    as an arbitrary string. `CostEntryORM.role` was deliberately left
+    unrenamed: it's a write-only telemetry snapshot (never filtered or
+    joined on anywhere in `costs/service.py`), the brief's §9.1 text
+    names only `AgentORM`, and renaming it would be scope creep with no
+    behavioral or architectural payoff this sprint. The external JSON
+    contract and event payloads were kept byte-identical (CLAUDE.md's
+    "동작 변화 0" applies) by giving `AgentResponse.role` a Pydantic v2
+    `Field(validation_alias="role_key")` (works with
+    `from_attributes=True`) rather than renaming the API field, and by
+    reading `row.role_key` into event payloads/reasons that still use the
+    literal `"role"` JSON key. Migration verified by running the full
+    chain (`baseline -> accounts_and_sessions -> agent_role_key_rename`)
+    against a scratch SQLite DB, then `downgrade -1` followed by
+    `upgrade head` again, to confirm both directions of
+    `batch_alter_table` work before relying on it against Postgres.
+    167. **`create_employee()` singleton enforcement is a service-layer
+    check-then-insert, not a DB-level unique constraint** — brief §10
+    requires either a DB constraint or a documented reason a
+    service-layer check is sufficient. Chose the service-layer check
+    (`SingletonRoleViolation` raised inside `create_employee` when
+    `role.singleton` is true and a row with that `project_id`/`role_key`
+    already exists) because: (a) `create_employee` is not wired to any
+    route this sprint -- Sprint 11 adds the hiring endpoint, so the
+    function is unreachable from any concurrent HTTP request path today,
+    making a TOCTOU race a theoretical, not live, concern; (b) a
+    conditional/partial unique index (unique only when
+    `RoleSpec.singleton` is true) can't be expressed as a plain column
+    constraint since `singleton` is template data, not a DB-resident
+    flag, and a real fix would need either a generated/trigger-backed
+    column or an application-level advisory lock -- both meaningfully
+    more machinery than this sprint's actual reachable surface
+    justifies (CLAUDE.md §16.3, "불필요한 과설계는 하지 않는다"); (c)
+    "single worker assumptions" is already a logged accepted tradeoff
+    (CLAUDE.md §15). Revisit when Sprint 11 adds the hiring route and a
+    concurrent "click Hire twice" scenario becomes real. Five new tests
+    in `tests/test_employee_singleton.py` cover: `AgentORM.role_key`
+    (not `.role`) is what founding rows expose; a second PM and a second
+    Reviewer both raise `SingletonRoleViolation`; two additional Engineer
+    Employees are both accepted (three total Engineers on one project);
+    and a rejected second-PM attempt leaves exactly one PM row behind
+    (no partial insert). `workflow_engine/engine.py`'s `_agents_for`
+    was changed to return `dict[str, list[AgentORM]]` (grouped by
+    `role_key`) instead of `dict[str, AgentORM]`, removing the
+    structural one-employee-per-role assumption at the query layer; the
+    pipeline call site still picks `agents[stage.role_key][0]`
+    (behaviorally identical today, since no route yet creates a second
+    worker Employee) with a comment marking it for replacement by
+    Phase 3's `resolve_employee_for_role`. Full suite: 204 passed, 4
+    skipped (199/4 after Phase 1, plus this phase's 5 new tests).

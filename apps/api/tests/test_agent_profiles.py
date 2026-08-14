@@ -14,7 +14,7 @@ from app.modules.projects.service import create_project
 async def _pm_agent_id(harness, project_id: str) -> str:
     async with harness.session_factory() as session:
         result = await session.execute(
-            select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role == "pm")
+            select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role_key == "pm")
         )
         return result.scalar_one().id
 

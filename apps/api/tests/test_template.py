@@ -21,7 +21,7 @@ async def test_founding_matches_the_template_exactly(harness):
 
     async with harness.session_factory() as session:
         result = await session.execute(select(AgentORM).where(AgentORM.project_id == project.id))
-        rows = {row.role: row for row in result.scalars().all()}
+        rows = {row.role_key: row for row in result.scalars().all()}
 
     assert set(rows.keys()) == {role.key for role in TEMPLATE.roles}
     for role in TEMPLATE.roles:

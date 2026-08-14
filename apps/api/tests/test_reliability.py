@@ -49,7 +49,7 @@ async def _set_agent_state(harness, agent_id: str, state: AgentState, current_ta
 async def _engineer_agent_id(harness, project_id: str) -> str:
     async with harness.session_factory() as session:
         result = await session.execute(
-            select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role == "engineer")
+            select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role_key == "engineer")
         )
         return result.scalars().one().id
 

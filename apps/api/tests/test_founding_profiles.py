@@ -17,7 +17,7 @@ async def test_create_project_founds_all_three_roles_with_default_profiles(harne
         rows = list(result.scalars().all())
 
     assert len(rows) == 3
-    roles = {row.role for row in rows}
+    roles = {row.role_key for row in rows}
     assert roles == {"pm", "engineer", "reviewer"}
 
     for row in rows:
@@ -27,4 +27,4 @@ async def test_create_project_founds_all_three_roles_with_default_profiles(harne
         assert profile.decision_style == DecisionStyle.BALANCED
         assert profile.custom_instructions == ""
         assert profile.model_ref is None
-        assert profile.role == row.role
+        assert profile.role == row.role_key

@@ -77,7 +77,7 @@ class AgentORM(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"))
-    role: Mapped[str] = mapped_column(String)  # "pm" | "engineer" | "reviewer"
+    role_key: Mapped[str] = mapped_column(String)  # RoleSpec.key, e.g. "pm" | "engineer" | "reviewer"
     name: Mapped[str] = mapped_column(String)
     profile: Mapped[dict] = mapped_column(JSON)  # AgentProfile.model_dump(mode="json")
     avatar_color: Mapped[str] = mapped_column(String)

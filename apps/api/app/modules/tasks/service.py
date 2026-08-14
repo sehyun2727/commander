@@ -109,7 +109,7 @@ async def assign_task(
 
         if agent_id is None:
             result = await session.execute(
-                select(AgentORM).where(AgentORM.project_id == task.project_id, AgentORM.role == _PM_KEY)
+                select(AgentORM).where(AgentORM.project_id == task.project_id, AgentORM.role_key == _PM_KEY)
             )
             pm = result.scalars().first()
             agent_id = pm.id if pm else None
@@ -260,7 +260,7 @@ async def post_message(
         agent = result.scalars().first()
         if agent is None:
             result = await session.execute(
-                select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role == _PM_KEY)
+                select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role_key == _PM_KEY)
             )
             agent = result.scalars().first()
 
@@ -280,14 +280,14 @@ async def post_message(
         project_id=project_id,
         session_factory=session_factory,
     )
-    model_ref = TEMPLATE.roles_by_key.get(agent.role, TEMPLATE.roles_by_key[_PM_KEY]).model_ref
+    model_ref = TEMPLATE.roles_by_key.get(agent.role_key, TEMPLATE.roles_by_key[_PM_KEY]).model_ref
     actor = Actor(role="employee", id=agent.id, name=agent.name)
     profile = AgentProfile.model_validate(agent.profile)
     buffer: list[str] = []
     usage: dict[str, int] = {}
     async for chunk in gateway.stream(
         model_ref,
-        system=prompt_builder.build(profile, agent.role),
+        system=prompt_builder.build(profile, agent.role_key),
         messages=[{"role": "user", "content": text}],
         usage=usage,
         agent_override=profile.model_ref,
@@ -319,7 +319,7 @@ async def post_message(
             project_id=project_id,
             task_id=task_id,
             agent_id=agent.id,
-            role=agent.role,
+            role=agent.role_key,
             provider=gateway.provider_name,
             model=await gateway.resolve_model(model_ref, profile.model_ref),
             input_tokens=usage.get("input_tokens", 0),

@@ -50,10 +50,10 @@ async def update_profile(
 
         if merged.model_ref is not None:
             project = await session.get(ProjectORM, agent.project_id)
-            registry_role = _registry_role_for(agent.role)
+            registry_role = _registry_role_for(agent.role_key)
             if merged.model_ref not in options_for_role(project.provider, registry_role):
                 raise InvalidModelRefError(
-                    f"{merged.model_ref!r} is not a known model for role {agent.role!r} "
+                    f"{merged.model_ref!r} is not a known model for role {agent.role_key!r} "
                     f"on provider {project.provider!r}"
                 )
 

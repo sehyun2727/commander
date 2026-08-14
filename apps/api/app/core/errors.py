@@ -32,6 +32,16 @@ class ApprovalRejectedError(CommanderError):
     """The CEO rejected an approval request."""
 
 
+class SingletonRoleViolation(CommanderError):
+    """A second Employee was about to be created for a `singleton=True`
+    Role (Sprint 10 §10) -- PM/Reviewer may each have at most one
+    Employee at a time; worker Roles like Engineer have no such limit."""
+
+    def __init__(self, role_key: str) -> None:
+        self.role_key = role_key
+        super().__init__(f"Role {role_key!r} is a singleton and already has an Employee")
+
+
 class BudgetExceededError(CommanderError):
     """A Mission exceeded one of its token/USD/wall-time budget caps (Rule #13)."""
 

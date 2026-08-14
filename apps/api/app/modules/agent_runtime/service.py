@@ -8,8 +8,11 @@ AgentStateChanged with the `reason` the caller gave.
 
 from __future__ import annotations
 
+from sqlalchemy import select
+
 from ...core.contracts import AgentProfile
 from ...core.db_models import AgentORM
+from ...core.errors import SingletonRoleViolation
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
 from ...core.interfaces.event_bus import EventBus
@@ -18,6 +21,39 @@ from ...core.lifecycle.state_machine import transition
 from ...templates import TEMPLATE
 
 SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
+
+
+async def create_employee(session_factory, project_id: str, role_key: str) -> AgentORM:
+    """Add one Employee to `role_key`, enforcing Sprint 10 §10 singleton
+    rule: a `singleton=True` Role (PM, Reviewer) may hold at most one
+    Employee; a worker Role (Engineer) may hold any number.
+
+    Not yet reachable from a route -- Sprint 11 wires an actual hiring
+    endpoint through this function. It exists now so the enforcement rule
+    and its race-condition analysis are settled before that UI lands (see
+    docs/DECISIONS.md, Sprint 10 Phase 2).
+    """
+    role = TEMPLATE.roles_by_key[role_key]
+    async with session_factory() as session:
+        if role.singleton:
+            existing = await session.execute(
+                select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role_key == role_key)
+            )
+            if existing.scalars().first() is not None:
+                raise SingletonRoleViolation(role_key)
+        profile = AgentProfile(**role.default_profile)
+        row = AgentORM(
+            project_id=project_id,
+            role_key=role_key,
+            name=role.founding_name,
+            profile=profile.model_dump(mode="json"),
+            avatar_color=role.avatar_color,
+            state=AgentState.IDLE.value,
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        return row
 
 
 class DBAgentRuntime(AgentRuntime):
@@ -36,7 +72,7 @@ class DBAgentRuntime(AgentRuntime):
                 profile = AgentProfile(**role.default_profile)
                 row = AgentORM(
                     project_id=project_id,
-                    role=role.key,
+                    role_key=role.key,
                     name=role.founding_name,
                     profile=profile.model_dump(mode="json"),
                     avatar_color=role.avatar_color,
@@ -55,8 +91,8 @@ class DBAgentRuntime(AgentRuntime):
                     type=EventType.AGENT_CREATED,
                     project_id=project_id,
                     actor=SYSTEM_ACTOR,
-                    payload={"agent_id": row.id, "role": row.role, "name": row.name},
-                    reason=f"Company Department bootstrap hired a {row.role}",
+                    payload={"agent_id": row.id, "role": row.role_key, "name": row.name},
+                    reason=f"Company Department bootstrap hired a {row.role_key}",
                 )
             )
 
@@ -70,7 +106,7 @@ class DBAgentRuntime(AgentRuntime):
                     type=EventType.CONVERSATION_MESSAGE,
                     project_id=project_id,
                     actor=Actor(role="employee", id=row.id, name=row.name),
-                    payload={"text": TEMPLATE.roles_by_key[row.role].intro, "agent_id": row.id, "task_id": None},
+                    payload={"text": TEMPLATE.roles_by_key[row.role_key].intro, "agent_id": row.id, "task_id": None},
                     reason="Introduced themself at founding",
                 )
             )

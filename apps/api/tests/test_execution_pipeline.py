@@ -55,7 +55,7 @@ async def _make_code_task(harness, title: str = "Add a function", description: s
     async with harness.session_factory() as session:
         engineer_agent = (
             await session.execute(
-                select(AgentORM).where(AgentORM.project_id == project.id, AgentORM.role == "engineer")
+                select(AgentORM).where(AgentORM.project_id == project.id, AgentORM.role_key == "engineer")
             )
         ).scalar_one()
     return project, task, engineer_agent

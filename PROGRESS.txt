@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 10 — Phase B: Role / Employee 분리
- Overall: 16/45 items · 36%
- Now working on: Phase 2
+ Overall: 22/45 items · 49%
+ Now working on: Phase 3
  Last update: 2026-08-14
 ================================================
 
@@ -17,7 +17,7 @@ PHASE 0 — 진단 가능성 + Sprint 9 잔여 문제          (9/9)
 [x] 0.8 cancel_task current_task_id cleanup
 [x] 0.9 commit + push (2cc253e)
 
-PHASE 1 — RoleSpec 정의                             (6/7)
+PHASE 1 — RoleSpec 정의                             (7/7)
 [x] 1.1 RoleSpec frozen dataclass (+category/singleton/harness/tools/permissions/default_profile property)
 [x] 1.2 software_company RoleSpec migration (PM/ENGINEER/REVIEWER instances updated)
 [x] 1.3 canonical Role source (removed TEMPLATE.model_ref_for_role / role_contracts / default_profiles duplicate dicts; 5 consumer files + test_template.py repointed to RoleSpec)
@@ -26,13 +26,13 @@ PHASE 1 — RoleSpec 정의                             (6/7)
 [x] 1.6 RoleSpec tests (frozen/immutable, singleton semantics, canonical-source-only, default_profile read-only + derived -- 199 passed, 4 skipped)
 [x] 1.7 commit + push
 
-PHASE 2 — Employee schema                           (0/6)
-[ ] 2.1 AgentORM.role -> role_key + migration
-[ ] 2.2 multi-employee query paths
-[ ] 2.3 singleton enforcement
-[ ] 2.4 RoleSpec-based founding roster
-[ ] 2.5 schema / singleton / multi-worker tests
-[ ] 2.6 commit + push
+PHASE 2 — Employee schema                           (6/6)
+[x] 2.1 AgentORM.role -> role_key + migration (91919bd41ac3, batch_alter_table; up/down/up verified against scratch SQLite)
+[x] 2.2 multi-employee query paths (_agents_for returns dict[str, list[AgentORM]] grouped by role_key; call site keeps [0] pending Phase 3 resolver)
+[x] 2.3 singleton enforcement (create_employee + SingletonRoleViolation; service-layer check, race-condition reasoning in DECISIONS.md #167)
+[x] 2.4 RoleSpec-based founding roster (verified -- create_department already RoleSpec-driven since Phase 1)
+[x] 2.5 schema / singleton / multi-worker tests (tests/test_employee_singleton.py, 5 new tests)
+[x] 2.6 commit + push
 
 PHASE 3 — Role -> Employee resolution               (0/6)
 [ ] 3.1 resolver
