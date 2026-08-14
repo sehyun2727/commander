@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 10 — Phase B: Role / Employee 분리
- Overall: 34/45 items · 76%
- Now working on: Phase 4
+ Overall: 35/45 items · 78%
+ Now working on: Phase 5
  Last update: 2026-08-14
 ================================================
 
@@ -49,7 +49,7 @@ PHASE 4 — #16 enforcement + UI                      (6/7)
 [x] 4.4 Roles API (GET /api/projects/{id}/roles; RoleSpec.description field added since intro is first-person onboarding voice, not a position summary; exposes key/title/category/singleton/description only -- 2 new tests)
 [x] 4.5 Employees grouping (app/company/[id]/employees/page.tsx groups by Role.category via useRoles(); Leadership/Engineering section headings; no Add Employee UI this sprint per brief §19)
 [x] 4.6 typecheck + build (pnpm typecheck clean; pnpm build succeeds, all routes compile)
-[ ] 4.7 commit + push
+[x] 4.7 commit + push (f2105cd, pushed to origin/master)
 
 PHASE 5 — verification / docs / report              (0/10)
 [ ] 5.1 make test
