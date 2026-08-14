@@ -2416,3 +2416,91 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     skill template today only changes what displays on an Employee, never
     what it can execute. This keeps Sprint 11 clearly on the presentation
     side of the Sprint 16 Agent Harness boundary the brief draws (§4.6).
+
+### Phase 2 — Persistence and atomic hiring
+
+181. **No new `AgentORM` columns for per-Employee model/skill
+    configuration** — re-reading the existing `RoutedProviderGateway`
+    revealed a three-tier model resolution already in production
+    (`AgentProfile.model_ref` > per-role CEO override via `settings_kv` >
+    registry default), so an Employee-level model override already has a
+    home. `skill_template_key` follows the same pattern: one new field on
+    the existing `AgentProfile` Pydantic model, persisted inside the JSON
+    `agents.profile` blob it already occupies. The *only* schema change
+    Phase 2 actually required was the new `role_singleton_locks` table --
+    not the AgentORM column additions assumed before re-reading the
+    provider gateway. Smaller diff, same guarantees, no migration needed
+    for configuration data at all (brief §6.2/§10.1's "smallest coherent
+    schema change").
+182. **Atomic singleton enforcement via a composite-primary-key lock
+    table, not `SELECT ... FOR UPDATE` or a partial unique index** — a new
+    `role_singleton_locks` table keyed on `(project_id, role_key)` is
+    inserted in the same transaction as the Employee row whenever
+    `role.singleton` is True. Two concurrent `hire_employee` calls for the
+    same Role now race on the database's own primary-key uniqueness
+    constraint, not application logic; the loser's `IntegrityError` is
+    caught and converted to `SingletonRoleViolation`. Rejected
+    alternatives: `SELECT FOR UPDATE` on the Employee table would still
+    need something to lock *before* any row for the Role exists yet (the
+    common case), which a plain row lock can't do; a Postgres partial
+    unique index (`WHERE role_key IN ('pm','reviewer')`) would hardcode
+    singleton role keys into a migration, violating Rule #16's "no
+    hardcoded role identity" spirit and silently failing to protect a
+    *future* singleton Role added only to the template. The lock table
+    instead derives its protection from `RoleSpec.singleton`, so a new
+    singleton Role added purely as template data is protected with zero
+    engine changes.
+183. **Founding PM/Reviewer must also claim a lock row, in the same
+    transaction as their founding insert** — `DBAgentRuntime.
+    create_department()` was extended to add a `RoleSingletonLockORM` row
+    for every founding Role with `singleton=True`, not just `hire_employee`.
+    Missing this would have left a live gap: a freshly founded company's
+    PM/Reviewer would hold no lock row, so the *first* `hire_employee`
+    call for `"pm"` afterward would find no conflicting lock and insert a
+    second PM straight past the guarantee this phase exists to build.
+    Caught by re-reading `create_department` against the new invariant
+    before writing tests, not by a failing test -- recorded here so the
+    reasoning survives even though no regression test could have caught
+    the *absence* of this fix without first asserting the invariant it
+    protects.
+184. **SQLite concurrency test needs an explicit busy timeout; Postgres
+    needs none** — the real concurrency test
+    (`test_hire_employee_concurrent_hires_for_a_singleton_role_only_one_wins`)
+    fires two `hire_employee` calls via `asyncio.gather` against a
+    dedicated SQLite engine with `connect_args={"timeout": 5}`. SQLite
+    serializes writers at the file-lock level (not Postgres's row-level
+    MVCC), so without a busy timeout the losing writer would surface an
+    unrelated `OperationalError: database is locked` instead of the
+    `IntegrityError` the composite primary key is supposed to produce;
+    `timeout` makes the second writer block-and-retry until the first
+    transaction commits, so the loser reaches the PK conflict cleanly.
+    This is a test-harness concern only -- the production Postgres
+    container needs no equivalent setting, since row-level MVCC lets both
+    transactions proceed until one hits the real conflict. Verified
+    directly against the live `commander-postgres-1` container this
+    sprint: `alembic upgrade head` / `downgrade -1` / `upgrade head` all
+    ran cleanly, and the backfill correctly seeded one lock row per
+    pre-existing PM/Reviewer across every project in the dev database.
+185. **Employee renaming after hire is out of scope this sprint** — the
+    brief's wording on Employee update is conditional ("if the existing
+    naming model permits it"). `AgentORM.name` (a top-level column, used
+    for FK-free display and query filters) and `AgentProfile.name` (a
+    field inside the JSON `profile` blob) are two copies of the same
+    fact with no existing atomic-sync path between them; building one
+    is a real feature, not something to fold silently into "extend the
+    profile PUT endpoint." Name is therefore settable only at hire time
+    via `hire_employee`; `PUT /api/agents/{id}/profile` continues to
+    reject `name` (it was never in `ProfileUpdateRequest`). Revisit if a
+    later sprint brief asks for it explicitly.
+186. **Reused two existing endpoints instead of building duplicates** --
+    `PUT /api/agents/{agent_id}/profile` (extended with
+    `skill_template_key`, mirroring its existing `model_ref` validation
+    block) covers post-hire Employee configuration, and
+    `GET /api/projects/{project_id}/models` (unchanged) remains the one
+    model catalog the hiring form's Model dropdown reads from. `RoleResponse`
+    gained a `model_ref` field so the dashboard can derive
+    `model_ref.removesuffix("-default")` and call the existing models
+    endpoint with the right registry-role, without a second, parallel
+    model-options endpoint keyed by `role_key` instead of the registry's
+    own vocabulary. Satisfies brief §6.6 ("prefer extending existing
+    endpoints over creating duplicate representations") directly.

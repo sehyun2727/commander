@@ -26,6 +26,16 @@ def test_skill_templates_registry_is_the_only_source():
     assert DEFAULT_SKILL_TEMPLATE_KEY in SKILL_TEMPLATES_BY_KEY
 
 
+def test_agent_profile_default_skill_template_matches_registry_default():
+    """core.contracts.AgentProfile.skill_template_key hardcodes the literal
+    "generalist" (core must not import a module -- Rule #1/#5). This guards
+    against that literal drifting away from the registry's own default."""
+    from app.core.contracts import AgentProfile
+
+    assert AgentProfile.model_fields["skill_template_key"].default == DEFAULT_SKILL_TEMPLATE_KEY
+    assert DEFAULT_SKILL_TEMPLATE_KEY == GENERALIST.key
+
+
 @pytest.mark.asyncio
 async def test_skill_templates_api_exposes_only_safe_fields(api_client, harness):
     login = await api_client.post(

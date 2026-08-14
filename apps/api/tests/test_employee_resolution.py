@@ -16,7 +16,7 @@ from sqlalchemy import select
 from app.core.db_models import AgentORM
 from app.core.lifecycle.agent_states import AgentState
 from app.core.lifecycle.task_states import TaskState
-from app.modules.agent_runtime.service import create_employee
+from app.modules.agent_runtime.service import hire_employee
 from app.modules.projects.service import create_project
 from app.modules.tasks import service as tasks_service
 from app.modules.workflow_engine.employee_resolution import resolve_employee_for_role
@@ -130,7 +130,7 @@ async def test_pipeline_run_emits_agent_resolved_for_every_stage(harness):
                 select(AgentORM).where(AgentORM.project_id == project.id, AgentORM.role_key == "engineer")
             )
         ).scalar_one()
-    await create_employee(harness.session_factory, project.id, "engineer")
+    await hire_employee(harness.session_factory, harness.event_bus, project.id, "mock", "engineer", "Second Engineer")
 
     task = await tasks_service.create_task(
         harness.session_factory, harness.event_bus, project.id, "Build landing page", "hero + tagline", "normal",

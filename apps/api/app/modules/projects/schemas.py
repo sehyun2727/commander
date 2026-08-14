@@ -43,3 +43,8 @@ class RoleResponse(BaseModel):
     category: Literal["leadership", "worker"]
     singleton: bool
     description: str
+    # Sprint 11 §6.4: exposed so the hiring form can derive the
+    # model_registry role (`model_ref.removesuffix("-default")`) and reuse
+    # the existing GET /api/projects/{project_id}/models catalog instead of
+    # a second, duplicate model-options endpoint (§6.6).
+    model_ref: str

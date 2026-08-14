@@ -56,6 +56,12 @@ class AgentProfile(BaseModel):
     # Never a provider switch, only a model choice within the company's
     # active provider.
     model_ref: str | None = None
+    # Sprint 11 §6.3: which canonical skill template this Employee was
+    # hired/configured with. A plain string literal, not an import of
+    # app.modules.skill_templates.registry.DEFAULT_SKILL_TEMPLATE_KEY --
+    # core must not depend on a module (Rule #1/#5). Kept in sync with
+    # SkillTemplate GENERALIST.key by test_skill_templates.py.
+    skill_template_key: str = "generalist"
 
 
 class StatusWord(str, Enum):

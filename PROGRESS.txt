@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 11 — Build the Company: CTO, Hiring, Employee Configuration
- Overall: 22/70 · 31%
- Now working on: Phase 1 complete, starting Phase 2 (persistence + atomic hiring)
+ Overall: 53/70 · 76%
+ Now working on: Phase 4 (dashboard hiring UX)
  Last update: 2026-08-14
 ================================================
 
@@ -45,48 +45,63 @@ PHASE 1 — CTO and Canonical Configuration Data       (12/12)
          intro-set assertion for non-founding CTO -- classification: intentional
          behavior change)
 [x] 1.11 update PROGRESS.txt
-[ ] 1.12 commit + push Phase 1
+[x] 1.12 commit + push Phase 1 (f2dcbae)
 
-PHASE 2 — Persistence and Atomic Hiring Domain       (0/17)
-[ ] 2.1 determine smallest schema change for per-Employee model/skill config
-[ ] 2.2 add Alembic migration if required
-[ ] 2.3 backfill existing Employee rows safely
-[ ] 2.4 preserve existing role_key/runtime state semantics
-[ ] 2.5 implement authoritative hire_employee/create_employee behavior
-[ ] 2.6 implement atomic singleton protection (concurrency-safe, DB-backed)
-[ ] 2.7 validate role/model/skill/ownership/name
-[ ] 2.8 define domain errors + status mapping (409 for singleton conflict)
-[ ] 2.9 emit hiring event after successful persistence
-[ ] 2.10 implement allowed Employee configuration updates
-[ ] 2.11 reject role transfer through generic update
-[ ] 2.12 protect active/busy Employee invariants
-[ ] 2.13 tests: CTO hire, 2nd CTO conflict, 2nd PM/Reviewer conflict, multi-Engineer
+PHASE 2 — Persistence and Atomic Hiring Domain       (17/17)
+[x] 2.1 determine smallest schema change for per-Employee model/skill config
+        (none needed for model_ref -- reuses existing 3-tier resolution;
+        skill_template_key added as a field inside the existing profile JSON)
+[x] 2.2 add Alembic migration if required (3066d66c0064: role_singleton_locks)
+[x] 2.3 backfill existing Employee rows safely (seeded from live pm/reviewer
+        agents; verified against real commander-postgres-1 container)
+[x] 2.4 preserve existing role_key/runtime state semantics (unchanged)
+[x] 2.5 implement authoritative hire_employee behavior (agent_runtime/service.py)
+[x] 2.6 implement atomic singleton protection (composite-PK lock table +
+        IntegrityError -> SingletonRoleViolation; founding path fixed too)
+[x] 2.7 validate role/model/skill/ownership/name
+[x] 2.8 define domain errors + status mapping (409 for singleton conflict,
+        400 role/name, 422 model/skill)
+[x] 2.9 emit hiring event after successful persistence (AGENT_HIRED)
+[x] 2.10 implement allowed Employee configuration updates (skill_template_key
+         added to PUT /api/agents/{id}/profile)
+[x] 2.11 reject role transfer through generic update (ProfileUpdateRequest has
+         no role field, extra="forbid")
+[x] 2.12 protect active/busy Employee invariants (profile PUT only ever
+         touches the JSON profile blob, never state/current_task_id -- no
+         config mutation can strand an active Mission by construction)
+[x] 2.13 tests: CTO hire, 2nd CTO conflict, 2nd PM/Reviewer conflict, multi-Engineer
          hire, invalid role/model/skill, cross-company access, rollback/no-partial-row,
-         CONCURRENT singleton creation, independent Employee config, existing-row
-         backfill, fresh-db migration
-[ ] 2.14 run migration + domain tests
-[ ] 2.15 update PROGRESS.txt
-[ ] 2.16 record concurrency/schema decisions in DECISIONS.md
-[ ] 2.17 commit + push Phase 2
+         CONCURRENT singleton creation (asyncio.gather + busy-timeout SQLite),
+         independent Employee config, existing-row backfill, fresh-db migration
+[x] 2.14 run migration + domain tests (upgrade/downgrade/upgrade verified on
+         live Postgres; 41/41 targeted tests green)
+[x] 2.15 update PROGRESS.txt
+[x] 2.16 record concurrency/schema decisions in DECISIONS.md (#181-186)
+[x] 2.17 commit + push Phase 2
 
-PHASE 3 — API and Runtime Integration                (0/16)
-[ ] 3.1 add/extend company/project-scoped employee endpoints
-[ ] 3.2 reuse authoritative service (no route-level business logic)
-[ ] 3.3 apply existing auth + company ownership checks
-[ ] 3.4 return stable public schemas
-[ ] 3.5 keep Role endpoint read-only
-[ ] 3.6 expose safe role/model/skill option metadata
-[ ] 3.7 every new mutation returns structured errors
-[ ] 3.8 Employee listing includes config needed by UI
-[ ] 3.9 confirm hired Employees participate in existing resolver
-[ ] 3.10 verify deterministic selection with multiple hired Engineers
-[ ] 3.11 verify singleton leadership roles resolve correctly
-[ ] 3.12 verify no route bypasses singleton/registry validation
-[ ] 3.13 add API/integration tests
-[ ] 3.14 run API-level flow (create company -> roles -> hire CTO -> reject 2nd CTO
+PHASE 3 — API and Runtime Integration                (16/16)
+[x] 3.1 add/extend company/project-scoped employee endpoints
+        (POST /api/projects/{id}/agents)
+[x] 3.2 reuse authoritative service (no route-level business logic --
+        routes.py only maps hire_employee's errors to status codes)
+[x] 3.3 apply existing auth + company ownership checks (project_owned_by, 404)
+[x] 3.4 return stable public schemas (AgentResponse, unchanged)
+[x] 3.5 keep Role endpoint read-only (unchanged, only gained model_ref field)
+[x] 3.6 expose safe role/model/skill option metadata (RoleResponse.model_ref
+        + existing /models + /skill-templates endpoints, no duplication)
+[x] 3.7 every new mutation returns structured errors (400/404/409/422, no bare 500s)
+[x] 3.8 Employee listing includes config needed by UI (profile already nested)
+[x] 3.9 confirm hired Employees participate in existing resolver
+        (test_pipeline_run_emits_agent_resolved_for_every_stage uses hire_employee)
+[x] 3.10 verify deterministic selection with multiple hired Engineers (same test)
+[x] 3.11 verify singleton leadership roles resolve correctly (full-flow test)
+[x] 3.12 verify no route bypasses singleton/registry validation (hire_employee
+         is the only insertion path; no other route creates AgentORM rows)
+[x] 3.13 add API/integration tests (tests/test_hiring.py, 11 tests)
+[x] 3.14 run API-level flow (create company -> roles -> hire CTO -> reject 2nd CTO
          -> hire 2 Engineers -> edit one -> list independence -> mock mission ->
-         resolver event)
-[ ] 3.15 update PROGRESS.txt
+         resolver event) -- test_full_hiring_flow_end_to_end, passing
+[x] 3.15 update PROGRESS.txt
 [ ] 3.16 commit + push Phase 3
 
 PHASE 4 — Dashboard Hiring and Configuration UX      (0/19)

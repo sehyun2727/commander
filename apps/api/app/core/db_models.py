@@ -92,6 +92,26 @@ class AgentORM(Base):
     last_assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class RoleSingletonLockORM(Base):
+    """Sprint 11 §4.10: the actual concurrency guarantee behind singleton
+    Role enforcement. One row per (project_id, role_key) exists exactly
+    while that singleton Role is occupied; the composite primary key --
+    not a service-layer check-then-insert -- is what makes two
+    simultaneous hiring transactions for the same singleton Role race-safe:
+    both INSERT in the same transaction as their Employee row, the
+    database allows exactly one to commit, and the loser's IntegrityError
+    is converted to SingletonRoleViolation. Never written for
+    singleton=False Roles, and never for a single company/role pair twice
+    -- no employee-firing flow exists yet to delete a row once created."""
+
+    __tablename__ = "role_singleton_locks"
+
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), primary_key=True)
+    role_key: Mapped[str] = mapped_column(String, primary_key=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class TaskORM(Base):
     __tablename__ = "tasks"
 

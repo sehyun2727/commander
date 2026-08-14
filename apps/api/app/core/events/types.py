@@ -33,6 +33,7 @@ class EventType(str, Enum):
     AGENT_PROFILE_UPDATED = "agent.profile_updated"
     CODING_STARTED = "agent.coding_started"
     AGENT_RESOLVED = "agent.resolved"  # Sprint 10 §14: which Employee the resolver picked for a Role, and why
+    AGENT_HIRED = "agent.hired"  # Sprint 11 §6.7: the CEO hired an Employee into a Role (distinct from founding)
 
     # Workspace (Workspace/Repository) — Sprint 5
     WORKSPACE_INITIALIZED = "workspace.initialized"

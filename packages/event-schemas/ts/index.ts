@@ -22,6 +22,7 @@ export enum EventType {
   AGENT_PROFILE_UPDATED = "agent.profile_updated",
   CODING_STARTED = "agent.coding_started",
   AGENT_RESOLVED = "agent.resolved",
+  AGENT_HIRED = "agent.hired",
   WORKSPACE_INITIALIZED = "workspace.initialized",
   CODE_CHANGED = "code.changed",
   BRANCH_MERGED = "branch.merged",
@@ -114,6 +115,7 @@ export interface AgentProfile {
   decision_style: DecisionStyle;
   custom_instructions: string;
   model_ref?: string | null;
+  skill_template_key: string;
 }
 
 export interface CheckOutcome {
@@ -218,6 +220,13 @@ export interface AgentResolvedPayload {
   role_key: string;
   agent_id: string;
   rule: "idle" | "no_idle_fallback";
+}
+
+export interface AgentHiredPayload {
+  agent_id: string;
+  role_key: string;
+  model_ref: string | null;
+  skill_template_key: string;
 }
 
 export interface WorkspaceInitializedPayload {
@@ -359,6 +368,7 @@ export interface EventPayloadMap {
   "agent.profile_updated": AgentProfileUpdatedPayload;
   "agent.coding_started": CodingStartedPayload;
   "agent.resolved": AgentResolvedPayload;
+  "agent.hired": AgentHiredPayload;
   "workspace.initialized": WorkspaceInitializedPayload;
   "code.changed": CodeChangedPayload;
   "branch.merged": BranchMergedPayload;

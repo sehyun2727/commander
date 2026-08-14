@@ -13,3 +13,4 @@ class ProfileUpdateRequest(BaseModel):
     decision_style: DecisionStyle | None = None
     custom_instructions: str | None = Field(default=None, max_length=CUSTOM_INSTRUCTIONS_MAX_LEN)
     model_ref: str | None = None
+    skill_template_key: str | None = None

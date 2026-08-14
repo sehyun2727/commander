@@ -23,3 +23,12 @@ class AgentResponse(BaseModel):
     state: str
     current_task_id: str | None
     created_at: datetime
+
+
+class HireEmployeeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role_key: str
+    name: str
+    model_ref: str | None = None
+    skill_template_key: str | None = None

@@ -8,52 +8,137 @@ AgentStateChanged with the `reason` the caller gave.
 
 from __future__ import annotations
 
-from sqlalchemy import select
+import uuid
+
+from sqlalchemy.exc import IntegrityError
 
 from ...core.contracts import AgentProfile
-from ...core.db_models import AgentORM
+from ...core.db_models import AgentORM, RoleSingletonLockORM
 from ...core.errors import SingletonRoleViolation
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
 from ...core.interfaces.event_bus import EventBus
 from ...core.lifecycle.agent_states import AGENT_TRANSITIONS, AgentState
 from ...core.lifecycle.state_machine import transition
+from ..model_registry import options_for_role
+from ..skill_templates import DEFAULT_SKILL_TEMPLATE_KEY, SKILL_TEMPLATES_BY_KEY
 from ...templates import TEMPLATE
+from ...templates.software_company import RoleSpec
 
 SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
+CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
+
+EMPLOYEE_NAME_MAX_LEN = 100
 
 
-async def create_employee(session_factory, project_id: str, role_key: str) -> AgentORM:
-    """Add one Employee to `role_key`, enforcing Sprint 10 §10 singleton
-    rule: a `singleton=True` Role (PM, Reviewer) may hold at most one
-    Employee; a worker Role (Engineer) may hold any number.
+class InvalidRoleError(ValueError):
+    """Raised when a hire names a role_key the active template doesn't define."""
 
-    Not yet reachable from a route -- Sprint 11 wires an actual hiring
-    endpoint through this function. It exists now so the enforcement rule
-    and its race-condition analysis are settled before that UI lands (see
-    docs/DECISIONS.md, Sprint 10 Phase 2).
-    """
-    role = TEMPLATE.roles_by_key[role_key]
+
+class InvalidModelRefError(ValueError):
+    """Raised when a hire names a model_ref the registry doesn't offer for
+    this Employee's Role/provider."""
+
+
+class InvalidSkillTemplateError(ValueError):
+    """Raised when a hire names a skill_template_key outside the canonical
+    skill_templates registry (Sprint 11 §4.6)."""
+
+
+class InvalidEmployeeNameError(ValueError):
+    """Raised when a hire's employee name is empty or too long."""
+
+
+def _registry_role_for(role: RoleSpec) -> str:
+    return role.model_ref.removesuffix("-default")
+
+
+async def hire_employee(
+    session_factory,
+    event_bus: EventBus,
+    project_id: str,
+    provider: str,
+    role_key: str,
+    name: str,
+    model_ref: str | None = None,
+    skill_template_key: str | None = None,
+) -> AgentORM:
+    """The one authoritative hiring path (Sprint 11 §6.4). Validates Role,
+    model, skill template, and name; enforces the Role's singleton policy
+    atomically via `RoleSingletonLockORM`'s composite primary key rather
+    than a service-layer check-then-insert (docs/DECISIONS.md #167, #18x);
+    persists the Employee; and emits AGENT_HIRED only once the transaction
+    has actually committed (Rule #3, §6.7 -- never a success event before
+    persistence)."""
+    role = TEMPLATE.roles_by_key.get(role_key)
+    if role is None:
+        raise InvalidRoleError(f"unknown role {role_key!r}")
+
+    employee_name = name.strip()
+    if not employee_name:
+        raise InvalidEmployeeNameError("employee name must not be empty")
+    if len(employee_name) > EMPLOYEE_NAME_MAX_LEN:
+        raise InvalidEmployeeNameError(f"employee name must be at most {EMPLOYEE_NAME_MAX_LEN} characters")
+
+    resolved_skill_key = skill_template_key or DEFAULT_SKILL_TEMPLATE_KEY
+    if resolved_skill_key not in SKILL_TEMPLATES_BY_KEY:
+        raise InvalidSkillTemplateError(f"unknown skill template {resolved_skill_key!r}")
+
+    if model_ref is not None and model_ref not in options_for_role(provider, _registry_role_for(role)):
+        raise InvalidModelRefError(
+            f"{model_ref!r} is not a known model for role {role_key!r} on provider {provider!r}"
+        )
+
+    profile = AgentProfile(
+        name=employee_name, role=role_key, model_ref=model_ref, skill_template_key=resolved_skill_key
+    )
+    agent_id = str(uuid.uuid4())
+
     async with session_factory() as session:
         if role.singleton:
-            existing = await session.execute(
-                select(AgentORM).where(AgentORM.project_id == project_id, AgentORM.role_key == role_key)
-            )
-            if existing.scalars().first() is not None:
+            # Fast, non-authoritative pre-check: a clean, cheap error on
+            # the overwhelmingly common non-racing path. The composite
+            # primary key insert below -- not this check -- is what
+            # actually makes concurrent hires race-safe.
+            existing_lock = await session.get(RoleSingletonLockORM, (project_id, role_key))
+            if existing_lock is not None:
                 raise SingletonRoleViolation(role_key)
-        profile = AgentProfile(**role.default_profile)
+
         row = AgentORM(
+            id=agent_id,
             project_id=project_id,
             role_key=role_key,
-            name=role.founding_name,
+            name=employee_name,
             profile=profile.model_dump(mode="json"),
             avatar_color=role.avatar_color,
             state=AgentState.IDLE.value,
         )
         session.add(row)
-        await session.commit()
+        if role.singleton:
+            session.add(RoleSingletonLockORM(project_id=project_id, role_key=role_key, agent_id=agent_id))
+
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            raise SingletonRoleViolation(role_key)
         await session.refresh(row)
-        return row
+
+    await event_bus.publish(
+        build_event(
+            type=EventType.AGENT_HIRED,
+            project_id=project_id,
+            actor=CEO_ACTOR,
+            payload={
+                "agent_id": agent_id,
+                "role_key": role_key,
+                "model_ref": model_ref,
+                "skill_template_key": resolved_skill_key,
+            },
+            reason=f"CEO hired a new {role.title}",
+        )
+    )
+    return row
 
 
 class DBAgentRuntime(AgentRuntime):
@@ -73,8 +158,10 @@ class DBAgentRuntime(AgentRuntime):
             for role in TEMPLATE.roles:
                 if not role.founding:
                     continue
+                agent_id = str(uuid.uuid4())
                 profile = AgentProfile(**role.default_profile)
                 row = AgentORM(
+                    id=agent_id,
                     project_id=project_id,
                     role_key=role.key,
                     name=role.founding_name,
@@ -84,6 +171,14 @@ class DBAgentRuntime(AgentRuntime):
                 )
                 session.add(row)
                 rows.append(row)
+                if role.singleton:
+                    # Founding never races (each Role appears at most once
+                    # in TEMPLATE.roles), but a founding PM/Reviewer still
+                    # has to claim its singleton lock row now -- otherwise
+                    # a later hire_employee() call for the same Role would
+                    # find no lock and insert a second Employee straight
+                    # past the atomic guard (Sprint 11 §4.10).
+                    session.add(RoleSingletonLockORM(project_id=project_id, role_key=role.key, agent_id=agent_id))
             await session.commit()
             for row in rows:
                 await session.refresh(row)

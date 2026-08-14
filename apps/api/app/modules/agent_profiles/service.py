@@ -6,6 +6,7 @@ from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.event_bus import EventBus
 from ...templates import TEMPLATE
 from ..model_registry import options_for_role
+from ..skill_templates import SKILL_TEMPLATES_BY_KEY
 
 CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
 
@@ -15,6 +16,11 @@ class InvalidModelRefError(ValueError):
     know for this Employee's role -- a ValueError subclass so existing
     callers still catch it, but distinguishable so routes.py can answer
     422 instead of the generic 404 for an unknown agent."""
+
+
+class InvalidSkillTemplateError(ValueError):
+    """Raised when a profile PUT names a skill_template_key outside the
+    canonical skill_templates registry (Sprint 11 §6.5)."""
 
 
 def _registry_role_for(agent_role: str) -> str:
@@ -56,6 +62,9 @@ async def update_profile(
                     f"{merged.model_ref!r} is not a known model for role {agent.role_key!r} "
                     f"on provider {project.provider!r}"
                 )
+
+        if merged.skill_template_key not in SKILL_TEMPLATES_BY_KEY:
+            raise InvalidSkillTemplateError(f"unknown skill template {merged.skill_template_key!r}")
 
         agent.profile = merged.model_dump(mode="json")
         project_id, agent_name = agent.project_id, agent.name

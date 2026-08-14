@@ -126,7 +126,7 @@ async def test_roles_api_exposes_only_the_ceo_facing_fields(api_client, harness)
 
     assert {role["key"] for role in roles} == {"pm", "engineer", "reviewer", "cto"}
     for role in roles:
-        assert set(role.keys()) == {"key", "title", "category", "singleton", "description"}
+        assert set(role.keys()) == {"key", "title", "category", "singleton", "description", "model_ref"}
 
 
 @pytest.mark.asyncio
