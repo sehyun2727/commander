@@ -20,4 +20,4 @@ cp .env.local.example .env.local
 pnpm dev
 ```
 
-Requires the API server running at the URL in `.env.local` (`NEXT_PUBLIC_API_URL`, default `http://127.0.0.1:8000`).
+Requires the API server running at the URL in `.env.local` (`NEXT_PUBLIC_API_URL`, default `http://localhost:8000`).

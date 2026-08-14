@@ -399,17 +399,24 @@ class CommanderWorkflowEngine(WorkflowEngine):
         """Force an Employee back onto the bench no matter which state a
         cancelled/failed mission left it in. AGENT_TRANSITIONS has no
         direct edge from most working states to Idle, so this walks the
-        two-step path a state actually allows (Sprint 9)."""
-        current = await self._agent_runtime.get_state(agent_id)
-        if current == AgentState.IDLE:
-            return
-        if current == AgentState.WAITING_REVIEW:
-            await self._agent_runtime.transition(agent_id, AgentState.COMPLETED, reason)
-        elif current not in (AgentState.COMPLETED, AgentState.FAILED):
-            await self._agent_runtime.transition(agent_id, AgentState.FAILED, reason)
+        two-step path a state actually allows (Sprint 9).
+
+        Also clears `current_task_id` (Sprint 10 §0.8): the state
+        transition alone leaves it pointing at the mission that just
+        ended, so a CEO message sent right after a cancel would still
+        route to this Employee's stale mission. `recover_orphaned_tasks`
+        (tasks/service.py) already clears this on its own recovery path;
+        this brings the cancel path to the same behavior."""
         current = await self._agent_runtime.get_state(agent_id)
         if current != AgentState.IDLE:
-            await self._agent_runtime.transition(agent_id, AgentState.IDLE, reason)
+            if current == AgentState.WAITING_REVIEW:
+                await self._agent_runtime.transition(agent_id, AgentState.COMPLETED, reason)
+            elif current not in (AgentState.COMPLETED, AgentState.FAILED):
+                await self._agent_runtime.transition(agent_id, AgentState.FAILED, reason)
+            current = await self._agent_runtime.get_state(agent_id)
+            if current != AgentState.IDLE:
+                await self._agent_runtime.transition(agent_id, AgentState.IDLE, reason)
+        await self._agent_runtime.set_current_task(agent_id, None)
 
     async def _check_budget(self, task: TaskSnapshot, stage: str) -> None:
         """Mission budget guard (Rule #13, Sprint 9): checked before each

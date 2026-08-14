@@ -3,6 +3,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import type { ProfileUpdateRequest } from "./api";
+import { mutationErrorMessage, useToast } from "@/components/ToastProvider";
 
 export const keys = {
   companies: ["companies"] as const,
@@ -115,12 +116,14 @@ export function useModels(companyId: string) {
 
 export function useSetModel(companyId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: ({ role, model }: { role: string; model: string }) => api.setModel(companyId, role, model),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.models(companyId) });
       qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
     },
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
@@ -130,12 +133,14 @@ export function useEmployeeProfile(agentId: string) {
 
 export function useUpdateEmployeeProfile(companyId: string, agentId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: (body: ProfileUpdateRequest) => api.updateEmployeeProfile(agentId, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.employeeProfile(agentId) });
       qc.invalidateQueries({ queryKey: keys.employees(companyId) });
     },
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
@@ -157,33 +162,40 @@ export function useSituation(companyId: string) {
 
 export function useGenerateReport(companyId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: () => api.generateReport(companyId),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.reports(companyId) }),
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
 export function useCreateCompany() {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: (name: string) => api.createCompany(name),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.companies }),
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
 export function useArchiveCompany(companyId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: () => api.archiveCompany(companyId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.companies });
       qc.invalidateQueries({ queryKey: keys.company(companyId) });
     },
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
 export function useUpdateCompanySettings(companyId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: (body: { name?: string; provider?: "mock" | "anthropic"; anthropic_api_key?: string }) =>
       api.updateCompanySettings(companyId, body),
@@ -191,15 +203,18 @@ export function useUpdateCompanySettings(companyId: string) {
       qc.invalidateQueries({ queryKey: keys.company(companyId) });
       qc.invalidateQueries({ queryKey: keys.companies });
     },
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
 export function useCreateMission(companyId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: (body: { title: string; description: string; priority: string; deliverable_type?: string }) =>
       api.createMission(companyId, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.missions(companyId) }),
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
@@ -254,14 +269,17 @@ export function useExecutionSettings(companyId: string) {
 
 export function useSetExecutionEnabled(companyId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: (enabled: boolean) => api.setExecutionEnabled(companyId, enabled),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.executionSettings(companyId) }),
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
 export function useAssignMission(companyId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: (taskId: string) => api.assignMission(taskId),
     onSuccess: (task) => {
@@ -269,19 +287,37 @@ export function useAssignMission(companyId: string) {
       qc.invalidateQueries({ queryKey: keys.mission(task.id) });
       qc.invalidateQueries({ queryKey: keys.employees(companyId) });
     },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
+}
+
+export function useCancelMission(companyId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: ({ taskId, reason }: { taskId: string; reason?: string }) => api.cancelMission(taskId, reason),
+    onSuccess: (task) => {
+      qc.invalidateQueries({ queryKey: keys.missions(companyId) });
+      qc.invalidateQueries({ queryKey: keys.mission(task.id) });
+      qc.invalidateQueries({ queryKey: keys.employees(companyId) });
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
 export function usePostMessage(taskId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: (text: string) => api.postMessage(taskId, text),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.messages(taskId) }),
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 
 export function useDecideApproval(companyId: string, taskId: string) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   return useMutation({
     mutationFn: ({
       approvalId,
@@ -299,6 +335,7 @@ export function useDecideApproval(companyId: string, taskId: string) {
       qc.invalidateQueries({ queryKey: keys.mission(taskId) });
       qc.invalidateQueries({ queryKey: keys.employees(companyId) });
     },
+    onError: (error) => showToast(mutationErrorMessage(error)),
   });
 }
 

@@ -233,6 +233,13 @@ async def test_cancel_running_mission_transitions_to_cancelled_and_frees_agent(h
         state = await harness.agent_runtime.get_state(engineer_id)
     assert state == AgentState.IDLE
 
+    # Sprint 10 §0.8: current_task_id must not still point at the
+    # cancelled mission, or a CEO message sent right afterward would
+    # route to a mission that no longer exists for this Employee.
+    async with harness.session_factory() as session:
+        agent_row = await session.get(AgentORM, engineer_id)
+        assert agent_row.current_task_id is None
+
 
 @pytest.mark.asyncio
 async def test_cancel_completed_mission_is_rejected(harness):

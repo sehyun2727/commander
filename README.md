@@ -93,6 +93,27 @@ make export-users  # export all CEO accounts to CSV on stdout (bcrypt hashes onl
 
 The dashboard polls `/api/health` and shows a banner if the API is unreachable; the SSE connection has its own "Reconnecting…" indicator if the live event stream drops.
 
+On boot, the API logs its git SHA and Alembic revision (current vs. head) — check this line first whenever behavior doesn't match what you expect from the code; it's usually a stale process, not a bug.
+
+---
+
+## Restarting the API cleanly
+
+The API, the dashboard, and CORS are all pinned to one host/port pair: `http://localhost:8000` (API) and `http://localhost:3000` (dashboard) — `NEXT_PUBLIC_API_URL`, `CORS_ORIGINS`, the Makefile, and `.env.local.example` all agree on this. Do not point any of them at `127.0.0.1` instead of `localhost`; browsers treat these as different origins for credentialed requests, so mixing them silently breaks the session cookie and looks like a CORS bug.
+
+A stray API process left running on an old port (or an old code/schema version) is the most common cause of confusing failures — a request that looks like a CORS error in the browser, or a route that behaves like an older Sprint's code. Before filing a bug, make sure only one API process is running:
+
+```bash
+# find anything still listening on 8000 (or an old port like 8001)
+lsof -i :8000        # macOS/Linux
+netstat -ano | findstr :8000   # Windows
+
+# stop make dev / make demo with Ctrl-C, then confirm nothing is left:
+pkill -f "uvicorn app.main:app"   # macOS/Linux, if a background process survived
+```
+
+Then restart with `make dev` (or `make demo`) and check the boot log for the git SHA + Alembic revision to confirm you're running what you think you're running.
+
 ---
 
 ## Architecture at a glance

@@ -6,18 +6,27 @@ docs/ARCHITECTURE.md § API Server."""
 
 from __future__ import annotations
 
+import logging
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from .core.boot_checks import BootConfigError, redact_database_url, validate_boot_config
+from .core.boot_checks import (
+    BootConfigError,
+    git_sha,
+    redact_database_url,
+    validate_boot_config,
+    validate_db_revision,
+)
 from .core.config import settings
-from .core.db import async_session_factory, init_db
+from .core.db import async_session_factory, engine, init_db
 from .core.secrets import DBSecretsProvider
+
+logger = logging.getLogger("commander")
 from .modules.agent_profiles import router as agent_profiles_router
 from .modules.agent_runtime import DBAgentRuntime
 from .modules.agent_runtime import router as agents_router
@@ -42,6 +51,8 @@ from .modules.workspace_manager import router as workspace_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print(f"Commander booting: git={git_sha()}", file=sys.stderr)
+
     try:
         validate_boot_config()
     except BootConfigError as exc:
@@ -57,6 +68,12 @@ async def lifespan(app: FastAPI):
             "Is Postgres running? Try `make db-up`.",
             file=sys.stderr,
         )
+        raise SystemExit(1) from None
+
+    try:
+        await validate_db_revision(engine, settings.database_url)
+    except BootConfigError as exc:
+        print(f"Commander cannot start: {exc}", file=sys.stderr)
         raise SystemExit(1) from None
 
     session_factory = async_session_factory
@@ -95,6 +112,36 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Rule #18 (no silent failure): a bug the code never anticipated
+    still has to end as something the CEO's screen can show, not a blank
+    failure. Starlette's ServerErrorMiddleware -- which drives this
+    handler -- sits *outside* CORSMiddleware in the stack (see
+    starlette.applications.Starlette.build_middleware_stack), so it never
+    gets CORS headers applied automatically; without adding them here by
+    hand from the same origin allowlist CORSMiddleware uses, a real
+    server crash reads in the browser as a CORS failure, exactly like the
+    Sprint 9 stale-process incident this diagnosability work follows up
+    on (sprint10.md §4.1a)."""
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    response = JSONResponse(
+        status_code=500,
+        content={
+            "detail": (
+                "Something went wrong on Commander's end. Please try again "
+                "in a moment; if it keeps happening, this has been logged."
+            )
+        },
+    )
+    origin = request.headers.get("origin")
+    if origin in settings.cors_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
 
 app.include_router(auth_router)
 app.include_router(projects_router)

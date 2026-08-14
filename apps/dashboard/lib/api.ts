@@ -32,7 +32,7 @@ export interface ProfileUpdateRequest {
   model_ref?: string | null;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Carries the HTTP status so callers (esp. the login/register forms, which
  * need FastAPI's `detail` string verbatim -- e.g. the unified login-failure
@@ -124,6 +124,11 @@ export const api = {
     request<Task>(`/api/tasks/${taskId}/assign`, {
       method: "POST",
       body: JSON.stringify({ agent_id: agentId ?? null }),
+    }),
+  cancelMission: (taskId: string, reason?: string) =>
+    request<Task>(`/api/tasks/${taskId}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? null }),
     }),
   listStarters: (companyId: string) => request<Starter[]>(`/api/projects/${companyId}/starters`),
 

@@ -2027,3 +2027,51 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     direct SQLite inspection, then successfully ran a brand-new mission
     through the same Employee to full `completed` with no crash and no
     traceback in the server log.
+
+## Sprint 10 — Phase B: Role / Employee separation
+
+### Phase 0 — Diagnosability + Sprint 9 followups
+
+163. **Toast system built from scratch instead of pulling in a library** —
+    no toast/notification primitive existed anywhere in
+    `apps/dashboard`, and Rule #18 ("CEO actions never fail silently")
+    requires every one of the ~12 `useMutation` hooks in `lib/hooks.ts`
+    to surface failures visibly. Rather than add a dependency for a
+    ~60-line component, added `components/ToastProvider.tsx`: a
+    `ToastProvider` (mounted once in `app/providers.tsx`, inside
+    `QueryClientProvider` and outside `AuthProvider` so any auth-flow
+    mutation can also use it) exposing `useToast().showToast(message)`,
+    plus a `mutationErrorMessage(error)` helper that unwraps
+    `ApiError.message` (already the FastAPI `detail` string, CEO-legible
+    per existing convention) with a generic fallback for network
+    failures. Every mutation hook in `lib/hooks.ts` now has an `onError`
+    calling `showToast(mutationErrorMessage(error))` — this fires
+    regardless of whether the call site uses `.mutate()` or
+    `.mutateAsync()`, so components that `await mutateAsync(...)` in a
+    try-less `async function` (several pre-existing forms did this,
+    e.g. `EmployeeProfile.tsx`, `NewMissionForm.tsx`,
+    `app/company/[id]/settings/page.tsx`) still get a visible toast on
+    failure even though the awaited promise itself goes unhandled past
+    the component (a console-only artifact, not a UI gap — the CEO
+    already saw the toast). Toasts auto-dismiss after 7s or on click;
+    styled with the existing `status-red`/`status-green` Tailwind
+    tokens rather than inventing new colors.
+
+164. **Cancel-button visibility mirrors `TASK_TRANSITIONS` exactly,
+    rather than allowlisting specific "in-progress" states** — the
+    brief said "visible only on in-progress missions." Backend
+    `TASK_TRANSITIONS` (`core/lifecycle/task_states.py`) already encodes
+    the real rule: every state has a path to `CANCELLED` except
+    `COMPLETED`, `CANCELLED`, and `BLOCKED` (empty transition sets).
+    Duplicating that as a frontend allowlist of "in-progress" states
+    would drift the moment a new state is added on the backend.
+    Instead, `MissionDetail.tsx` uses one `NOT_CANCELLABLE_STATES` set
+    matching those three terminal states, shown as a "Cancel Mission"
+    button with a confirm/never-mind inline step (no browser
+    `window.confirm`, to match the app's existing dialog-free style)
+    that calls the new `useCancelMission` hook
+    (`api.cancelMission` -> `POST /api/tasks/{id}/cancel`, matching the
+    existing `TaskCancelRequest{reason}` contract exactly). It renders
+    alongside the "Assign to Department" button (not mutually
+    exclusive) since a `created` mission is itself cancellable per the
+    same transition table.

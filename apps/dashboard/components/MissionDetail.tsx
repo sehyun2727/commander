@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ChangeSummaryCard } from "@/components/ChangeSummaryCard";
 import { ChatThread } from "@/components/ChatThread";
 import { DecisionCard } from "@/components/DecisionCard";
 import { ErrorState } from "@/components/ErrorState";
 import { ExecutionResults } from "@/components/ExecutionResults";
 import { StatusWord, taskStatusWord } from "@/components/StatusWord";
-import { useApprovals, useAssignMission, useEmployees, useMission, useMissionCosts } from "@/lib/hooks";
+import { useApprovals, useAssignMission, useCancelMission, useEmployees, useMission, useMissionCosts } from "@/lib/hooks";
 import { formatUsd } from "@/lib/utils";
+
+const NOT_CANCELLABLE_STATES = new Set(["completed", "cancelled", "blocked"]);
 
 export function MissionDetail({ companyId, taskId }: { companyId: string; taskId: string }) {
   const { data: mission, isLoading, isError } = useMission(taskId);
@@ -16,6 +19,8 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
   const { data: costs } = useMissionCosts(taskId);
   const { data: employees } = useEmployees(companyId);
   const assign = useAssignMission(companyId);
+  const cancel = useCancelMission(companyId);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   const pendingApproval = approvals?.find((a) => a.task_id === taskId && a.status === "pending");
   const reviewer = pendingApproval
@@ -60,15 +65,49 @@ export function MissionDetail({ companyId, taskId }: { companyId: string; taskId
           <h1 className="text-2xl font-semibold text-text">{mission.title}</h1>
           {mission.description && <p className="mt-2 text-sm text-text-muted">{mission.description}</p>}
         </div>
-        {mission.state === "created" && (
-          <button
-            onClick={() => assign.mutate(mission.id)}
-            disabled={assign.isPending}
-            className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-          >
-            {assign.isPending ? "Assigning…" : "Assign to Department"}
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {mission.state === "created" && (
+            <button
+              onClick={() => assign.mutate(mission.id)}
+              disabled={assign.isPending}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+            >
+              {assign.isPending ? "Assigning…" : "Assign to Department"}
+            </button>
+          )}
+          {!NOT_CANCELLABLE_STATES.has(mission.state) &&
+            (confirmingCancel ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-text-muted">Cancel this Mission?</span>
+                <button
+                  onClick={() => {
+                    cancel.mutate(
+                      { taskId: mission.id },
+                      { onSettled: () => setConfirmingCancel(false) }
+                    );
+                  }}
+                  disabled={cancel.isPending}
+                  className="rounded-lg bg-status-red px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  {cancel.isPending ? "Cancelling…" : "Yes, cancel"}
+                </button>
+                <button
+                  onClick={() => setConfirmingCancel(false)}
+                  disabled={cancel.isPending}
+                  className="rounded-lg border border-base-border px-3 py-2 text-sm font-medium text-text-muted hover:bg-base-hover disabled:opacity-50"
+                >
+                  Never mind
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmingCancel(true)}
+                className="rounded-lg border border-base-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-base-hover"
+              >
+                Cancel Mission
+              </button>
+            ))}
+        </div>
       </header>
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
