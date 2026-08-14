@@ -216,7 +216,13 @@ Still the product's most important component:
 
 V1.1 adds one variant: the **Specification approval** card, whose body is the specification summary rather than a single problem statement.
 
-### 5.4 Employees  *[V1.1 — Sprints 10–11]*
+### 5.4 Employees  *[Sprint 10 ✅ grouped-by-category display; Sprint 11 — CTO, worker-role split, Add Employee]*
+
+Sprint 10 shipped the grouping-by-`Role.category` behavior below for the
+current PM/Engineer/Reviewer roster (`Leadership`/`Engineering` section
+headings, a section hidden entirely when it holds no hired Employee — §10.4).
+The full picture — a second Leadership row (CTO), a worker-role split
+(Backend/Frontend Engineer), and the **+ Add Employee** action — is Sprint 11.
 
 **Roles are positions; Employees are people.** The Employees page shows the org, grouped by role:
 
