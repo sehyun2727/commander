@@ -280,7 +280,7 @@ async def post_message(
         project_id=project_id,
         session_factory=session_factory,
     )
-    model_ref = TEMPLATE.model_ref_for_role.get(agent.role, TEMPLATE.model_ref_for_role[_PM_KEY])
+    model_ref = TEMPLATE.roles_by_key.get(agent.role, TEMPLATE.roles_by_key[_PM_KEY]).model_ref
     actor = Actor(role="employee", id=agent.id, name=agent.name)
     profile = AgentProfile.model_validate(agent.profile)
     buffer: list[str] = []

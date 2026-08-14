@@ -14,9 +14,9 @@ ABSENT) -- this file is deliberately concrete, not a plugin system.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from types import MappingProxyType
+from typing import Literal, Mapping
 
-from ..core.contracts import AgentProfile
 from ..core.interfaces.sandbox import CheckSpec
 
 _PM_CONTRACT = (
@@ -77,18 +77,42 @@ _REVIEWER_CONTRACT = (
 
 @dataclass(frozen=True)
 class RoleSpec:
+    """A Role is a template-owned *position*, not a person (Sprint 10,
+    CLAUDE.md §2.3 / Rule #16). Every field here is data the template
+    supplies; nothing about an Employee (name, model choice, personal
+    profile edits) belongs on this class. RoleSpec is the single
+    canonical source for a role's model_ref/contract/default profile --
+    no other module-level dict may duplicate these facts (docs/DECISIONS.md,
+    Sprint 10 Phase 1)."""
+
     key: str  # mirrors AgentORM.role / AgentProfile.role
     title: str  # UI-facing role label
+    category: Literal["leadership", "worker"]  # leadership roles are singletons
+    singleton: bool  # at most one Employee may occupy this Role at a time
     founding_name: str
     avatar_color: str
     model_ref: str  # logical ref resolved by model_registry
     contract: str  # prompt_builder's immutable, always-appended-last layer
     intro: str  # spoken at founding as a conversation event (§6, onboarding)
+    harness: Literal["one_shot"]  # execution shape; Sprint 16+ may add "tool_loop"
+    tools: tuple[str, ...]  # whitelist granted by the template (Rule #12); none yet
+    permissions: tuple[str, ...]  # organizational actions this Role may take
+
+    @property
+    def default_profile(self) -> Mapping[str, str]:
+        """The `AgentProfile` fields a new Employee of this Role is founded
+        with, derived from this RoleSpec's own canonical fields (not a
+        second stored copy) and returned as a read-only mapping so nothing
+        can mutate a RoleSpec's identity through it -- construct with
+        `AgentProfile(**role.default_profile)` at the point of use."""
+        return MappingProxyType({"name": self.founding_name, "role": self.key})
 
 
 PM = RoleSpec(
     key="pm",
     title="PM",
+    category="leadership",
+    singleton=True,
     founding_name="Priya Shah",
     avatar_color="#8b5cf6",
     model_ref="planner-default",
@@ -97,11 +121,16 @@ PM = RoleSpec(
         "Hi, I'm Priya, your PM. I'll turn every mission brief into a "
         "clear plan before anyone starts building."
     ),
+    harness="one_shot",
+    tools=(),
+    permissions=("assign_mission", "request_ceo_decision"),
 )
 
 ENGINEER = RoleSpec(
     key="engineer",
     title="Engineer",
+    category="worker",
+    singleton=False,
     founding_name="Devon Cole",
     avatar_color="#3b82f6",
     model_ref="builder-default",
@@ -110,11 +139,16 @@ ENGINEER = RoleSpec(
         "Devon here, your Engineer. I take Priya's plans and turn them "
         "into real deliverables."
     ),
+    harness="one_shot",
+    tools=(),
+    permissions=("produce_deliverable",),
 )
 
 REVIEWER = RoleSpec(
     key="reviewer",
     title="Reviewer",
+    category="leadership",
+    singleton=True,
     founding_name="Ari Kim",
     avatar_color="#14b8a6",
     model_ref="reviewer-default",
@@ -123,14 +157,15 @@ REVIEWER = RoleSpec(
         "Ari, your Reviewer. I audit everything before it reaches your "
         "desk, so you only see what's ready for a decision."
     ),
+    harness="one_shot",
+    tools=(),
+    permissions=("request_ceo_decision",),
 )
 
 # Tuple order IS the founding roster order (display / onboarding only —
 # the *pipeline* order is a separate, explicit sequence below, PIPELINE).
 ROLES: tuple[RoleSpec, ...] = (PM, ENGINEER, REVIEWER)
 ROLES_BY_KEY: dict[str, RoleSpec] = {role.key: role for role in ROLES}
-ROLE_CONTRACTS: dict[str, str] = {role.key: role.contract for role in ROLES}
-MODEL_REF_FOR_ROLE: dict[str, str] = {role.key: role.model_ref for role in ROLES}
 
 
 @dataclass(frozen=True)
@@ -162,18 +197,11 @@ PIPELINE: tuple[StageSpec, ...] = (
 )
 
 # The Engineer's contract varies by mission deliverable_type; every other
-# role's contract is deliverable-agnostic (see ROLE_CONTRACTS above).
+# role's contract is deliverable-agnostic (see each RoleSpec.contract above).
 # Keyed by TaskORM.deliverable_type ("code" | "document").
 ENGINEER_CONTRACT_BY_DELIVERABLE: dict[str, str] = {
     "code": _ENGINEER_CONTRACT_CODE,
     "document": _ENGINEER_CONTRACT_DOCUMENT,
-}
-
-# Every Employee is founded with the same neutral trait defaults (the
-# AgentProfile field defaults) -- role-specific voice comes from the
-# immutable contract layer above, not personality/working/decision style.
-DEFAULT_PROFILES: dict[str, AgentProfile] = {
-    role.key: AgentProfile(name=role.founding_name, role=role.key) for role in ROLES
 }
 
 DELIVERABLE_TYPE = "code"
@@ -232,10 +260,7 @@ class CompanyTemplate:
     key: str
     roles: tuple[RoleSpec, ...]
     roles_by_key: dict[str, RoleSpec]
-    default_profiles: dict[str, AgentProfile]
-    role_contracts: dict[str, str]
     engineer_contract_by_deliverable: dict[str, str]
-    model_ref_for_role: dict[str, str]
     deliverable_type: str
     vocabulary_overrides: dict[str, str]
     starters: list[dict[str, str]]
@@ -247,10 +272,7 @@ TEMPLATE = CompanyTemplate(
     key="software_company",
     roles=ROLES,
     roles_by_key=ROLES_BY_KEY,
-    default_profiles=DEFAULT_PROFILES,
-    role_contracts=ROLE_CONTRACTS,
     engineer_contract_by_deliverable=ENGINEER_CONTRACT_BY_DELIVERABLE,
-    model_ref_for_role=MODEL_REF_FOR_ROLE,
     deliverable_type=DELIVERABLE_TYPE,
     vocabulary_overrides=VOCABULARY_OVERRIDES,
     starters=STARTERS,

@@ -2075,3 +2075,56 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     alongside the "Assign to Department" button (not mutually
     exclusive) since a `created` mission is itself cancellable per the
     same transition table.
+
+### Phase 1 — RoleSpec as first-class data
+
+165. **`RoleSpec.default_profile` is a computed `@property`, not a stored
+    dataclass field** — the brief's illustrative `RoleSpec` sketch
+    (§6) shows `default_profile` as a plain field, but storing a second
+    copy of `founding_name`/`key` inside a `default_profile` dict would
+    itself be the "duplicate Role source" §7 explicitly forbids, and a
+    stored `Mapping` field on a frozen dataclass is still a mutable
+    object underneath unless deliberately wrapped. Implemented instead
+    as `@property def default_profile(self) -> Mapping[str, str]: return
+    MappingProxyType({"name": self.founding_name, "role": self.key})` --
+    every read derives fresh from the two already-canonical fields, and
+    `MappingProxyType` makes the returned view read-only (`TypeError` on
+    item assignment) without needing a `frozen`-dict library or a
+    `copy.deepcopy` on every access. Call sites construct the real,
+    mutable-by-design `AgentProfile` only at the point of use:
+    `AgentProfile(**role.default_profile)` (`agent_runtime/service.py`
+    `create_department`, and `tests/test_template.py`'s founding-profile
+    assertion). This also fully removed the `TEMPLATE.default_profiles`,
+    `TEMPLATE.role_contracts`, and `TEMPLATE.model_ref_for_role`
+    module-level dicts (Sprint 4.7/9 leftovers that duplicated
+    `RoleSpec.model_ref`/`.contract`/founding identity as second dicts
+    keyed by role string) -- five consumer files
+    (`agent_runtime/service.py`, `agent_profiles/service.py`,
+    `tasks/service.py`, `workflow_engine/engine.py`,
+    `prompt_builder/role_contracts.py`) now read `TEMPLATE.roles_by_key[
+    key].model_ref` / `.contract` directly, or (for `role_contracts.py`'s
+    public `ROLE_CONTRACTS` dict, still depended on by `builder.py` and
+    `tests/test_prompt_builder.py`) rebuild it as a one-line
+    comprehension over `TEMPLATE.roles` at import time rather than
+    proxying a `TEMPLATE` field. `RoleSpec` gained
+    `category: Literal["leadership","worker"]`, `singleton: bool`,
+    `harness: Literal["one_shot"]`, `tools: tuple[str,...]` (empty for
+    every role this sprint -- grant structure only, no real tool grants
+    until a later sprint per Rule #12), and `permissions: tuple[str,...]`
+    (organizational-action declarations, e.g. `"assign_mission"` for PM,
+    `"produce_deliverable"` for Engineer, `"request_ceo_decision"` for
+    PM/Reviewer -- declared as data this sprint, not yet enforced
+    anywhere; enforcement is Sprint 12+ per the brief). PM and Reviewer
+    are `category="leadership", singleton=True`; Engineer is
+    `category="worker", singleton=False`, matching CLAUDE.md §2.3's
+    leadership/worker split (singleton *enforcement* at the service
+    layer is Phase 2 scope, not this phase). Five new tests added to
+    `tests/test_template.py` cover: `RoleSpec` frozen-ness
+    (`dataclasses.FrozenInstanceError` on attribute assignment),
+    leadership-vs-worker singleton flags, absence of the three deleted
+    duplicate dicts on `TEMPLATE` (`hasattr` checks), `default_profile`
+    read-only-ness (`TypeError` on item assignment) and value
+    correctness, and that `default_profile` is genuinely derived (two
+    `RoleSpec`s built with the same identity fields via
+    `dataclasses.replace` produce equal `default_profile`s). Full suite:
+    199 passed, 4 skipped (was 194/4 before this phase's 5 new tests).

@@ -8,6 +8,7 @@ AgentStateChanged with the `reason` the caller gave.
 
 from __future__ import annotations
 
+from ...core.contracts import AgentProfile
 from ...core.db_models import AgentORM
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
@@ -18,16 +19,6 @@ from ...templates import TEMPLATE
 
 SYSTEM_ACTOR = Actor(role="system", id="system", name="Commander")
 
-# The founding trio, role order, and default profiles all come from the
-# active company template (see app/templates) -- founding never hardcodes
-# a role name the template doesn't already provide.
-DEPARTMENT_ROSTER = [
-    dict(role=role.key, name=role.founding_name, avatar_color=role.avatar_color)
-    for role in TEMPLATE.roles
-]
-
-DEFAULT_PROFILES = TEMPLATE.default_profiles
-
 
 class DBAgentRuntime(AgentRuntime):
     def __init__(self, session_factory, event_bus: EventBus) -> None:
@@ -35,16 +26,20 @@ class DBAgentRuntime(AgentRuntime):
         self._event_bus = event_bus
 
     async def create_department(self, project_id: str) -> list[str]:
+        # The founding roster, role order, and default profiles all come
+        # from the active company template's RoleSpecs -- founding never
+        # hardcodes a role name the template doesn't already provide.
         agent_ids: list[str] = []
         async with self._session_factory() as session:
             rows = []
-            for member in DEPARTMENT_ROSTER:
+            for role in TEMPLATE.roles:
+                profile = AgentProfile(**role.default_profile)
                 row = AgentORM(
                     project_id=project_id,
-                    role=member["role"],
-                    name=member["name"],
-                    profile=DEFAULT_PROFILES[member["role"]].model_dump(mode="json"),
-                    avatar_color=member["avatar_color"],
+                    role=role.key,
+                    name=role.founding_name,
+                    profile=profile.model_dump(mode="json"),
+                    avatar_color=role.avatar_color,
                     state=AgentState.IDLE.value,
                 )
                 session.add(row)

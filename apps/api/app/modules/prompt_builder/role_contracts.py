@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from ...templates import TEMPLATE, first_stage_role_key
 
-ROLE_CONTRACTS: dict[str, str] = TEMPLATE.role_contracts
+ROLE_CONTRACTS: dict[str, str] = {role.key: role.contract for role in TEMPLATE.roles}
 ENGINEER_CONTRACT_BY_DELIVERABLE: dict[str, str] = TEMPLATE.engineer_contract_by_deliverable
 # The role that does the pipeline's "produce" stage -- looked up by stage
 # *kind*, not position, so this survives the pipeline growing a second

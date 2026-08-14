@@ -18,7 +18,7 @@ class InvalidModelRefError(ValueError):
 
 
 def _registry_role_for(agent_role: str) -> str:
-    return TEMPLATE.model_ref_for_role[agent_role].removesuffix("-default")
+    return TEMPLATE.roles_by_key[agent_role].model_ref.removesuffix("-default")
 
 
 async def get_profile(session_factory, agent_id: str) -> AgentProfile:

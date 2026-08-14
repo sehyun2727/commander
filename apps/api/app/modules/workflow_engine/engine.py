@@ -618,8 +618,9 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     )
 
                 agent = agents[stage.role_key]
-                model_ref = TEMPLATE.model_ref_for_role[stage.role_key]
-                role_title = TEMPLATE.roles_by_key[stage.role_key].title
+                role_spec = TEMPLATE.roles_by_key[stage.role_key]
+                model_ref = role_spec.model_ref
+                role_title = role_spec.title
                 await self._check_budget(task, stage.role_key)
 
                 if stage.kind == "plan":

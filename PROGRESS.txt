@@ -1,12 +1,12 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 10 — Phase B: Role / Employee 분리
- Overall: 8/45 items · 18%
- Now working on: Phase 0 (0.9 commit + push next)
+ Overall: 16/45 items · 36%
+ Now working on: Phase 2
  Last update: 2026-08-14
 ================================================
 
-PHASE 0 — 진단 가능성 + Sprint 9 잔여 문제          (8/9)
+PHASE 0 — 진단 가능성 + Sprint 9 잔여 문제          (9/9)
 [x] 0.1 PROGRESS.txt 리셋
 [x] 0.2 포트/호스트명 8000 통일 + README 실행 안내
 [x] 0.3 git SHA + Alembic diagnostics
@@ -15,16 +15,16 @@ PHASE 0 — 진단 가능성 + Sprint 9 잔여 문제          (8/9)
 [x] 0.6 dashboard mutation error surfacing (ToastProvider + onError on every mutation hook)
 [x] 0.7 mission cancel UI (api.cancelMission, useCancelMission, confirm-to-cancel button)
 [x] 0.8 cancel_task current_task_id cleanup
-[ ] 0.9 commit + push
+[x] 0.9 commit + push (2cc253e)
 
-PHASE 1 — RoleSpec 정의                             (0/7)
-[ ] 1.1 RoleSpec frozen dataclass
-[ ] 1.2 software_company RoleSpec migration
-[ ] 1.3 canonical Role source
-[ ] 1.4 StageSpec integration
-[ ] 1.5 tools / permissions structure
-[ ] 1.6 RoleSpec tests
-[ ] 1.7 commit + push
+PHASE 1 — RoleSpec 정의                             (6/7)
+[x] 1.1 RoleSpec frozen dataclass (+category/singleton/harness/tools/permissions/default_profile property)
+[x] 1.2 software_company RoleSpec migration (PM/ENGINEER/REVIEWER instances updated)
+[x] 1.3 canonical Role source (removed TEMPLATE.model_ref_for_role / role_contracts / default_profiles duplicate dicts; 5 consumer files + test_template.py repointed to RoleSpec)
+[x] 1.4 StageSpec integration (engine.py derives model_ref/title from TEMPLATE.roles_by_key[stage.role_key], unchanged StageSpec contract)
+[x] 1.5 tools / permissions structure (declared, empty tools=() for now; no real grants yet)
+[x] 1.6 RoleSpec tests (frozen/immutable, singleton semantics, canonical-source-only, default_profile read-only + derived -- 199 passed, 4 skipped)
+[x] 1.7 commit + push
 
 PHASE 2 — Employee schema                           (0/6)
 [ ] 2.1 AgentORM.role -> role_key + migration
