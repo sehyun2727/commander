@@ -13,6 +13,7 @@ import type {
   Report,
   Role,
   Situation,
+  SkillTemplate,
   Starter,
   Task,
   TaskCostSummary,
@@ -31,6 +32,14 @@ export interface ProfileUpdateRequest {
   decision_style?: DecisionStyle;
   custom_instructions?: string;
   model_ref?: string | null;
+  skill_template_key?: string;
+}
+
+export interface HireEmployeeRequest {
+  role_key: string;
+  name: string;
+  model_ref?: string | null;
+  skill_template_key?: string;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -110,9 +119,15 @@ export const api = {
 
   // Employees
   listEmployees: (companyId: string) => request<Agent[]>(`/api/projects/${companyId}/agents`),
+  hireEmployee: (companyId: string, body: HireEmployeeRequest) =>
+    request<Agent>(`/api/projects/${companyId}/agents`, { method: "POST", body: JSON.stringify(body) }),
   getEmployeeProfile: (agentId: string) => request<AgentProfile>(`/api/agents/${agentId}/profile`),
   updateEmployeeProfile: (agentId: string, body: ProfileUpdateRequest) =>
     request<AgentProfile>(`/api/agents/${agentId}/profile`, { method: "PUT", body: JSON.stringify(body) }),
+
+  // Skill Templates (Sprint 11 §6.3) — static, server-owned catalog.
+  listSkillTemplates: (companyId: string) =>
+    request<SkillTemplate[]>(`/api/projects/${companyId}/skill-templates`),
 
   // Missions
   listMissions: (companyId: string) => request<Task[]>(`/api/projects/${companyId}/tasks`),

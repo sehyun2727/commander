@@ -35,6 +35,18 @@ export function roleLabel(roles: { key: string; title: string }[] | undefined, r
   return roles?.find((role) => role.key === roleKey)?.title ?? roleKey;
 }
 
+// Sprint 11 §6.4: the model_registry role ("planner"/"builder"/"reviewer"/…)
+// a Role resolves against, derived from `Role.model_ref` (e.g.
+// "planner-default" -> "planner") instead of a frontend-hardcoded
+// role-key -> registry-role map (Rule #16).
+export function registryRoleFor(
+  roles: { key: string; model_ref: string }[] | undefined,
+  roleKey: string
+): string | undefined {
+  const modelRef = roles?.find((role) => role.key === roleKey)?.model_ref;
+  return modelRef?.replace(/-default$/, "");
+}
+
 const PERSONALITY_LABEL: Record<string, string> = {
   professional: "Professional",
   friendly: "Friendly",

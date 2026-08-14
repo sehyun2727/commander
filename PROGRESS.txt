@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 11 — Build the Company: CTO, Hiring, Employee Configuration
- Overall: 53/70 · 76%
- Now working on: Phase 4 (dashboard hiring UX)
+ Overall: 73/93 · 78%
+ Now working on: Phase 5 (regression, security, documentation)
  Last update: 2026-08-14
 ================================================
 
@@ -102,28 +102,52 @@ PHASE 3 — API and Runtime Integration                (16/16)
          -> hire 2 Engineers -> edit one -> list independence -> mock mission ->
          resolver event) -- test_full_hiring_flow_end_to_end, passing
 [x] 3.15 update PROGRESS.txt
-[ ] 3.16 commit + push Phase 3
+[x] 3.16 commit + push Phase 3 (3f8d3f4)
 
-PHASE 4 — Dashboard Hiring and Configuration UX      (0/19)
-[ ] 4.1 extend current Employees/Organization page
-[ ] 4.2 add "Hire employee" action
-[ ] 4.3 build Role/model/skill selection from API data
-[ ] 4.4 add Employee name input + validation
-[ ] 4.5 show singleton + occupied states
-[ ] 4.6 support multiple Employees under worker roles
-[ ] 4.7 add Employee configuration editing
-[ ] 4.8 wire loading/success/empty/error states
-[ ] 4.9 connect mutation errors to global toast/error system
-[ ] 4.10 invalidate/refetch correct queries after mutation
-[ ] 4.11 prevent duplicate submission
-[ ] 4.12 preserve accessible labels/keyboard/focus handling
-[ ] 4.13 no hardcoded role/model/skill option arrays
-[ ] 4.14 run typecheck
-[ ] 4.15 run production build
-[ ] 4.16 browser verification if tooling exists, else explicitly UNVERIFIED
-[ ] 4.17 record browser verification status honestly
-[ ] 4.18 update PROGRESS.txt
-[ ] 4.19 commit + push Phase 4
+PHASE 4 — Dashboard Hiring and Configuration UX      (19/19)
+[x] 4.1 extend current Employees/Organization page (header now hosts
+        NewEmployeeForm; stale "no Add Employee affordance" comment removed)
+[x] 4.2 add "Hire employee" action (components/NewEmployeeForm.tsx, same
+        inline expand/collapse pattern as NewMissionForm)
+[x] 4.3 build Role/model/skill selection from API data (useRoles/useModels/
+        useSkillTemplates; no static option arrays)
+[x] 4.4 add Employee name input + validation (required, trimmed, submit
+        disabled until non-empty -- mirrors NewMissionForm's title guard)
+[x] 4.5 show singleton + occupied states (occupied singleton Roles stay
+        visible in the select, marked "(already hired)" and disabled,
+        rather than silently disappearing)
+[x] 4.6 support multiple Employees under worker roles (pre-existing page
+        grouping already renders N cards per role; hiring form does not
+        cap worker-role headcount, only disables occupied singletons)
+[x] 4.7 add Employee configuration editing (EmployeeProfile.tsx gained a
+        Skill Template <select>, wired to PUT /profile's skill_template_key)
+[x] 4.8 wire loading/success/empty/error states (page-level loading/empty/
+        error preserved; NewEmployeeForm shows "Hiring…" while pending;
+        EmployeeProfile's existing "Saved." confirmation now also covers
+        skill_template_key)
+[x] 4.9 connect mutation errors to global toast/error system
+        (useHireEmployee follows the same onError -> showToast
+        (mutationErrorMessage(error)) convention as every other mutation)
+[x] 4.10 invalidate/refetch correct queries after mutation (useHireEmployee
+         invalidates employees + timeline; profile update already
+         invalidated employeeProfile + employees)
+[x] 4.11 prevent duplicate submission (submit button disabled while
+         hire.isPending / updateProfile.isPending, matching existing forms)
+[x] 4.12 preserve accessible labels/keyboard/focus handling (every field
+         has a paired <label>; autoFocus on the form's first field)
+[x] 4.13 no hardcoded role/model/skill option arrays -- replaced the
+         Rule #16-risk MODEL_ROLE_FOR_AGENT_ROLE map in EmployeeProfile.tsx
+         with lib/utils.ts's new registryRoleFor(roles, roleKey), derived
+         from the new RoleResponse.model_ref field (backend, Phase 3)
+[x] 4.14 run typecheck -- clean (tsc --noEmit, zero errors)
+[x] 4.15 run production build -- clean, 15 routes unchanged (Next.js 14.2.35)
+[~] 4.16 browser verification -- UNVERIFIED: no browser tool available in
+        this environment (re-confirmed via ToolSearch; same finding as
+        Sprint 10/11 Phase 0 §0.8)
+[x] 4.17 record browser verification status honestly (recorded above and
+         in the Phase 4 report; not claimed as browser-verified)
+[x] 4.18 update PROGRESS.txt
+[x] 4.19 commit + push Phase 4
 
 PHASE 5 — Regression, Security, Documentation        (0/19)
 [ ] 5.1 full backend test suite

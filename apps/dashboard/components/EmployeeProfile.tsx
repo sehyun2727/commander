@@ -4,23 +4,25 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { ErrorState } from "@/components/ErrorState";
-import { useEmployeeProfile, useEmployees, useModels, useRoles, useUpdateEmployeeProfile } from "@/lib/hooks";
+import {
+  useEmployeeProfile,
+  useEmployees,
+  useModels,
+  useRoles,
+  useSkillTemplates,
+  useUpdateEmployeeProfile,
+} from "@/lib/hooks";
 import { DecisionStyle, Personality, WorkingStyle } from "@/lib/types";
-import { decisionStyleLabel, personalityLabel, roleLabel, workingStyleLabel } from "@/lib/utils";
+import { decisionStyleLabel, personalityLabel, registryRoleFor, roleLabel, workingStyleLabel } from "@/lib/utils";
 
 const CUSTOM_INSTRUCTIONS_MAX_LEN = 500;
-
-const MODEL_ROLE_FOR_AGENT_ROLE: Record<string, string> = {
-  pm: "planner",
-  engineer: "builder",
-  reviewer: "reviewer",
-};
 
 export function EmployeeProfile({ companyId, agentId }: { companyId: string; agentId: string }) {
   const { data: employees, isError: employeesError } = useEmployees(companyId);
   const { data: profile, isLoading, isError: profileError } = useEmployeeProfile(agentId);
   const { data: models } = useModels(companyId);
   const { data: roles } = useRoles(companyId);
+  const { data: skillTemplates } = useSkillTemplates(companyId);
   const updateProfile = useUpdateEmployeeProfile(companyId, agentId);
 
   const employee = employees?.find((e) => e.id === agentId);
@@ -30,6 +32,7 @@ export function EmployeeProfile({ companyId, agentId }: { companyId: string; age
   const [decisionStyle, setDecisionStyle] = useState<DecisionStyle>(DecisionStyle.BALANCED);
   const [customInstructions, setCustomInstructions] = useState("");
   const [modelRef, setModelRef] = useState<string>("");
+  const [skillTemplateKey, setSkillTemplateKey] = useState<string>("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -39,6 +42,7 @@ export function EmployeeProfile({ companyId, agentId }: { companyId: string; age
     setDecisionStyle(profile.decision_style);
     setCustomInstructions(profile.custom_instructions);
     setModelRef(profile.model_ref ?? "");
+    setSkillTemplateKey(profile.skill_template_key);
   }, [profile]);
 
   if (isLoading) {
@@ -68,7 +72,7 @@ export function EmployeeProfile({ companyId, agentId }: { companyId: string; age
     );
   }
 
-  const modelEntry = models?.find((m) => m.role === MODEL_ROLE_FOR_AGENT_ROLE[employee.role]);
+  const modelEntry = models?.find((m) => m.role === registryRoleFor(roles, employee.role));
   const modelOptions = modelEntry?.options ?? [];
   const effectiveModel = profile.model_ref ?? modelEntry?.current_model;
 
@@ -81,6 +85,7 @@ export function EmployeeProfile({ companyId, agentId }: { companyId: string; age
       decision_style: decisionStyle,
       custom_instructions: customInstructions,
       model_ref: modelRef || null,
+      skill_template_key: skillTemplateKey,
     });
     setSaved(true);
   }
@@ -143,6 +148,21 @@ export function EmployeeProfile({ companyId, agentId }: { companyId: string; age
             {Object.values(DecisionStyle).map((value) => (
               <option key={value} value={value}>
                 {decisionStyleLabel(value)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-faint">Skill template</label>
+          <select
+            value={skillTemplateKey}
+            onChange={(e) => setSkillTemplateKey(e.target.value)}
+            className="w-full rounded-lg border border-base-border bg-base-raised px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+          >
+            {(skillTemplates ?? []).map((template) => (
+              <option key={template.key} value={template.key}>
+                {template.title}
               </option>
             ))}
           </select>

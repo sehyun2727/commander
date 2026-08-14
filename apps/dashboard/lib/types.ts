@@ -60,6 +60,16 @@ export interface Role {
   category: "leadership" | "worker";
   singleton: boolean;
   description: string;
+  // Sprint 11 §6.4: the model_registry role this Role resolves against
+  // (e.g. "planner-default") -- lets the hiring/config UI derive model
+  // options without a hardcoded role->registry-role map (Rule #16).
+  model_ref: string;
+}
+
+export interface SkillTemplate {
+  key: string;
+  title: string;
+  description: string;
 }
 
 export interface CodeStats {

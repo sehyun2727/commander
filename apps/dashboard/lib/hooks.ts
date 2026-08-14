@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
-import type { ProfileUpdateRequest } from "./api";
+import type { HireEmployeeRequest, ProfileUpdateRequest } from "./api";
 import { mutationErrorMessage, useToast } from "@/components/ToastProvider";
 
 export const keys = {
@@ -25,6 +25,7 @@ export const keys = {
   situation: (companyId: string) => ["situation", companyId] as const,
   starters: (companyId: string) => ["starters", companyId] as const,
   roles: (companyId: string) => ["roles", companyId] as const,
+  skillTemplates: (companyId: string) => ["skillTemplates", companyId] as const,
   workspaceTree: (companyId: string, ref: string) => ["workspaceTree", companyId, ref] as const,
   workspaceFile: (companyId: string, path: string, ref: string) =>
     ["workspaceFile", companyId, path, ref] as const,
@@ -65,6 +66,25 @@ export function useEmployees(companyId: string) {
 // §18) -- no polling needed, unlike Employees which change state constantly.
 export function useRoles(companyId: string) {
   return useQuery({ queryKey: keys.roles(companyId), queryFn: () => api.listRoles(companyId) });
+}
+
+// Skill templates are a static, server-owned catalog (Sprint 11 §6.3) --
+// no polling needed, same rationale as useRoles.
+export function useSkillTemplates(companyId: string) {
+  return useQuery({ queryKey: keys.skillTemplates(companyId), queryFn: () => api.listSkillTemplates(companyId) });
+}
+
+export function useHireEmployee(companyId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: (body: HireEmployeeRequest) => api.hireEmployee(companyId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.employees(companyId) });
+      qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
 }
 
 export function useMissions(companyId: string) {
