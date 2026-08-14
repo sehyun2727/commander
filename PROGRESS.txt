@@ -1,65 +1,124 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 10 — Phase B: Role / Employee 분리
- Overall: 45/45 items · 100%
- Now working on: Sprint 10 complete
+ Sprint: 11 — Build the Company: CTO, Hiring, Employee Configuration
+ Overall: 4/70 · 6%
+ Now working on: Phase 0 close-out, starting Phase 1
  Last update: 2026-08-14
 ================================================
 
-PHASE 0 — 진단 가능성 + Sprint 9 잔여 문제          (9/9)
-[x] 0.1 PROGRESS.txt 리셋
-[x] 0.2 포트/호스트명 8000 통일 + README 실행 안내
-[x] 0.3 git SHA + Alembic diagnostics
-[x] 0.4 global exception handler
-[x] 0.5 invariant #18
-[x] 0.6 dashboard mutation error surfacing (ToastProvider + onError on every mutation hook)
-[x] 0.7 mission cancel UI (api.cancelMission, useCancelMission, confirm-to-cancel button)
-[x] 0.8 cancel_task current_task_id cleanup
-[x] 0.9 commit + push (2cc253e)
+PHASE 0 — Baseline and Sprint State                 (9/10)
+[x] 0.1 verify local HEAD == origin/master == 29fd400
+[x] 0.2 confirm working tree clean (only untracked docs/prompts/sprint-11.md)
+[x] 0.3 read required repo docs/code (template, resolver, AgentORM, agent_runtime
+        service/routes/schemas, projects/service, model_registry, errors.py,
+        contracts.py, main.py exception handler, alembic migration pattern)
+[x] 0.4 baseline backend suite: 218 passed / 4 skipped (matches Sprint 10 close)
+[x] 0.5 dashboard typecheck: clean
+[x] 0.6 dashboard build: clean, 15 routes
+[x] 0.7 alembic head confirmed: 3c792f42c404 (head), current == head on dev DB
+[~] 0.8 audit Sprint 10 browser-UNVERIFIED items: carried forward -- no browser
+        tool available in this environment (confirmed via ToolSearch in Sprint 10);
+        Employees UI browser verification remains UNVERIFIED, same for Sprint 11
+[x] 0.9 PROGRESS.txt replaced with Sprint 11 live checklist (this file)
+[ ] 0.10 commit + push Phase 0 checkpoint
 
-PHASE 1 — RoleSpec 정의                             (7/7)
-[x] 1.1 RoleSpec frozen dataclass (+category/singleton/harness/tools/permissions/default_profile property)
-[x] 1.2 software_company RoleSpec migration (PM/ENGINEER/REVIEWER instances updated)
-[x] 1.3 canonical Role source (removed TEMPLATE.model_ref_for_role / role_contracts / default_profiles duplicate dicts; 5 consumer files + test_template.py repointed to RoleSpec)
-[x] 1.4 StageSpec integration (engine.py derives model_ref/title from TEMPLATE.roles_by_key[stage.role_key], unchanged StageSpec contract)
-[x] 1.5 tools / permissions structure (declared, empty tools=() for now; no real grants yet)
-[x] 1.6 RoleSpec tests (frozen/immutable, singleton semantics, canonical-source-only, default_profile read-only + derived -- 199 passed, 4 skipped)
-[x] 1.7 commit + push
+PHASE 1 — CTO and Canonical Configuration Data       (0/12)
+[ ] 1.1 add CTO RoleSpec (key=cto, leadership, singleton=True)
+[ ] 1.2 CTO title/category/singleton/description/contract/permissions/model default
+[ ] 1.3 verify RoleSpec immutability (frozen dataclass, existing test pattern)
+[ ] 1.4 confirm CTO surfaces via role-derived APIs/UI with zero hardcoded branches
+[ ] 1.5 add canonical typed skill-template registry (new, minimal)
+[ ] 1.6 skill metadata immutable + server-owned
+[ ] 1.7 model choices sourced from existing model_registry (no duplication)
+[ ] 1.8 safe read APIs/schemas for model + skill options
+[ ] 1.9 tests: CTO metadata, singleton classification, RoleSpec canonicality,
+        skill-template immutability, safe registry serialization, no dup sources
+[ ] 1.10 run targeted + full relevant tests
+[ ] 1.11 update PROGRESS.txt
+[ ] 1.12 commit + push Phase 1
 
-PHASE 2 — Employee schema                           (6/6)
-[x] 2.1 AgentORM.role -> role_key + migration (91919bd41ac3, batch_alter_table; up/down/up verified against scratch SQLite)
-[x] 2.2 multi-employee query paths (_agents_for returns dict[str, list[AgentORM]] grouped by role_key; call site keeps [0] pending Phase 3 resolver)
-[x] 2.3 singleton enforcement (create_employee + SingletonRoleViolation; service-layer check, race-condition reasoning in DECISIONS.md #167)
-[x] 2.4 RoleSpec-based founding roster (verified -- create_department already RoleSpec-driven since Phase 1)
-[x] 2.5 schema / singleton / multi-worker tests (tests/test_employee_singleton.py, 5 new tests)
-[x] 2.6 commit + push
+PHASE 2 — Persistence and Atomic Hiring Domain       (0/17)
+[ ] 2.1 determine smallest schema change for per-Employee model/skill config
+[ ] 2.2 add Alembic migration if required
+[ ] 2.3 backfill existing Employee rows safely
+[ ] 2.4 preserve existing role_key/runtime state semantics
+[ ] 2.5 implement authoritative hire_employee/create_employee behavior
+[ ] 2.6 implement atomic singleton protection (concurrency-safe, DB-backed)
+[ ] 2.7 validate role/model/skill/ownership/name
+[ ] 2.8 define domain errors + status mapping (409 for singleton conflict)
+[ ] 2.9 emit hiring event after successful persistence
+[ ] 2.10 implement allowed Employee configuration updates
+[ ] 2.11 reject role transfer through generic update
+[ ] 2.12 protect active/busy Employee invariants
+[ ] 2.13 tests: CTO hire, 2nd CTO conflict, 2nd PM/Reviewer conflict, multi-Engineer
+         hire, invalid role/model/skill, cross-company access, rollback/no-partial-row,
+         CONCURRENT singleton creation, independent Employee config, existing-row
+         backfill, fresh-db migration
+[ ] 2.14 run migration + domain tests
+[ ] 2.15 update PROGRESS.txt
+[ ] 2.16 record concurrency/schema decisions in DECISIONS.md
+[ ] 2.17 commit + push Phase 2
 
-PHASE 3 — Role -> Employee resolution               (6/6)
-[x] 3.1 resolver (employee_resolution.resolve_employee_for_role -- pure function, idle-first then longest-since-assigned)
-[x] 3.2 engine integration (_resolve_agent replaces agents[stage.role_key][0]; persists last_assigned_at)
-[x] 3.3 resolution event (EventType.AGENT_RESOLVED / AgentResolvedPayload{role_key,agent_id,rule}; TS schemas regenerated)
-[x] 3.4 test multi-employee template (tests use create_employee to add a 2nd Engineer to the existing template -- no separate CompanyTemplate needed, singleton=False already supports it)
-[x] 3.5 deterministic selection tests (tests/test_employee_resolution.py: idle-first, assignment-age, no-idle fallback, tie-break, determinism, event emission -- 7 new tests)
-[x] 3.6 commit + push
+PHASE 3 — API and Runtime Integration                (0/16)
+[ ] 3.1 add/extend company/project-scoped employee endpoints
+[ ] 3.2 reuse authoritative service (no route-level business logic)
+[ ] 3.3 apply existing auth + company ownership checks
+[ ] 3.4 return stable public schemas
+[ ] 3.5 keep Role endpoint read-only
+[ ] 3.6 expose safe role/model/skill option metadata
+[ ] 3.7 every new mutation returns structured errors
+[ ] 3.8 Employee listing includes config needed by UI
+[ ] 3.9 confirm hired Employees participate in existing resolver
+[ ] 3.10 verify deterministic selection with multiple hired Engineers
+[ ] 3.11 verify singleton leadership roles resolve correctly
+[ ] 3.12 verify no route bypasses singleton/registry validation
+[ ] 3.13 add API/integration tests
+[ ] 3.14 run API-level flow (create company -> roles -> hire CTO -> reject 2nd CTO
+         -> hire 2 Engineers -> edit one -> list independence -> mock mission ->
+         resolver event)
+[ ] 3.15 update PROGRESS.txt
+[ ] 3.16 commit + push Phase 3
 
-PHASE 4 — #16 enforcement + UI                      (6/7)
-[x] 4.1 engine / prompt hardcoding removal (audited via AST guard -- zero violations in app/ outside app/templates/; prompt_builder's ENGINEER_ROLE_KEY check confirmed stage-kind-derived, not a literal)
-[x] 4.2 frontend role presentation data-driven (Agent.role: string not a hardcoded union; lib/utils.roleLabel reads Role.title from the new Roles API instead of a static map; Employees page + EmployeeCard + EmployeeProfile updated)
-[x] 4.3 automated behavioral hardcoding guard (tests/test_role_hardcoding_guard.py -- AST walk, not substring search; flags role-key ==/!=/in comparisons, position-based roles[N] indexing, hardcoded-key subscripts; role-key set read live from TEMPLATE; self-test proves the guard actually fires -- 5 new tests)
-[x] 4.4 Roles API (GET /api/projects/{id}/roles; RoleSpec.description field added since intro is first-person onboarding voice, not a position summary; exposes key/title/category/singleton/description only -- 2 new tests)
-[x] 4.5 Employees grouping (app/company/[id]/employees/page.tsx groups by Role.category via useRoles(); Leadership/Engineering section headings; no Add Employee UI this sprint per brief §19)
-[x] 4.6 typecheck + build (pnpm typecheck clean; pnpm build succeeds, all routes compile)
-[x] 4.7 commit + push (f2105cd, pushed to origin/master)
+PHASE 4 — Dashboard Hiring and Configuration UX      (0/19)
+[ ] 4.1 extend current Employees/Organization page
+[ ] 4.2 add "Hire employee" action
+[ ] 4.3 build Role/model/skill selection from API data
+[ ] 4.4 add Employee name input + validation
+[ ] 4.5 show singleton + occupied states
+[ ] 4.6 support multiple Employees under worker roles
+[ ] 4.7 add Employee configuration editing
+[ ] 4.8 wire loading/success/empty/error states
+[ ] 4.9 connect mutation errors to global toast/error system
+[ ] 4.10 invalidate/refetch correct queries after mutation
+[ ] 4.11 prevent duplicate submission
+[ ] 4.12 preserve accessible labels/keyboard/focus handling
+[ ] 4.13 no hardcoded role/model/skill option arrays
+[ ] 4.14 run typecheck
+[ ] 4.15 run production build
+[ ] 4.16 browser verification if tooling exists, else explicitly UNVERIFIED
+[ ] 4.17 record browser verification status honestly
+[ ] 4.18 update PROGRESS.txt
+[ ] 4.19 commit + push Phase 4
 
-PHASE 5 — verification / docs / report              (0/10)
-[x] 5.1 make test (pytest 218 passed/4 skipped; dashboard typecheck clean; dashboard build succeeds, 15 routes)
-[x] 5.2 existing tests verification (baseline 157 @ V1 -> 194 @ Sprint9 close -> 218 now; net +24 this sprint across Phases 1-4, zero regressions)
-[x] 5.3 classify modified existing tests (6 pre-existing files touched: 5 are mechanical AgentORM.role->role_key fixture renames tracking the Phase 2 migration, zero assertion/behavior change; test_reliability.py additionally carries Phase 0.8's current_task_id-cleanup assertion, already-shipped Sprint 9 followup work, not new this sprint)
-[~] 5.4 company -> mission completion: API-level E2E only (no browser tool in this environment) -- create -> assign -> in_progress -> in_review -> pending_approval -> approve -> completed, with real git commit/branch; NOT visually browser-verified
-[~] 5.5 employees -> approval -> cancel: API-level E2E only (same caveat) -- roles/founding-roster shapes match new frontend contract; in-flight cancel frees the Engineer and clears current_task_id (0.8 regression check); NOT visually browser-verified
-[x] 5.6 CLAUDE.md (3504944 -- reconciled pre-drafted V1.1 baseline: roadmap+§2.3 marked shipped for structural split, CTO/hiring flagged pending Sprint 11; also folded in the long-pending Sprint 9 restructure diff)
-[x] 5.7 ARCHITECTURE.md (c856bb7 -- §1.2 + §6.1 module table synced to what Sprint 10 actually shipped)
-[x] 5.8 UX_SPEC.md (a194092 -- §5.4 marks the Role.category grouping shipped, CTO/split/Add-Employee still Sprint 11)
-[x] 5.9 DECISIONS.md (5fedb78 -- Phase 5 entries #174-177: assign-vs-create non-bug, API-level verification scope, CLAUDE.md fold-in rationale, final test tally)
-[x] 5.10 final commit + push + remote HEAD
+PHASE 5 — Regression, Security, Documentation        (0/19)
+[ ] 5.1 full backend test suite
+[ ] 5.2 dashboard typecheck
+[ ] 5.3 dashboard production build
+[ ] 5.4 mock E2E with zero provider keys
+[ ] 5.5 re-run hiring API integration flow
+[ ] 5.6 verify migration from Sprint 10 revision
+[ ] 5.7 verify fresh database bootstrap
+[ ] 5.8 review git diff for scope leakage
+[ ] 5.9 audit new routes for auth/ownership
+[ ] 5.10 audit API/event output for secrets/unsafe skill details
+[ ] 5.11 audit role/model/skill hardcoding (AST guard green)
+[ ] 5.12 audit WorkflowEngine for unrelated growth
+[ ] 5.13 audit mutation hooks for visible error handling
+[ ] 5.14 classify verification (unit/API/integration/migration/typecheck/build/
+         browser/mock E2E/real LLM E2E)
+[ ] 5.15 update CLAUDE.md, ARCHITECTURE.md, DECISIONS.md, UX_SPEC.md, README.md(if needed)
+[ ] 5.16 record deliberate Sprint 12 deferrals
+[ ] 5.17 PROGRESS.txt marked complete only after verification+docs done
+[ ] 5.18 commit + push final documentation and progress state
+[ ] 5.19 confirm local HEAD == origin/master
 ================================================
