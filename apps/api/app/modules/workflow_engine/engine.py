@@ -45,6 +45,7 @@ from ..model_registry import RECOMMENDED_PROVIDER
 from ..provider_gateway import build_gateway
 from ..sandbox import detect_checks, get_execution_enabled
 from . import parsing
+from .employee_resolution import resolve_employee_for_role
 
 logger = logging.getLogger("commander.workflow_engine")
 
@@ -317,6 +318,35 @@ class CommanderWorkflowEngine(WorkflowEngine):
         for row in rows:
             by_role.setdefault(row.role_key, []).append(row)
         return by_role
+
+    async def _resolve_agent(self, project_id: str, agents: dict[str, list[AgentORM]], role_key: str) -> AgentORM:
+        """Sprint 10 §12: the pipeline's only call site for *which* Employee
+        of `role_key` runs the upcoming stage -- selection policy itself
+        lives in `employee_resolution.resolve_employee_for_role`, kept
+        deterministic and Event-observable (§13, §14) so Sprint 12 can swap
+        the policy without touching this call site."""
+        selected, rule = resolve_employee_for_role(agents[role_key])
+
+        now = datetime.now(timezone.utc)
+        async with self._session_factory() as session:
+            row = await session.get(AgentORM, selected.id)
+            row.last_assigned_at = now
+            await session.commit()
+        selected.last_assigned_at = now
+
+        rule_reason = (
+            "was idle" if rule == "idle" else "no idle Employee was available; fell back across the whole Role"
+        )
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.AGENT_RESOLVED,
+                project_id=project_id,
+                actor=SYSTEM_ACTOR,
+                payload={"role_key": role_key, "agent_id": selected.id, "rule": rule},
+                reason=f"Resolved {role_key} to {selected.name} ({rule_reason}, longest since assigned)",
+            )
+        )
+        return selected
 
     async def _stream_say(
         self, project_id: str, agent: AgentORM, task_id: str, gateway: ProviderGateway, model_ref: str, **opts
@@ -626,12 +656,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                         task_id, TaskState.IN_REVIEW, "Handing off for review", SYSTEM_ACTOR
                     )
 
-                # Sprint 10 Phase 2 stops assuming one Employee per role at
-                # the query layer (_agents_for); this sprint's founding
-                # roster still only ever has one Employee per role, so [0]
-                # is behaviorally identical until Phase 3's resolver
-                # replaces this line with a real selection policy.
-                agent = agents[stage.role_key][0]
+                agent = await self._resolve_agent(project_id, agents, stage.role_key)
                 role_spec = TEMPLATE.roles_by_key[stage.role_key]
                 model_ref = role_spec.model_ref
                 role_title = role_spec.title

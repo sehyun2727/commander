@@ -120,6 +120,12 @@ class AgentProfileUpdatedPayload(Payload):
     changed_fields: list[str]
 
 
+class AgentResolvedPayload(Payload):
+    role_key: str
+    agent_id: str
+    rule: Literal["idle", "no_idle_fallback"]
+
+
 # --- Workspace (Sprint 5) --------------------------------------------------------
 
 class WorkspaceInitializedPayload(Payload):
@@ -277,6 +283,7 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.AGENT_STATE_CHANGED: AgentStateChangedPayload,
     EventType.AGENT_PROFILE_UPDATED: AgentProfileUpdatedPayload,
     EventType.CODING_STARTED: CodingStartedPayload,
+    EventType.AGENT_RESOLVED: AgentResolvedPayload,
     EventType.WORKSPACE_INITIALIZED: WorkspaceInitializedPayload,
     EventType.CODE_CHANGED: CodeChangedPayload,
     EventType.BRANCH_MERGED: BranchMergedPayload,

@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 10 — Phase B: Role / Employee 분리
- Overall: 22/45 items · 49%
- Now working on: Phase 3
+ Overall: 28/45 items · 62%
+ Now working on: Phase 4
  Last update: 2026-08-14
 ================================================
 
@@ -34,13 +34,13 @@ PHASE 2 — Employee schema                           (6/6)
 [x] 2.5 schema / singleton / multi-worker tests (tests/test_employee_singleton.py, 5 new tests)
 [x] 2.6 commit + push
 
-PHASE 3 — Role -> Employee resolution               (0/6)
-[ ] 3.1 resolver
-[ ] 3.2 engine integration
-[ ] 3.3 resolution event
-[ ] 3.4 test multi-employee template
-[ ] 3.5 deterministic selection tests
-[ ] 3.6 commit + push
+PHASE 3 — Role -> Employee resolution               (6/6)
+[x] 3.1 resolver (employee_resolution.resolve_employee_for_role -- pure function, idle-first then longest-since-assigned)
+[x] 3.2 engine integration (_resolve_agent replaces agents[stage.role_key][0]; persists last_assigned_at)
+[x] 3.3 resolution event (EventType.AGENT_RESOLVED / AgentResolvedPayload{role_key,agent_id,rule}; TS schemas regenerated)
+[x] 3.4 test multi-employee template (tests use create_employee to add a 2nd Engineer to the existing template -- no separate CompanyTemplate needed, singleton=False already supports it)
+[x] 3.5 deterministic selection tests (tests/test_employee_resolution.py: idle-first, assignment-age, no-idle fallback, tie-break, determinism, event emission -- 7 new tests)
+[x] 3.6 commit + push
 
 PHASE 4 — #16 enforcement + UI                      (0/7)
 [ ] 4.1 engine / prompt hardcoding removal

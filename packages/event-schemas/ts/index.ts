@@ -21,6 +21,7 @@ export enum EventType {
   AGENT_STATE_CHANGED = "agent.state_changed",
   AGENT_PROFILE_UPDATED = "agent.profile_updated",
   CODING_STARTED = "agent.coding_started",
+  AGENT_RESOLVED = "agent.resolved",
   WORKSPACE_INITIALIZED = "workspace.initialized",
   CODE_CHANGED = "code.changed",
   BRANCH_MERGED = "branch.merged",
@@ -213,6 +214,12 @@ export interface CodingStartedPayload {
   task_id: string;
 }
 
+export interface AgentResolvedPayload {
+  role_key: string;
+  agent_id: string;
+  rule: "idle" | "no_idle_fallback";
+}
+
 export interface WorkspaceInitializedPayload {
 }
 
@@ -351,6 +358,7 @@ export interface EventPayloadMap {
   "agent.state_changed": AgentStateChangedPayload;
   "agent.profile_updated": AgentProfileUpdatedPayload;
   "agent.coding_started": CodingStartedPayload;
+  "agent.resolved": AgentResolvedPayload;
   "workspace.initialized": WorkspaceInitializedPayload;
   "code.changed": CodeChangedPayload;
   "branch.merged": BranchMergedPayload;

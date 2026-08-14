@@ -2184,3 +2184,58 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     worker Employee) with a comment marking it for replacement by
     Phase 3's `resolve_employee_for_role`. Full suite: 204 passed, 4
     skipped (199/4 after Phase 1, plus this phase's 5 new tests).
+
+### Phase 3 — Role -> Employee resolution
+
+168. **`resolve_employee_for_role` lives in a new
+    `workflow_engine/employee_resolution.py`, as a pure function over a
+    list of `AgentORM`, not a method on the engine** — brief §12 requires
+    the selection *rule* to live in exactly one place so Sprint 12 can
+    swap it for the PM's explicit assignment without touching engine
+    call sites. Keeping it a free function with no DB/event-bus
+    dependency makes the rule itself trivially unit-testable (5 of the 7
+    new tests in `tests/test_employee_resolution.py` construct
+    `AgentORM` instances directly, no `harness` fixture needed) while
+    the engine's new `_resolve_agent` wrapper method owns the two side
+    effects the pure rule can't: persisting `last_assigned_at` and
+    publishing `AGENT_RESOLVED`. §12.1's fixed rule for this sprint --
+    idle Employees first, then whoever has gone longest without being
+    assigned, falling back to the whole Role if nobody's idle -- reduces
+    to `min()` over a tie-break key once a "never assigned" Employee is
+    defined as waiting longer than any real timestamp.
+    169. **A new nullable `AgentORM.last_assigned_at` column, set by the
+    resolver itself, not derived from `current_task_id`** — §13 requires
+    a deterministic tie-break field, and no existing column answers "when
+    was this Employee last picked": `current_task_id` is cleared back to
+    `None` the moment a Mission finishes, so it can't be read after the
+    fact, and repurposing it would conflate "currently busy" with "was
+    once chosen." Added via a second pure-rename-shaped migration
+    (`3c792f42c404`, nullable `add_column`/`drop_column` via
+    `batch_alter_table`, chained after Phase 2's `role_key` rename;
+    verified upgrade -> downgrade -> upgrade against a scratch SQLite DB
+    the same way as Phase 2's migration). NULL means "never resolved by
+    this selection layer" and deliberately sorts as the oldest possible
+    value, so every pre-Sprint-10 Employee is eligible first on upgrade
+    rather than being starved by a synthetic non-NULL default. The
+    tie-break tuple is `(has_been_assigned, last_assigned_at or
+    created_at, created_at, id)` rather than comparing against a
+    synthetic `datetime.min` sentinel -- SQLite returns naive datetimes
+    for `DateTime(timezone=True)` columns (verified empirically) while
+    Postgres returns aware ones, so a hand-built sentinel would need two
+    different tz-handling branches to compare safely against both;
+    comparing only real, same-column values already sidesteps the whole
+    issue. §14's observability requirement (role, who, when, why) is met
+    without adding a `resolved_at` payload field: `Event.created_at` is
+    already the "when," and `Event.reason` carries the "why" in prose
+    (e.g. `"Resolved engineer to Priya Shah (was idle, longest since
+    assigned)"`); the payload itself (`role_key`, `agent_id`, `rule:
+    "idle" | "no_idle_fallback"`) keeps just the two machine-readable
+    facts a future UI would filter/group on. No dedicated "test-only
+    multi-employee template" (brief item 3.4) was built as a second
+    `CompanyTemplate` -- Engineer was already `singleton=False` since
+    Phase 1, so `create_employee(session_factory, project_id,
+    "engineer")` against the *existing* `software_company` template is
+    sufficient to produce a real multi-Employee Role for tests; a second
+    template would duplicate Sprint 10's actual template shape for no
+    behavioral gain (CLAUDE.md §16.3). Full suite: 211 passed, 4 skipped
+    (204/4 after Phase 2, plus this phase's 7 new tests).

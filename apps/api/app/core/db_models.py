@@ -84,6 +84,12 @@ class AgentORM(Base):
     state: Mapped[str] = mapped_column(String, default="idle")
     current_task_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    # Sprint 10 Phase 3 §13: the resolver's "longest since assigned"
+    # tie-break needs a per-Employee timestamp that no existing column
+    # captures -- `current_task_id` is cleared on completion, so it can't
+    # answer "when was this Employee last picked". Set by the resolver
+    # itself each time it selects this Employee for a pipeline stage.
+    last_assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TaskORM(Base):
