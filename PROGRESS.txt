@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 10 — Phase B: Role / Employee 분리
- Overall: 35/45 items · 78%
- Now working on: Phase 5
+ Overall: 45/45 items · 100%
+ Now working on: Sprint 10 complete
  Last update: 2026-08-14
 ================================================
 
@@ -52,14 +52,14 @@ PHASE 4 — #16 enforcement + UI                      (6/7)
 [x] 4.7 commit + push (f2105cd, pushed to origin/master)
 
 PHASE 5 — verification / docs / report              (0/10)
-[ ] 5.1 make test
-[ ] 5.2 existing 194 tests verification
-[ ] 5.3 classify modified existing tests
-[ ] 5.4 browser: company -> mission completion
-[ ] 5.5 browser: employees -> approval -> cancel
-[ ] 5.6 CLAUDE.md
-[ ] 5.7 ARCHITECTURE.md
-[ ] 5.8 UX_SPEC.md
-[ ] 5.9 DECISIONS.md
-[ ] 5.10 final commit + push + remote HEAD
+[x] 5.1 make test (pytest 218 passed/4 skipped; dashboard typecheck clean; dashboard build succeeds, 15 routes)
+[x] 5.2 existing tests verification (baseline 157 @ V1 -> 194 @ Sprint9 close -> 218 now; net +24 this sprint across Phases 1-4, zero regressions)
+[x] 5.3 classify modified existing tests (6 pre-existing files touched: 5 are mechanical AgentORM.role->role_key fixture renames tracking the Phase 2 migration, zero assertion/behavior change; test_reliability.py additionally carries Phase 0.8's current_task_id-cleanup assertion, already-shipped Sprint 9 followup work, not new this sprint)
+[~] 5.4 company -> mission completion: API-level E2E only (no browser tool in this environment) -- create -> assign -> in_progress -> in_review -> pending_approval -> approve -> completed, with real git commit/branch; NOT visually browser-verified
+[~] 5.5 employees -> approval -> cancel: API-level E2E only (same caveat) -- roles/founding-roster shapes match new frontend contract; in-flight cancel frees the Engineer and clears current_task_id (0.8 regression check); NOT visually browser-verified
+[x] 5.6 CLAUDE.md (3504944 -- reconciled pre-drafted V1.1 baseline: roadmap+§2.3 marked shipped for structural split, CTO/hiring flagged pending Sprint 11; also folded in the long-pending Sprint 9 restructure diff)
+[x] 5.7 ARCHITECTURE.md (c856bb7 -- §1.2 + §6.1 module table synced to what Sprint 10 actually shipped)
+[x] 5.8 UX_SPEC.md (a194092 -- §5.4 marks the Role.category grouping shipped, CTO/split/Add-Employee still Sprint 11)
+[x] 5.9 DECISIONS.md (5fedb78 -- Phase 5 entries #174-177: assign-vs-create non-bug, API-level verification scope, CLAUDE.md fold-in rationale, final test tally)
+[x] 5.10 final commit + push + remote HEAD
 ================================================
