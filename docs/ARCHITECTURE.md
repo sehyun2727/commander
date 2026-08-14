@@ -55,9 +55,21 @@ Rendering the org as a single tree produces a contradiction, because leadership 
 
 The PM is the organization's representative to the CEO in both phases.
 
-### 1.2 Role vs Employee  *[V1.1 — not built]*
+### 1.2 Role vs Employee  *[Sprint 10 ✅ structural split; hiring flow — Sprint 11]*
 
 This separation is the largest structural change in V1.1.
+
+Sprint 10 shipped: `RoleSpec` as a frozen, template-owned dataclass
+(`role_key`, `title`, `category`, `singleton`, `description`, `default_profile`);
+`AgentORM.role_key` replacing the old `role` column; singleton enforcement
+at the service layer (`SingletonRoleViolation`); idle-first Role → Employee
+resolution (`employee_resolution.resolve_employee_for_role`) with an
+`AGENT_RESOLVED` event; a read-only Roles API
+(`GET /api/projects/{id}/roles`); and the Rule #16 AST guard
+(`tests/test_role_hardcoding_guard.py`). `tools`/`permissions` exist on
+`RoleSpec` as declared, empty fields (`tools=()`) — no real grants are
+wired yet. Still pending: the CTO role, any role beyond PM/Engineer/Reviewer,
+and the CEO-facing "Add Employee" flow below.
 
 ```
 Template
@@ -284,8 +296,8 @@ Selective recall is mandatory: injecting the entire history into every prompt wo
 | `projects` | Company CRUD. Founding auto-creates a Department with 3 Employees (PM / Engineer / Reviewer) from the template, posts each intro as a conversation event, serves starter Missions. | ✅ |
 | `tasks` | Mission CRUD, assignment, Meeting messages, `deliverable_type: "code" \| "document"`. Assignment triggers the workflow. Serves `GET /tasks/{id}/diff`. | ✅ |
 | `workflow_engine` | The brain. Iterates `TEMPLATE.pipeline` (plan → produce → review for the real template) as background asyncio tasks, dispatching per-stage by `kind` (§4.1). Parses FILE blocks, commits to the mission branch, runs matched `CheckSpec`s through `SandboxRunner`, hands the Reviewer a Change Summary + real diff + checks summary. Approve → merge; reject → branch preserved; request_changes → resumes at the first `produce` stage index; merge conflict → `blocked` with a plain-language reason. Orphan recovery, cancel, and a per-mission budget guard run around it (Rule #13). | ✅ Template-driven stage sequence, `TaskSnapshot`-based (Sprint 9) |
-| `agent_runtime` | Employee state + validated transitions. Founds Employees with role-keyed defaults. | ⚠️ **Agent ≡ role; no Role/Employee split** — Sprints 10–11 |
-| `templates` | Static internal data file (`app/templates/software_company.py`). Single source of the founding trio, `TEMPLATE.pipeline` stage sequence (§4.1), role contracts, founding profile defaults, onboarding data, `CheckSpec`s. | ⚠️ **Covers roles+workflow only; no tool registry, approval flow, or template registry** — Sprints 10–11, 19 |
+| `agent_runtime` | Employee state + validated transitions. Founds Employees with role-keyed defaults (`AgentORM.role_key`). Idle-first Role → Employee resolution with an `AGENT_RESOLVED` event. | ✅ Role/Employee split — Sprint 10; CTO/multi-role expansion — Sprint 11 |
+| `templates` | Static internal data file (`app/templates/software_company.py`). Single source of the founding trio, `TEMPLATE.pipeline` stage sequence (§4.1), `RoleSpec` (contract/tools/permissions/category/singleton/description/default_profile), founding profile defaults, onboarding data, `CheckSpec`s. | ⚠️ **`tools`/`permissions` declared but empty (no real grants); no approval-flow or template registry** — Sprints 11, 19 |
 | `agent_profiles` | CEO-editable personality / working style / decision style / custom instructions / per-Employee model override, persisted as JSON on `AgentORM.profile`. | ✅ |
 | `prompt_builder` | Pure function: profile + role → system prompt. Role contract appended **last**, so no custom instruction can suppress the Reviewer's trailing `**Verdict:**`. | ✅ |
 | `provider_gateway` | Sole path to AI. `MockProvider` (default, zero-key) + `AnthropicProvider` (streaming, retry-with-backoff). Three-tier model resolution: Employee override > CEO per-role override > registry default. | ✅ |
@@ -302,7 +314,8 @@ Selective recall is mandatory: injecting the entire history into every prompt wo
 | `core/db` + Alembic | Postgres default (Docker Compose), SQLite for tests. Schema owned by Alembic. | ✅ |
 | `core/boot_checks` | Fail-fast startup validation before `init_db()`. | ✅ |
 | `auth` | Local email+password accounts. `IdentityProvider` port + `LocalIdentityProvider`; bcrypt (cost 12) password hashing, no plaintext column anywhere; HttpOnly session cookies, SHA-256 token hash at rest, sliding 7-day expiry / 30-day max age; `register`/`login`/`logout`/`me` routes; `get_current_user` dependency applied to every non-health/non-auth router. | ✅ Sprint 9 |
-| `roles`, `employees`, `specifications`, `memory`, `widgets` | — | 🔲 **Do not exist** — Sprints 10–18 |
+| Roles API | `GET /api/projects/{id}/roles` — read-only, template-owned Role data (`key`/`title`/`category`/`singleton`/`description`); no write route, Role is not CEO-owned. Lives in `projects` module, not a standalone `roles` module. | ✅ Sprint 10 |
+| `specifications`, `memory`, `widgets` | — | 🔲 **Do not exist** — Sprints 12–18 |
 
 ### 6.2 Lifecycles
 
