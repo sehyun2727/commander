@@ -2318,3 +2318,57 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     pre-existing axis for per-function AI model overrides, unrelated to
     `RoleSpec.key`), not an organizational Role identity, so it's outside
     this phase's scope. `pnpm typecheck` and `pnpm build` both pass.
+
+### Phase 5 — Verification, docs sync, sprint close
+
+174. **Task creation and task assignment are two separate calls, confirmed
+    correct during Phase 5's own E2E verification, not a bug** —
+    `POST /projects/{id}/tasks` only inserts the row and publishes
+    `TASK_CREATED` (nobody subscribes to it; it's audit-log only).
+    `workflow_engine.start_task` is only reached through
+    `POST /tasks/{id}/assign` (`tasks/service.py`'s `assign_task`, which
+    transitions `CREATED -> ASSIGNED` then calls `start_task`). A first
+    verification pass created a mission and polled it for 2.5 minutes
+    expecting auto-progression, saw `created` never move, and initially
+    read that as a regression from this sprint's `role_key` rename before
+    tracing the actual call graph -- it is unrelated, pre-existing
+    behavior (a CEO creating a Mission and a CEO assigning it are
+    deliberately distinct actions in the org model, §2.2). Noted here so
+    a future sprint's verification pass doesn't re-diagnose the same
+    non-bug.
+175. **Full mission lifecycle re-verified end-to-end against a live
+    mock-provider server after Phase 4's changes**: register -> create
+    company -> `GET /roles` (three Roles, exact `key/title/category/
+    singleton/description` shape) -> `GET /agents` (founding roster keyed
+    by `role_key`) -> create mission -> assign -> `in_progress -> in_review
+    -> pending_approval` -> approve -> `completed` with a real mission
+    branch and commit SHA. A second mission verified the cancel path:
+    assign -> cancel mid-`in_progress` -> `cancelled`, Engineer's
+    `AgentState` back to `idle` with `current_task_id` cleared (Sprint 9
+    Phase 0.8's fix still holds under the new `role_key` schema). This is
+    **API-level E2E verification** (curl against the running server), not
+    browser verification -- no browser automation tool exists in this
+    environment (confirmed via an explicit tool search). PROGRESS.txt
+    5.4/5.5 are marked accordingly rather than claiming a browser check
+    that wasn't performed (CLAUDE.md §16.7).
+176. **`CLAUDE.md`'s long-pending uncommitted restructure (numbered
+    sections, expanded rules #11-#18) was folded into this sprint's docs
+    commit rather than left open** — it had been deliberately excluded
+    from the Phase 2 and Phase 3 commits as out-of-scope-for-that-commit,
+    but by Phase 5 it was reviewed in full: its content (including §2.3's
+    Role/Employee table and Rule #16 itself) already matches what this
+    sprint built, so no rewrite was needed, only two accuracy fixes --
+    the Sprint 10 roadmap row marked shipped, and §2.3's tag changed from
+    "not built" to "structural separation shipped" with a note that
+    CTO/hiring remain Sprint 11. Folding it in avoids a second, unrelated
+    multi-hundred-line diff landing on top of whatever Sprint 11 touches
+    in the same file.
+177. **Full suite re-run at sprint close: 218 passed, 4 skipped** (was 194
+    at Sprint 9 close; +24 net this sprint across Phases 1-4 -- RoleSpec/
+    template tests, `role_key` migration + singleton tests, resolver
+    tests, Roles API tests, and the Rule #16 guard's 5 tests). Dashboard
+    `pnpm typecheck` and `pnpm build` both clean, 15 routes compiling.
+    Zero pre-existing test assertions changed behavior -- the 6 touched
+    test files are mechanical `AgentORM.role -> role_key` fixture renames
+    plus additive new tests, matching the brief's "동작 변화 0" requirement
+    (§21).
