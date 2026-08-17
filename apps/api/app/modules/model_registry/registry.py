@@ -17,6 +17,10 @@ MODEL_REGISTRY: dict[str, dict[str, str]] = {
         # the CEO can't reassign them.
         "reporter-default": "mock-reporter-v1",
         "situation-default": "mock-situation-v1",
+        # CTO's logical ref (Sprint 12) — a distinct mock model id so
+        # mock_provider can tell CTO planning turns apart from the PM's
+        # "mock-planner-v1" and give the CTO its own deterministic voice.
+        "advisor-default": "mock-advisor-v1",
     },
     "anthropic": {
         # Haiku for the fast planning/review passes, Sonnet for the
@@ -26,6 +30,7 @@ MODEL_REGISTRY: dict[str, dict[str, str]] = {
         "reviewer-default": "claude-haiku-4-5-20251001",
         "reporter-default": "claude-haiku-4-5-20251001",
         "situation-default": "claude-haiku-4-5-20251001",
+        "advisor-default": "claude-haiku-4-5-20251001",
     },
 }
 
@@ -50,6 +55,7 @@ PRICE_PER_MILLION_TOKENS: dict[str, tuple[float, float]] = {
     "mock-planner-v1": (0.25, 1.25),
     "mock-builder-v1": (3.00, 15.00),
     "mock-reviewer-v1": (0.25, 1.25),
+    "mock-advisor-v1": (0.25, 1.25),
     "claude-haiku-4-5-20251001": (1.00, 5.00),
     "claude-sonnet-4-6": (3.00, 15.00),
 }

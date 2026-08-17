@@ -1,221 +1,96 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 11 — Build the Company: CTO, Hiring, Employee Configuration
- Overall: 92/93 · 99% (0.8 is a permanently-partial carried-forward note,
- not a failure -- browser tooling remains unavailable in this environment)
- Now working on: Sprint 11 complete -- ready for CEO/PM review
+ Sprint: 12 — PM<->CTO Planning + Project Specification
+ Overall: 24/70 (Phase 0 + Phase 1 complete; Phase 2-5 not started)
+ Now working on: Phase 2 — PM <-> CTO planning orchestration
  Last update: 2026-08-17
 ================================================
 
-PHASE 0 — Baseline and Sprint State                 (9/10)
-[x] 0.1 verify local HEAD == origin/master == 29fd400
-[x] 0.2 confirm working tree clean (only untracked docs/prompts/sprint-11.md)
-[x] 0.3 read required repo docs/code (template, resolver, AgentORM, agent_runtime
-        service/routes/schemas, projects/service, model_registry, errors.py,
-        contracts.py, main.py exception handler, alembic migration pattern)
-[x] 0.4 baseline backend suite: 218 passed / 4 skipped (matches Sprint 10 close)
-[x] 0.5 dashboard typecheck: clean
-[x] 0.6 dashboard build: clean, 15 routes
-[x] 0.7 alembic head confirmed: 3c792f42c404 (head), current == head on dev DB
-[~] 0.8 audit Sprint 10 browser-UNVERIFIED items: carried forward -- no browser
-        tool available in this environment (confirmed via ToolSearch in Sprint 10);
-        Employees UI browser verification remains UNVERIFIED, same for Sprint 11
-[x] 0.9 PROGRESS.txt replaced with Sprint 11 live checklist (this file)
-[x] 0.10 commit + push Phase 0 checkpoint (c75dc76)
+PHASE 0 — Baseline and Design Audit                  (10/10)
+[x] 0.1 verify local HEAD == origin/master (aed4786, Sprint 11 close)
+[x] 0.2 confirm working tree state (docs/prompts/sprint-12.md added by CEO;
+        docs/prompts/sprint10.md -> sprint-10.md rename, unrelated to Sprint 12)
+[x] 0.3 read full sprint-12.md brief (819 lines) in full before starting
+[x] 0.4 baseline backend suite: 248 passed / 4 skipped (matches Sprint 11 close)
+[x] 0.5 read repo context: deps.py, main.py, interfaces/workflow_engine,
+        interfaces/provider_gateway, provider_gateway/gateway+anthropic_provider,
+        workflow_engine/engine.py (resolver/usage/prompt-build call sites),
+        ownership.py, tasks/routes+schemas, approvals/service+routes,
+        templates/software_company.py, model_registry/registry.py,
+        prompt_builder/builder.py+role_contracts.py, employee_resolution.py,
+        mock_provider.py, db_models.py, agent_states.py,
+        alembic migration convention (3066d66c0064)
+[x] 0.6 design: unified Specification aggregate (not planning-run +
+        document as two aggregates) -- DECISIONS.md #194
+[x] 0.7 design: 9-state SpecificationStatus machine (§4.6), turn budget
+        math for every planning path (§4.3), resume_stage mechanism,
+        deterministic mock fixture markers, gated begin-execution endpoint
+        design (§4.7) -- DECISIONS.md #195-200
+[x] 0.8 confirm no dedicated planning DI singleton needed (orchestrator
+        built per-call from session_factory/event_bus/secrets, same as
+        build_gateway() is today)
+[x] 0.9 PROGRESS.txt replaced with Sprint 12 live checklist (this file)
+[x] 0.10 commit + push Phase 0 checkpoint
 
-PHASE 1 — CTO and Canonical Configuration Data       (12/12)
-[x] 1.1 add CTO RoleSpec (key=cto, leadership, singleton=True)
-[x] 1.2 CTO title/category/singleton/description/contract/permissions/model default
-[x] 1.3 verify RoleSpec immutability (frozen dataclass, existing test pattern)
-[x] 1.4 confirm CTO surfaces via role-derived APIs/UI with zero hardcoded branches
-        (added RoleSpec.founding: bool; create_department filters by role.founding
-        instead of a role-name list -- data-driven, guard stays green)
-[x] 1.5 add canonical typed skill-template registry (app/modules/skill_templates/,
-        3 entries: generalist/research_focused/speed_focused)
-[x] 1.6 skill metadata immutable + server-owned (frozen dataclass, GET-only route)
-[x] 1.7 model choices sourced from existing model_registry (no duplication --
-        CTO reuses "planner-default" logical ref rather than adding a new
-        model_registry slot; see DECISIONS.md)
-[x] 1.8 safe read APIs/schemas for model + skill options (new GET
-        /api/projects/{id}/skill-templates; existing /models and /roles reused)
-[x] 1.9 tests: CTO metadata, singleton classification, RoleSpec canonicality,
-        skill-template immutability, safe registry serialization, no dup sources
-        (tests/test_template.py, tests/test_skill_templates.py)
-[x] 1.10 run targeted + full relevant tests -- 225 passed / 4 skipped (was
-         218/4; +7 net: 1 test renamed not counted, updated test_onboarding.py
-         intro-set assertion for non-founding CTO -- classification: intentional
-         behavior change)
-[x] 1.11 update PROGRESS.txt
-[x] 1.12 commit + push Phase 1 (f2dcbae)
+PHASE 1 — Planning and Specification Domain          (14/14)
+[x] 1.1 add core.lifecycle.specification_states (SpecificationStatus enum,
+        SPECIFICATION_TRANSITIONS, TERMINAL_SPECIFICATION_STATUSES) --
+        same transition()-table pattern as agent_states/task_states
+[x] 1.2 add persistence models: SpecificationORM, SpecificationVersionORM
+        (immutable, uq_spec_version), SpecificationTurnORM (uq_spec_turn_index),
+        ActiveSpecificationLockORM (Sprint-11-style single-PK concurrency
+        guard); TaskORM.specification_id (nullable FK, NULL for every
+        legacy/manual Mission)
+[x] 1.3 add domain errors: CTOVacantError, ActivePlanningExistsError,
+        PlanningTurnBudgetExhaustedError, MalformedProviderOutputError
+[x] 1.4 add 10 new EventTypes + Payload models + PAYLOAD_MODELS entries
+        (SPECIFICATION_REQUESTED/TURN_POSTED/CLARIFICATION_REQUESTED/
+        CLARIFICATION_ANSWERED/READY/APPROVED/REVISION_REQUESTED/REJECTED/
+        CANCELLED/FAILED)
+[x] 1.5 template: rewrite _CTO_CONTRACT (CTO now has real planning
+        responsibilities, not "not yet part of the pipeline"); add
+        _PM_PLANNING_CONTRACT/_CTO_PLANNING_CONTRACT + PLANNING_CONTRACTS
+        dict; CTO.model_ref -> "advisor-default"; CompanyTemplate gains
+        planning_pm_role_key/planning_cto_role_key/planning_contracts
+[x] 1.6 model_registry: add advisor-default (mock-advisor-v1 / claude-haiku)
+        + price entry (deliberately NOT added to ROLES -- that tuple only
+        gates CEO-facing model reassignment, same reasoning as CTO Sprint 11)
+[x] 1.7 prompt_builder.build(): add optional contract_override param,
+        layered last, everything else unchanged
+[x] 1.8 add Alembic migration (7a1c9e3f2b6d, revises 3066d66c0064):
+        specifications, specification_versions, specification_turns,
+        active_specification_locks, tasks.specification_id -- no backfill
+        needed (all-new tables, existing tasks legitimately NULL)
+[x] 1.9 verify migration: upgrade head / downgrade -1 / upgrade head again
+        against live commander-postgres-1 -- clean in both directions
+[x] 1.10 add app/modules/planning/schemas.py (typed request/response
+        models for the future API layer; Response models use
+        from_attributes, never echo unchecked provider payloads)
+[x] 1.11 domain tests: tests/test_specification_state_machine.py (20 tests
+        -- every legal transition, terminal-status rejection, full table
+        coverage) + tests/test_specification_orm_constraints.py (4 tests --
+        DB-level one-active-lock-per-project, version uniqueness, turn-index
+        uniqueness, per-project lock independence) -- 24/24 passing
+[x] 1.12 run full suite -- 272 passed / 4 skipped (was 248/4 baseline;
+         +24 net: 20 state-machine + 4 ORM-constraint tests, zero regressions)
+[x] 1.13 update PROGRESS.txt with final Phase 1 counts
+[x] 1.14 commit + push Phase 1
 
-PHASE 2 — Persistence and Atomic Hiring Domain       (17/17)
-[x] 2.1 determine smallest schema change for per-Employee model/skill config
-        (none needed for model_ref -- reuses existing 3-tier resolution;
-        skill_template_key added as a field inside the existing profile JSON)
-[x] 2.2 add Alembic migration if required (3066d66c0064: role_singleton_locks)
-[x] 2.3 backfill existing Employee rows safely (seeded from live pm/reviewer
-        agents; verified against real commander-postgres-1 container)
-[x] 2.4 preserve existing role_key/runtime state semantics (unchanged)
-[x] 2.5 implement authoritative hire_employee behavior (agent_runtime/service.py)
-[x] 2.6 implement atomic singleton protection (composite-PK lock table +
-        IntegrityError -> SingletonRoleViolation; founding path fixed too)
-[x] 2.7 validate role/model/skill/ownership/name
-[x] 2.8 define domain errors + status mapping (409 for singleton conflict,
-        400 role/name, 422 model/skill)
-[x] 2.9 emit hiring event after successful persistence (AGENT_HIRED)
-[x] 2.10 implement allowed Employee configuration updates (skill_template_key
-         added to PUT /api/agents/{id}/profile)
-[x] 2.11 reject role transfer through generic update (ProfileUpdateRequest has
-         no role field, extra="forbid")
-[x] 2.12 protect active/busy Employee invariants (profile PUT only ever
-         touches the JSON profile blob, never state/current_task_id -- no
-         config mutation can strand an active Mission by construction)
-[x] 2.13 tests: CTO hire, 2nd CTO conflict, 2nd PM/Reviewer conflict, multi-Engineer
-         hire, invalid role/model/skill, cross-company access, rollback/no-partial-row,
-         CONCURRENT singleton creation (asyncio.gather + busy-timeout SQLite),
-         independent Employee config, existing-row backfill, fresh-db migration
-[x] 2.14 run migration + domain tests (upgrade/downgrade/upgrade verified on
-         live Postgres; 41/41 targeted tests green)
-[x] 2.15 update PROGRESS.txt
-[x] 2.16 record concurrency/schema decisions in DECISIONS.md (#181-186)
-[x] 2.17 commit + push Phase 2
+PHASE 2 — PM <-> CTO Planning Orchestration           (0/?)
+[ ] not started -- mock_provider.py planning-turn generators,
+    app/modules/planning/orchestrator.py, app/modules/planning/service.py,
+    turn-kind dispatch (pm_analysis/cto_review/pm_draft_or_followup/
+    cto_followup_answer/pm_draft/pm_revision_draft), resolver integration,
+    clarification fixture markers, blocking-feasibility fixture markers,
+    turn-budget enforcement, structural-guard extension if needed, tests
 
-PHASE 3 — API and Runtime Integration                (16/16)
-[x] 3.1 add/extend company/project-scoped employee endpoints
-        (POST /api/projects/{id}/agents)
-[x] 3.2 reuse authoritative service (no route-level business logic --
-        routes.py only maps hire_employee's errors to status codes)
-[x] 3.3 apply existing auth + company ownership checks (project_owned_by, 404)
-[x] 3.4 return stable public schemas (AgentResponse, unchanged)
-[x] 3.5 keep Role endpoint read-only (unchanged, only gained model_ref field)
-[x] 3.6 expose safe role/model/skill option metadata (RoleResponse.model_ref
-        + existing /models + /skill-templates endpoints, no duplication)
-[x] 3.7 every new mutation returns structured errors (400/404/409/422, no bare 500s)
-[x] 3.8 Employee listing includes config needed by UI (profile already nested)
-[x] 3.9 confirm hired Employees participate in existing resolver
-        (test_pipeline_run_emits_agent_resolved_for_every_stage uses hire_employee)
-[x] 3.10 verify deterministic selection with multiple hired Engineers (same test)
-[x] 3.11 verify singleton leadership roles resolve correctly (full-flow test)
-[x] 3.12 verify no route bypasses singleton/registry validation (hire_employee
-         is the only insertion path; no other route creates AgentORM rows)
-[x] 3.13 add API/integration tests (tests/test_hiring.py, 11 tests)
-[x] 3.14 run API-level flow (create company -> roles -> hire CTO -> reject 2nd CTO
-         -> hire 2 Engineers -> edit one -> list independence -> mock mission ->
-         resolver event) -- test_full_hiring_flow_end_to_end, passing
-[x] 3.15 update PROGRESS.txt
-[x] 3.16 commit + push Phase 3 (3f8d3f4)
+PHASE 3 — API, Approval Gate, Pipeline Integration    (0/?)
+[ ] not started -- app/modules/planning/routes.py, main.py wiring,
+    POST /specifications/{id}/begin-execution, API/integration tests
 
-PHASE 4 — Dashboard Hiring and Configuration UX      (19/19)
-[x] 4.1 extend current Employees/Organization page (header now hosts
-        NewEmployeeForm; stale "no Add Employee affordance" comment removed)
-[x] 4.2 add "Hire employee" action (components/NewEmployeeForm.tsx, same
-        inline expand/collapse pattern as NewMissionForm)
-[x] 4.3 build Role/model/skill selection from API data (useRoles/useModels/
-        useSkillTemplates; no static option arrays)
-[x] 4.4 add Employee name input + validation (required, trimmed, submit
-        disabled until non-empty -- mirrors NewMissionForm's title guard)
-[x] 4.5 show singleton + occupied states (occupied singleton Roles stay
-        visible in the select, marked "(already hired)" and disabled,
-        rather than silently disappearing)
-[x] 4.6 support multiple Employees under worker roles (pre-existing page
-        grouping already renders N cards per role; hiring form does not
-        cap worker-role headcount, only disables occupied singletons)
-[x] 4.7 add Employee configuration editing (EmployeeProfile.tsx gained a
-        Skill Template <select>, wired to PUT /profile's skill_template_key)
-[x] 4.8 wire loading/success/empty/error states (page-level loading/empty/
-        error preserved; NewEmployeeForm shows "Hiring…" while pending;
-        EmployeeProfile's existing "Saved." confirmation now also covers
-        skill_template_key)
-[x] 4.9 connect mutation errors to global toast/error system
-        (useHireEmployee follows the same onError -> showToast
-        (mutationErrorMessage(error)) convention as every other mutation)
-[x] 4.10 invalidate/refetch correct queries after mutation (useHireEmployee
-         invalidates employees + timeline; profile update already
-         invalidated employeeProfile + employees)
-[x] 4.11 prevent duplicate submission (submit button disabled while
-         hire.isPending / updateProfile.isPending, matching existing forms)
-[x] 4.12 preserve accessible labels/keyboard/focus handling (every field
-         has a paired <label>; autoFocus on the form's first field)
-[x] 4.13 no hardcoded role/model/skill option arrays -- replaced the
-         Rule #16-risk MODEL_ROLE_FOR_AGENT_ROLE map in EmployeeProfile.tsx
-         with lib/utils.ts's new registryRoleFor(roles, roleKey), derived
-         from the new RoleResponse.model_ref field (backend, Phase 3)
-[x] 4.14 run typecheck -- clean (tsc --noEmit, zero errors)
-[x] 4.15 run production build -- clean, 15 routes unchanged (Next.js 14.2.35)
-[~] 4.16 browser verification -- UNVERIFIED: no browser tool available in
-        this environment (re-confirmed via ToolSearch; same finding as
-        Sprint 10/11 Phase 0 §0.8)
-[x] 4.17 record browser verification status honestly (recorded above and
-         in the Phase 4 report; not claimed as browser-verified)
-[x] 4.18 update PROGRESS.txt
-[x] 4.19 commit + push Phase 4
+PHASE 4 — Dashboard Planning/Specification UX         (0/?)
+[ ] not started -- dashboard pages not yet read
 
-PHASE 5 — Regression, Security, Documentation        (19/19)
-[x] 5.1 full backend test suite: 248 passed / 4 skipped (was 218/4 baseline,
-        225/4 after Phase 1; +23 net across Phase 2/3 hiring+concurrency+
-        skill-template tests)
-[x] 5.2 dashboard typecheck: clean (tsc --noEmit, zero errors)
-[x] 5.3 dashboard production build: clean, 15 routes unchanged (Next.js 14.2.35)
-[x] 5.4 mock E2E with zero provider keys: confirmed no apps/api/.env, no
-        ANTHROPIC_API_KEY in shell env, Settings.commander_provider default
-        is "mock" -- the full suite (incl. test_full_hiring_flow_end_to_end,
-        the mission-lifecycle test, and every other mission test) ran under
-        mock mode with zero keys
-[x] 5.5 re-run hiring API integration flow: test_full_hiring_flow_end_to_end
-        (tests/test_hiring.py:143) re-executed as part of 5.1's full-suite
-        run -- company -> roles(incl. cto) -> hire CTO -> reject 2nd CTO 409
-        -> hire Kim/Lee Engineers -> edit Kim independently -> list reflects
-        independent configs -> assign+run a real mission to completion
-[x] 5.6 verify migration from Sprint 10 revision: live commander-postgres-1
-        downgraded 3066d66c0064 -> 3c792f42c404 (Sprint 10 head), then
-        upgraded back to head -- role_singleton_locks correctly backfilled
-        one row per pre-existing pm/reviewer across all 5 dev projects
-[x] 5.7 verify fresh database bootstrap: created throwaway
-        commander_freshcheck DB, `alembic upgrade head` from <base> ran all
-        5 revisions cleanly (baseline -> ... -> 3066d66c0064), then dropped
-[x] 5.8 review git diff for scope leakage: `git diff 29fd400..HEAD --stat` --
-        35 files, all within Sprint 11 boundaries (template, agent_runtime,
-        agent_profiles, skill_templates, projects/schemas, core contracts/
-        events/db_models, dashboard employees UI, docs, tests); zero touch
-        to workflow_engine, auth, provider_gateway, model_registry internals
-[x] 5.9 audit new routes for auth/ownership: POST/GET /api/projects/{id}/agents
-        and GET /api/projects/{id}/skill-templates use project_owned_by ->
-        404; PUT/GET /api/agents/{id}/profile uses resource_owned_by -> 404
-        (not 403, per Rule #15) -- confirmed by reading routes.py directly
-[x] 5.10 audit API/event output for secrets/unsafe skill details: RoleResponse
-         excludes contract/tools/permissions; SkillTemplateResponse excludes
-         `capabilities` (inert, never exposed); HireEmployeeRequest uses
-         extra="forbid"; AgentHiredPayload carries only agent_id/role_key/
-         model_ref/skill_template_key, no secrets/prompts
-[x] 5.11 audit role/model/skill hardcoding: AST guard (test_role_hardcoding_
-         guard.py) re-run standalone, 6/6 green, scans all of app/ except
-         app/templates/ via rglob so it automatically covers the new
-         skill_templates and agent_runtime surfaces with no update needed;
-         dashboard grep for hardcoded role/skill literals in lib/components
-         found none
-[x] 5.12 audit WorkflowEngine for unrelated growth: `git diff --stat` for
-         apps/api/app/modules/workflow_engine is empty -- zero changes
-[x] 5.13 audit mutation hooks for visible error handling: every useMutation
-         in lib/hooks.ts (including useHireEmployee, useUpdateEmployeeProfile)
-         has onError: (error) => showToast(mutationErrorMessage(error)); no
-         silent-failure mutation found
-[x] 5.14 classify verification: unit/domain PASS, API PASS, integration PASS,
-         concurrency PASS, migration PASS (upgrade-from-Sprint-10 + fresh),
-         typecheck PASS, build PASS, browser UNVERIFIED (no browser tool
-         available, re-confirmed via ToolSearch this phase), mock E2E PASS,
-         real LLM E2E UNVERIFIED (not required this sprint, no credentials
-         configured) -- see final report §11 for full matrix
-[x] 5.15 updated CLAUDE.md (§2.3 Sprint 11 CTO+hiring summary, roadmap table
-         11 marked done), docs/ARCHITECTURE.md (§1.2 Role/Employee, new §7.3
-         singleton concurrency, event-family table), docs/DECISIONS.md
-         (#187-193), docs/design/UX_SPEC.md (§5.4 rewritten: hiring entry
-         point, form fields/defaults, singleton/occupied state, multi-
-         employee display, editing flow, loading/error/success, browser
-         status), README.md (status paragraph -- CTO/hiring now shipped,
-         removed from "remaining roadmap")
-[x] 5.16 record deliberate Sprint 12 deferrals: DECISIONS.md #193
-[x] 5.17 PROGRESS.txt marked complete (below) -- all verification and docs
-         steps above are done, not aspirational
-[x] 5.18 commit + push final documentation and progress state
-[x] 5.19 confirm local HEAD == origin/master
+PHASE 5 — Full Verification and Documentation         (0/?)
+[ ] not started
 ================================================

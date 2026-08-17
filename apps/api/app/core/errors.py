@@ -51,3 +51,43 @@ class BudgetExceededError(CommanderError):
         self.observed_value = observed_value
         self.stage = stage
         super().__init__(f"{limit_kind} budget exceeded before '{stage}': {observed_value} > {limit_value}")
+
+
+class CTOVacantError(CommanderError):
+    """Sprint 12 §4.2: planning was requested but no Employee currently
+    occupies the CTO Role. Never falls back to another Role and never
+    auto-creates one -- the CEO must hire a CTO first."""
+
+    def __init__(self, project_id: str) -> None:
+        self.project_id = project_id
+        super().__init__("Planning requires an active CTO, and this company has none hired yet")
+
+
+class ActivePlanningExistsError(CommanderError):
+    """Sprint 12 §5.3: this Company already has a non-terminal
+    Specification in flight; only one may exist at a time."""
+
+    def __init__(self, project_id: str) -> None:
+        self.project_id = project_id
+        super().__init__("This company already has an active planning run or specification in review")
+
+
+class PlanningTurnBudgetExhaustedError(CommanderError):
+    """Sprint 12 §4.3: the Specification's lifetime planning-turn bound
+    (see `modules.planning.orchestrator.MAX_PLANNING_TURNS`) was reached
+    without producing a reviewable Specification version."""
+
+    def __init__(self, specification_id: str, max_turns: int) -> None:
+        self.specification_id = specification_id
+        self.max_turns = max_turns
+        super().__init__(f"Planning turn budget ({max_turns}) exhausted for specification {specification_id!r}")
+
+
+class MalformedProviderOutputError(CommanderError):
+    """Sprint 12 §4.12: a provider's structured-output response could not
+    be validated even after the bounded retry budget was spent."""
+
+    def __init__(self, stage: str, attempts: int) -> None:
+        self.stage = stage
+        self.attempts = attempts
+        super().__init__(f"Provider returned unusable structured output for '{stage}' after {attempts} attempt(s)")

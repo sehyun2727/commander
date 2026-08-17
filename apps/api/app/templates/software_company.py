@@ -75,10 +75,41 @@ _REVIEWER_CONTRACT = (
 )
 
 _CTO_CONTRACT = (
-    "You are the CTO for this company. You are not yet part of the "
-    "mission pipeline -- a later sprint defines how you plan alongside "
-    "the PM. If you are ever prompted directly before that exists, "
-    "answer plainly and defer any mission-shaping decision to the PM."
+    "You are the CTO for this company. Outside a planning exchange you "
+    "may be asked plain questions about technical direction -- answer "
+    "concisely and defer any mission-shaping decision to the PM. Your "
+    "core responsibility is technical feasibility, architecture, "
+    "implementation decomposition, dependency analysis, technical risk, "
+    "non-functional requirements, and verification strategy during "
+    "PM-led Project Specification planning (Sprint 12)."
+)
+
+# Sprint 12 §4.3/§4.12: PM<->CTO planning turns are structured-output
+# exchanges, not free narrative -- each turn's system prompt is this
+# contract layered under the Employee's usual traits/custom instructions
+# (via prompt_builder.build(..., contract_override=...)), never the
+# mission-pipeline contract above. Kept as template data, not a
+# prompt_builder-owned constant, so a future template swap can restate the
+# planning collaboration without touching orchestration code.
+_PM_PLANNING_CONTRACT = (
+    "You are the PM, running a structured planning exchange with the CTO "
+    "before any mission begins, to produce one Project Specification for "
+    "the CEO to review. Respond only with a single JSON object matching "
+    "the schema described in the user message -- no prose outside the "
+    "JSON, no markdown code fences. Never invent business requirements "
+    "the CEO did not provide; when scope, security, cost, or acceptance "
+    "criteria are materially unclear, say so plainly instead of guessing."
+)
+
+_CTO_PLANNING_CONTRACT = (
+    "You are the CTO, giving a technical feasibility review of the PM's "
+    "product analysis before any mission begins. Respond only with a "
+    "single JSON object matching the schema described in the user "
+    "message -- no prose outside the JSON, no markdown code fences. "
+    "Focus on architecture, dependencies, risk, security, and "
+    "verification strategy; if something the PM described is not "
+    "technically feasible as stated, say so plainly rather than quietly "
+    "working around it."
 )
 
 
@@ -190,10 +221,12 @@ CTO = RoleSpec(
     description="Owns technical direction for the company and partners with the PM on how work gets built.",
     founding_name="Morgan Lee",
     avatar_color="#f97316",
-    # Sprint 11: CTO has no pipeline stage yet (no PM<->CTO planning this
-    # sprint), so it reuses the PM's model slot rather than the template
-    # introducing an unused new logical ref -- see docs/DECISIONS.md.
-    model_ref="planner-default",
+    # Sprint 12: CTO now has a real distinct voice in PM<->CTO planning
+    # (mock provider needs a model_ref it can tell apart from the PM's
+    # "planner-default"), so this reuses "advisor-default" -- a new
+    # logical ref model_registry resolves alongside planner/builder/
+    # reviewer -- rather than the Sprint 11 PM-slot placeholder.
+    model_ref="advisor-default",
     contract=_CTO_CONTRACT,
     intro=(
         "Hi, I'm your CTO. I set technical direction and will partner "
@@ -300,6 +333,18 @@ STARTERS: list[dict[str, str]] = [
 ]
 
 
+# Sprint 12: the two Roles that take part in PM<->CTO planning, and the
+# structured-output contract each uses only during that exchange (never
+# during mission-pipeline conversation, which still uses `RoleSpec.contract`
+# above). Assembled here -- inside the template file itself -- because
+# naming *which* Roles plan together is company-template data, not
+# orchestration logic (Rule #16's template-only exception).
+PLANNING_CONTRACTS: dict[str, str] = {
+    PM.key: _PM_PLANNING_CONTRACT,
+    CTO.key: _CTO_PLANNING_CONTRACT,
+}
+
+
 @dataclass(frozen=True)
 class CompanyTemplate:
     key: str
@@ -311,6 +356,13 @@ class CompanyTemplate:
     starters: list[dict[str, str]]
     checks: tuple[CheckSpec, ...]
     pipeline: tuple[StageSpec, ...]
+    # Sprint 12 planning participants + their structured-output contracts.
+    # `planning_pm_role_key`/`planning_cto_role_key` are plain strings (not
+    # a list a caller would index by position) so nothing outside this
+    # template file ever needs a literal role-key comparison to find them.
+    planning_pm_role_key: str
+    planning_cto_role_key: str
+    planning_contracts: dict[str, str]
 
 
 TEMPLATE = CompanyTemplate(
@@ -323,6 +375,9 @@ TEMPLATE = CompanyTemplate(
     starters=STARTERS,
     checks=CHECKS,
     pipeline=PIPELINE,
+    planning_pm_role_key=PM.key,
+    planning_cto_role_key=CTO.key,
+    planning_contracts=PLANNING_CONTRACTS,
 )
 
 

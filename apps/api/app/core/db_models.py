@@ -129,6 +129,15 @@ class TaskORM(Base):
     check_results: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    # Sprint 12 §4.7: set only when this Mission was created from an
+    # approved Project Specification (the gated
+    # `POST /specifications/{id}/begin-execution` path). NULL for every
+    # legacy/manual Mission created through the pre-existing
+    # `POST /projects/{id}/tasks` endpoint, which remains ungated -- see
+    # docs/DECISIONS.md for the Sprint 12 backward-compatibility policy.
+    specification_id: Mapped[str | None] = mapped_column(
+        ForeignKey("specifications.id"), nullable=True
+    )
 
 
 class EventORM(Base):
@@ -214,3 +223,126 @@ class SettingORM(Base):
 
     key: Mapped[str] = mapped_column(String, primary_key=True)
     value: Mapped[str] = mapped_column(Text)
+
+
+class SpecificationORM(Base):
+    """Sprint 12 §4.5/§4.6: one Project Specification aggregate covers both
+    the PM<->CTO planning exchange and the resulting reviewable document --
+    a row exists from the moment the CEO submits a request (status=draft),
+    long before any `SpecificationVersionORM` content exists. `status`
+    lifecycle lives in `core.lifecycle.specification_states`; every
+    transition is validated through the shared `transition()` helper, the
+    same pattern `TaskORM`/`AgentORM` already use.
+
+    `current_version` is a pointer into `specification_versions`, never a
+    column that itself holds content -- "request revision" always appends
+    a new version row rather than mutating one in place (§4.8)."""
+
+    __tablename__ = "specifications"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    status: Mapped[str] = mapped_column(String, default="draft")
+    request_text: Mapped[str] = mapped_column(Text)
+    # Set only when planning was started from an existing Mission rather
+    # than a fresh CEO request (Required Backend Capability #1). Optional:
+    # the primary Sprint 12 flow never requires one.
+    source_task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True)
+    pm_agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id"), nullable=True)
+    cto_agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id"), nullable=True)
+    current_version: Mapped[int] = mapped_column(Integer, default=0)
+    turn_count: Mapped[int] = mapped_column(Integer, default=0)
+    clarification_questions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    clarification_answers: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Why planning most recently stopped (agreement / clarification_required
+    # / blocking_feasibility / turn_limit / provider_error / ceo_action) --
+    # observability for the CEO-facing status view (§4.9).
+    stop_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Which orchestrator stage to re-run once the CEO answers a
+    # clarification question (e.g. "pm_analysis" or "cto_review") -- set
+    # only while status=clarification_required, cleared once resumed.
+    resume_stage: Mapped[str | None] = mapped_column(String, nullable=True)
+    decision_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SpecificationVersionORM(Base):
+    """One immutable, structured Project Specification draft (§4.5).
+    Never updated in place once created -- a revision always inserts a new
+    row and `SpecificationORM.current_version` is bumped to point at it
+    (§4.8), so prior reviewable content and its approval/rejection history
+    are never lost."""
+
+    __tablename__ = "specification_versions"
+    __table_args__ = (UniqueConstraint("specification_id", "version", name="uq_spec_version"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    specification_id: Mapped[str] = mapped_column(ForeignKey("specifications.id"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String)
+    problem_statement: Mapped[str] = mapped_column(Text, default="")
+    goals: Mapped[list] = mapped_column(JSON, default=list)
+    non_goals: Mapped[list] = mapped_column(JSON, default=list)
+    requirements: Mapped[list] = mapped_column(JSON, default=list)
+    acceptance_criteria: Mapped[list] = mapped_column(JSON, default=list)
+    technical_approach: Mapped[str] = mapped_column(Text, default="")
+    architecture_components: Mapped[list] = mapped_column(JSON, default=list)
+    data_migration_impact: Mapped[str] = mapped_column(Text, default="")
+    security_considerations: Mapped[str] = mapped_column(Text, default="")
+    observability_requirements: Mapped[str] = mapped_column(Text, default="")
+    test_plan: Mapped[str] = mapped_column(Text, default="")
+    risks: Mapped[list] = mapped_column(JSON, default=list)  # [{"risk": ..., "mitigation": ...}]
+    dependencies: Mapped[list] = mapped_column(JSON, default=list)
+    assumptions: Mapped[list] = mapped_column(JSON, default=list)
+    unresolved_questions: Mapped[list] = mapped_column(JSON, default=list)
+    implementation_stages: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class SpecificationTurnORM(Base):
+    """One persisted PM or CTO planning contribution, or one CEO
+    clarification answer (§4.3, §4.9). The authoritative, efficiently
+    queryable "planning activity" list for the CEO-facing timeline --
+    `SpecificationTurnPosted`/`SpecificationClarificationAnswered` events
+    are still published alongside each row for the unified Timeline (Rule
+    #8), but this table is what `GET .../turns` actually reads, the same
+    division of labor `ApprovalORM` already has relative to its events.
+
+    `role_key` is a data value copied from the resolved Employee's
+    `AgentORM.role_key` at turn time (or None for a CEO-authored turn),
+    never a hardcoded literal -- see Rule #16."""
+
+    __tablename__ = "specification_turns"
+    __table_args__ = (UniqueConstraint("specification_id", "turn_index", name="uq_spec_turn_index"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    specification_id: Mapped[str] = mapped_column(ForeignKey("specifications.id"), index=True)
+    turn_index: Mapped[int] = mapped_column(Integer)
+    actor_role: Mapped[str] = mapped_column(String)  # "employee" | "ceo" (mirrors Actor.role)
+    role_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id"), nullable=True)
+    kind: Mapped[str] = mapped_column(String)  # analysis|review|clarification_request|clarification_answer|draft|revision
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class ActiveSpecificationLockORM(Base):
+    """Sprint 12 §5.3 concurrency guard, same shape as Sprint 11's
+    `RoleSingletonLockORM`: one row per `project_id` exists exactly while
+    that Company has a non-terminal Specification in flight. The
+    single-column primary key (not a service-layer check-then-insert) is
+    what makes two simultaneous "start planning"
+    requests for the same Company race-safe -- both INSERT in the same
+    transaction as their `SpecificationORM` row, the database allows
+    exactly one to commit, and the loser's IntegrityError becomes
+    `ActivePlanningExistsError`. Deleted (in the same transaction as the
+    status write) the moment a Specification reaches a terminal status,
+    freeing the Company to start a new planning run."""
+
+    __tablename__ = "active_specification_locks"
+
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), primary_key=True)
+    specification_id: Mapped[str] = mapped_column(ForeignKey("specifications.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

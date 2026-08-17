@@ -16,7 +16,19 @@ from .role_contracts import ENGINEER_CONTRACT_BY_DELIVERABLE, ENGINEER_ROLE_KEY,
 from .traits import DECISION_STYLE_TRAITS, PERSONALITY_TRAITS, WORKING_STYLE_TRAITS
 
 
-def build(profile: AgentProfile, role: str, deliverable_type: str = "document") -> str:
+def build(
+    profile: AgentProfile,
+    role: str,
+    deliverable_type: str = "document",
+    contract_override: str | None = None,
+) -> str:
+    """`contract_override` lets a caller substitute a turn-specific
+    contract (Sprint 12: PM/CTO planning turns use
+    `TEMPLATE.planning_contracts[role]`, never the mission-pipeline
+    contract below) while still layering this Employee's own
+    traits/custom-instructions the same way every other call site does --
+    the layering order itself (traits -> custom instructions -> contract
+    LAST) never changes, only which contract text goes last."""
     sections = [
         PERSONALITY_TRAITS[profile.personality],
         WORKING_STYLE_TRAITS[profile.working_style],
@@ -24,7 +36,9 @@ def build(profile: AgentProfile, role: str, deliverable_type: str = "document") 
     ]
     if profile.custom_instructions.strip():
         sections.append(f"CEO's custom instructions for you: {profile.custom_instructions.strip()}")
-    if role == ENGINEER_ROLE_KEY:
+    if contract_override is not None:
+        sections.append(contract_override)
+    elif role == ENGINEER_ROLE_KEY:
         sections.append(ENGINEER_CONTRACT_BY_DELIVERABLE[deliverable_type])
     else:
         sections.append(ROLE_CONTRACTS[role])

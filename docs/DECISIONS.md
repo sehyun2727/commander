@@ -2589,3 +2589,73 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     multi-user collaboration; and browser-tooling-dependent UI verification
     (no such tool was available in this environment for Sprint 10 or
     Sprint 11 -- re-confirmed at Phase 5 via `ToolSearch`).
+
+## Sprint 12 — Phase C: PM<->CTO Planning + Project Specification
+
+### Phase 0/1 — Design audit and domain layer
+
+194. **One `SpecificationORM` aggregate covers both the planning run and the
+    reviewable document**, rather than a separate "PlanningRun" and
+    "Specification" pair. `status` spans both phases (draft -> planning ->
+    ... -> approved/rejected/cancelled/failed); a row exists from the
+    moment the CEO submits a request, long before any
+    `SpecificationVersionORM` content is drafted. This directly satisfies
+    brief §3's "do not introduce a duplicate aggregate without need" --
+    there is exactly one thing to look up per CEO request, not two linked
+    by a foreign key for no independent reason.
+195. **`SpecificationORM.resume_stage`** records which orchestrator turn-kind
+    to re-run once the CEO answers a clarification question (e.g.
+    `"pm_analysis"`), rather than re-deriving position from turn history on
+    every resume. Set only while `status=clarification_required`, cleared
+    once the orchestrator resumes. Keeps resume logic a single column read
+    instead of a turn-log replay.
+196. **CTO gets its own `advisor-default` model_ref** (`mock-advisor-v1` in
+    mock mode), replacing Sprint 11's placeholder reuse of
+    `planner-default`. Reusing the PM's logical ref would have made
+    `mock_provider` produce planner-shaped text for CTO planning turns --
+    indistinguishable in mock mode, and semantically wrong even for real
+    providers where the CTO's system prompt differs from the PM's. The
+    mock-inferred label for this ref is `"advisor"`, not `"cto"` --
+    `"cto"` is a real `RoleSpec.key` and comparing against it inside
+    dispatch logic would trip the Rule #16 AST guard's hardcoded-role-key
+    check; `"advisor"` is deliberately not a Role identity, just a model-
+    voice label.
+197. **A new, dedicated `POST /specifications/{id}/begin-execution`
+    endpoint is the only path from an approved Specification into a
+    Mission**, rather than modifying the existing generic
+    `POST /projects/{id}/tasks`. The existing endpoint stays completely
+    unmodified (248 pre-Sprint-12 tests exercise it) and continues to
+    create ungated Missions with `specification_id = NULL`. This is the
+    Sprint 12 backward-compatibility policy required by brief §4.7:
+    existing/active Missions remain valid, non-code Missions are
+    unaffected, and only *new code Missions created through the new
+    endpoint* are gated on `spec.status == approved`. `begin-execution`
+    itself does nothing but validate approval and then call the existing,
+    unmodified `tasks.service.create_task`/`assign_task` -- the approval
+    gate is enforced once, at the one new entry point, not by threading a
+    new check through the WorkflowEngine.
+198. **`prompt_builder.build()` gained one optional `contract_override`
+    param**, layered in the existing traits -> custom-instructions ->
+    contract-LAST order, instead of a parallel planning-specific prompt
+    builder. PM/CTO planning turns pass
+    `TEMPLATE.planning_contracts[role]` as the override; every other call
+    site is unaffected (`contract_override=None` preserves the exact prior
+    behavior). Satisfies §4.10 (planning turns still layer the Employee's
+    own configured traits/custom instructions) with zero new prompt-
+    assembly code paths to keep in sync.
+199. **`TEMPLATE.planning_pm_role_key`/`planning_cto_role_key` are plain
+    string attributes**, assigned from `PM.key`/`CTO.key` inside
+    `software_company.py` itself, rather than an indexed lookup into a
+    `roles`/`role_specs`-named collection. The Rule #16 structural guard
+    forbids literal role-key string comparisons in engine/workflow code
+    *and* flags literal integer indexing into anything named
+    roles/role_specs; a plain named attribute sidesteps both concerns
+    while still being template-owned data, not an engine branch.
+200. **Planning turn budget: 6 turns lifetime per Specification, cumulative
+    across revision rounds.** Every documented planning path (fast
+    agreement, one CTO follow-up, PM clarification, CTO blocking
+    feasibility) completes in 3-5 turns; turn 7 without a ready spec
+    forces `status=failed`, `stop_reason="turn_limit_exceeded"`, no further
+    provider calls. Chosen as the smallest bound that still lets every
+    §9-required planning scenario complete without hitting the ceiling,
+    per brief §4.3's "max 6 unless a lower safe bound is justified."

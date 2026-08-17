@@ -69,3 +69,15 @@ class EventType(str, Enum):
     # Conversation (Meetings)
     CONVERSATION_MESSAGE = "conversation.message"
     CONVERSATION_MESSAGE_DELTA = "conversation.message.delta"
+
+    # Planning (PM <-> CTO) and Project Specification — Sprint 12
+    SPECIFICATION_REQUESTED = "specification.requested"
+    SPECIFICATION_TURN_POSTED = "specification.turn_posted"
+    SPECIFICATION_CLARIFICATION_REQUESTED = "specification.clarification_requested"
+    SPECIFICATION_CLARIFICATION_ANSWERED = "specification.clarification_answered"
+    SPECIFICATION_READY = "specification.ready_for_review"
+    SPECIFICATION_APPROVED = "specification.approved"
+    SPECIFICATION_REVISION_REQUESTED = "specification.revision_requested"
+    SPECIFICATION_REJECTED = "specification.rejected"
+    SPECIFICATION_CANCELLED = "specification.cancelled"
+    SPECIFICATION_FAILED = "specification.failed"

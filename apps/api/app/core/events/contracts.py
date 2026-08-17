@@ -271,6 +271,59 @@ class ConversationMessageDeltaPayload(Payload):
     done: bool = False
 
 
+# --- Planning (PM <-> CTO) and Project Specification — Sprint 12 -----------------
+
+class SpecificationRequestedPayload(Payload):
+    specification_id: str
+    pm_agent_id: str
+    cto_agent_id: str
+
+
+class SpecificationTurnPostedPayload(Payload):
+    specification_id: str
+    turn_index: int
+    role_key: str | None
+    agent_id: str | None
+    kind: str
+
+
+class SpecificationClarificationRequestedPayload(Payload):
+    specification_id: str
+    questions: list[str]
+
+
+class SpecificationClarificationAnsweredPayload(Payload):
+    specification_id: str
+
+
+class SpecificationReadyPayload(Payload):
+    specification_id: str
+    version: int
+
+
+class SpecificationApprovedPayload(Payload):
+    specification_id: str
+    version: int
+
+
+class SpecificationRevisionRequestedPayload(Payload):
+    specification_id: str
+    version: int
+
+
+class SpecificationRejectedPayload(Payload):
+    specification_id: str
+
+
+class SpecificationCancelledPayload(Payload):
+    specification_id: str
+
+
+class SpecificationFailedPayload(Payload):
+    specification_id: str
+    reason: str
+
+
 PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.PROJECT_CREATED: ProjectCreatedPayload,
     EventType.PROJECT_ARCHIVED: ProjectArchivedPayload,
@@ -313,6 +366,16 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.SYSTEM_HEARTBEAT: SystemHeartbeatPayload,
     EventType.CONVERSATION_MESSAGE: ConversationMessagePayload,
     EventType.CONVERSATION_MESSAGE_DELTA: ConversationMessageDeltaPayload,
+    EventType.SPECIFICATION_REQUESTED: SpecificationRequestedPayload,
+    EventType.SPECIFICATION_TURN_POSTED: SpecificationTurnPostedPayload,
+    EventType.SPECIFICATION_CLARIFICATION_REQUESTED: SpecificationClarificationRequestedPayload,
+    EventType.SPECIFICATION_CLARIFICATION_ANSWERED: SpecificationClarificationAnsweredPayload,
+    EventType.SPECIFICATION_READY: SpecificationReadyPayload,
+    EventType.SPECIFICATION_APPROVED: SpecificationApprovedPayload,
+    EventType.SPECIFICATION_REVISION_REQUESTED: SpecificationRevisionRequestedPayload,
+    EventType.SPECIFICATION_REJECTED: SpecificationRejectedPayload,
+    EventType.SPECIFICATION_CANCELLED: SpecificationCancelledPayload,
+    EventType.SPECIFICATION_FAILED: SpecificationFailedPayload,
 }
 
 _CONVERSATION_TYPES = {EventType.CONVERSATION_MESSAGE, EventType.CONVERSATION_MESSAGE_DELTA}
