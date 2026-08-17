@@ -49,6 +49,7 @@ async def create_task(
     description: str,
     priority: str,
     deliverable_type: str = TEMPLATE.deliverable_type,
+    specification_id: str | None = None,
 ) -> TaskORM:
     async with session_factory() as session:
         task = TaskORM(
@@ -57,6 +58,7 @@ async def create_task(
             description=description,
             priority=priority,
             deliverable_type=deliverable_type,
+            specification_id=specification_id,
         )
         session.add(task)
         await session.commit()
@@ -68,7 +70,11 @@ async def create_task(
             project_id=project_id,
             actor=CEO_ACTOR,
             payload={"task_id": task.id, "title": title, "priority": priority},
-            reason="CEO created a new mission",
+            reason=(
+                "CEO created a new mission"
+                if specification_id is None
+                else "Mission created from an approved Project Specification"
+            ),
         )
     )
     return task

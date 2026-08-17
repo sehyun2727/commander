@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 12 — PM<->CTO Planning + Project Specification
- Overall: 31/70 (Phase 0 + Phase 1 + Phase 2 complete; Phase 3-5 not started)
- Now working on: Phase 3 — API, approval gate, pipeline integration
+ Overall: 39/70 (Phase 0 + Phase 1 + Phase 2 + Phase 3 complete; Phase 4-5 not started)
+ Now working on: Phase 4 — Dashboard planning/specification UX
  Last update: 2026-08-17
 ================================================
 
@@ -119,9 +119,42 @@ PHASE 2 — PM <-> CTO Planning Orchestration           (7/7)
         counting rule, cost-tracking deferral, turn kind vocabulary,
         CTO-followup never pauses for CEO) + PROGRESS.txt update + commit
 
-PHASE 3 — API, Approval Gate, Pipeline Integration    (0/?)
-[ ] not started -- app/modules/planning/routes.py, main.py wiring,
-    POST /specifications/{id}/begin-execution, API/integration tests
+PHASE 3 — API, Approval Gate, Pipeline Integration    (8/8)
+[x] 3.1 core/errors.py: SpecificationAlreadyExecutingError (begin-execution
+        called twice for the same Specification)
+[x] 3.2 planning/service.py: approve_specification/reject_specification
+        (transition() + _release_lock() -- fixes a lock-leak: neither
+        terminal path released ActiveSpecificationLockORM before this,
+        DECISIONS #207) + begin_execution (validate APPROVED + one-
+        Mission-per-Specification, then delegate to tasks.create_task/
+        assign_task, DECISIONS #209)
+[x] 3.3 tasks/__init__.py: re-export create_task/assign_task/TaskResponse
+        (Rule #1 -- begin_execution and planning/routes.py go through this
+        public surface, never tasks.service/tasks.schemas directly,
+        DECISIONS #208); tasks/service.py create_task() grew a
+        backward-compatible specification_id=None param; tasks/schemas.py
+        TaskResponse grew specification_id; legacy POST /projects/{id}/tasks
+        route itself stays byte-for-byte unmodified (DECISIONS #197)
+[x] 3.4 app/modules/planning/routes.py: full endpoint set (start/list/get/
+        turns/versions/clarification-answer/revision/approve/reject/cancel/
+        begin-execution), every route ownership-checked via
+        resource_owned_by/project_owned_by (Rule #15, 404 not 403);
+        CommanderError/InvalidTransition -> HTTP status mapping
+        (DECISIONS #210); planning/__init__.py now exports router
+[x] 3.5 main.py: planning_router imported + included
+[x] 3.6 tests/test_planning_api.py -- 11 tests: CTO-vacancy 409, start
+        succeeds once hired, duplicate-start 409, clarification-answer via
+        API, revision via API (2nd version), reject then re-start,
+        duplicate-approve 409, begin-execution before approval 409,
+        begin-execution after approval creates+assigns a Mission with
+        specification_id set + duplicate begin-execution 409,
+        cross-account access 404 not 403, full mock E2E (CTO vacancy ->
+        hire -> clarification -> answer -> revision -> approve ->
+        begin-execution -> Mission progresses)
+[x] 3.7 tests/test_role_hardcoding_guard.py re-run -- 6/6 passing
+[x] 3.8 full suite: 297 passed / 4 skipped (was 286/4 Phase 2 baseline;
+        +11 net, zero regressions); docs/DECISIONS.md #207-210 + this
+        PROGRESS.txt update + commit
 
 PHASE 4 — Dashboard Planning/Specification UX         (0/?)
 [ ] not started -- dashboard pages not yet read

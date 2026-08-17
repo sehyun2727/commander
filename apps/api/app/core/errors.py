@@ -91,3 +91,15 @@ class MalformedProviderOutputError(CommanderError):
         self.stage = stage
         self.attempts = attempts
         super().__init__(f"Provider returned unusable structured output for '{stage}' after {attempts} attempt(s)")
+
+
+class SpecificationAlreadyExecutingError(CommanderError):
+    """Sprint 12 §4.7/§9: `begin-execution` was called for a Specification
+    that already has a Mission (`TaskORM.specification_id`) -- each
+    approved Specification may start execution exactly once, mirroring the
+    one-current-review-candidate policy brief §4.8 already establishes for
+    revisions."""
+
+    def __init__(self, specification_id: str) -> None:
+        self.specification_id = specification_id
+        super().__init__(f"Specification {specification_id!r} has already begun execution")

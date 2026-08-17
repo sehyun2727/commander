@@ -44,5 +44,6 @@ class TaskResponse(BaseModel):
     branch_name: str | None
     code_stats: dict | None
     check_results: list | None
+    specification_id: str | None
     created_at: datetime
     updated_at: datetime

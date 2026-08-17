@@ -35,6 +35,7 @@ from .modules.auth import router as auth_router
 from .modules.costs import router as costs_router
 from .modules.event_bus import InProcessEventBus
 from .modules.model_registry import router as models_router
+from .modules.planning import router as planning_router
 from .modules.projects import router as projects_router
 from .modules.realtime import router as realtime_router
 from .modules.reports import router as reports_router
@@ -159,6 +160,7 @@ app.include_router(situation_router)
 app.include_router(skill_templates_router)
 app.include_router(workspace_router)
 app.include_router(sandbox_router)
+app.include_router(planning_router)
 
 
 @app.get("/api/health")

@@ -2713,3 +2713,53 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     `cto_review` (CTO finds the request infeasible as stated) ever produce
     `CLARIFICATION_REQUIRED`; every other turn kind is bounded, internal
     PM<->CTO back-and-forth the CEO only sees afterward as posted turns.
+
+### Phase 3 — API, approval gate, pipeline integration
+
+207. **`approve_specification`/`reject_specification` release
+    `ActiveSpecificationLockORM` too, not just `PlanningOrchestrator`'s own
+    failure/cancel paths.** `_publish_ready()` intentionally leaves the lock
+    held while a Specification sits in `READY_FOR_REVIEW` (a second planning
+    run must not start while one is awaiting CEO review), but approval and
+    rejection are the other two ways a Specification reaches a terminal
+    state, and both were found to leak the lock forever if left alone --
+    the Company would permanently lose the ability to start a second
+    Specification after its first was ever approved or rejected. Fixed by
+    giving `planning/service.py` its own three-line `_release_lock`,
+    duplicated from the orchestrator's rather than imported (Rule #1: that
+    method is a private implementation detail of the turn-loop's own
+    cleanup), called from both `approve_specification` and
+    `reject_specification` after the state transition commits.
+208. **`create_task`/`assign_task`/`TaskResponse` are re-exported through
+    `tasks/__init__.py`** so `begin_execution` (Sprint 12 §4.7) can convert
+    an approved Specification into a Mission through the exact same
+    authoritative path every other Mission creation uses, and return the
+    result through the same response contract, without reaching into
+    `tasks.service`/`tasks.schemas` directly (Rule #1) or duplicating
+    task-creation logic in the planning module. `tasks/routes.py`'s
+    existing `POST /projects/{id}/tasks` stays byte-for-byte unmodified
+    (per #197) -- only `create_task()`'s Python signature grew a
+    backward-compatible `specification_id: str | None = None` parameter
+    that every pre-existing caller leaves at its default.
+209. **`begin_execution` validates then delegates; it does not orchestrate.**
+    It checks `SpecificationStatus.APPROVED` and the one-Mission-per-
+    Specification invariant (`TaskORM.specification_id` uniqueness, raising
+    `SpecificationAlreadyExecutingError` on a second attempt) itself, then
+    hands off unconditionally to `tasks.create_task`/`assign_task` --
+    exactly the brief §5.1 boundary: the approval gate is enforced once,
+    here, not threaded through `WorkflowEngine` or duplicated per call
+    site.
+210. **HTTP status mapping for the new planning routes**: `CTOVacantError`
+    and `ActivePlanningExistsError` -> 409 (a precondition on *starting*
+    planning, not a bad request body); `InvalidTransition` -> 409 across
+    every state-changing route (clarification-answer, revision, approve,
+    reject) -- covers double-approval/double-rejection for free since the
+    second call's `transition()` raises before any write; `cancel_planning`
+    returning `False` -> 409 with an explanatory detail message, mirroring
+    `tasks/routes.py`'s `cancel_task` pattern exactly;
+    `SpecificationAlreadyExecutingError` and the not-yet-approved
+    `ValueError` from `begin_execution` both -> 409 (Mission-creation
+    preconditions, not malformed input). Every route resolves ownership via
+    `resource_owned_by(session_factory, SpecificationORM, ...)` or
+    `project_owned_by` before calling `service`, so cross-account access is
+    404 (Rule #15) before any of these domain errors can even fire.
