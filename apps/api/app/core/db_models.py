@@ -135,8 +135,19 @@ class TaskORM(Base):
     # legacy/manual Mission created through the pre-existing
     # `POST /projects/{id}/tasks` endpoint, which remains ungated -- see
     # docs/DECISIONS.md for the Sprint 12 backward-compatibility policy.
+    #
+    # tasks.specification_id -> specifications.id and
+    # specifications.source_task_id -> tasks.id form a genuine FK cycle
+    # between these two tables. use_alter+name lets SQLAlchemy resolve it
+    # via ALTER TABLE ADD/DROP CONSTRAINT instead of failing to topologically
+    # sort CREATE/DROP order (see docs/DECISIONS.md).
     specification_id: Mapped[str | None] = mapped_column(
-        ForeignKey("specifications.id"), nullable=True
+        ForeignKey(
+            "specifications.id",
+            use_alter=True,
+            name="fk_tasks_specification_id",
+        ),
+        nullable=True,
     )
 
 

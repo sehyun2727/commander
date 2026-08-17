@@ -2826,3 +2826,33 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     rendering, and client-side query invalidation were exercised by code
     review and the typecheck/build passing, not by observing them fire in
     a real browser.
+216. **Found and fixed a genuine circular-FK bug during Phase 5's fresh-
+    database-bootstrap check.** `tasks.specification_id -> specifications.id`
+    (added Sprint 12) and `specifications.source_task_id -> tasks.id`
+    (already existed) form a true bidirectional FK cycle between those two
+    tables -- the first cycle anywhere in `db_models.py` (confirmed via
+    grep: no other `ForeignKey(...)` call in the file names its
+    constraint). `scripts/seed.py`'s Postgres reset path
+    (`Base.metadata.drop_all()`) failed hard with
+    `CircularDependencyError: Can't sort tables for DROP ... Please ensure
+    the ForeignKey ... have names so they can be dropped using DROP
+    CONSTRAINT`. The Alembic migration path itself
+    (`7a1c9e3f2b6d_project_specifications.py`) was unaffected because it
+    uses explicit hand-ordered `op.add_column`/`op.drop_column` rather than
+    automatic topological sort, and the sqlite test suite's
+    `Base.metadata.create_all()` (`tests/conftest.py`) was also unaffected
+    because SQLite does not validate FK targets at `CREATE TABLE` time (no
+    ordering constraint to violate), unlike Postgres which does. Fixed by
+    adding `use_alter=True, name="fk_tasks_specification_id"` to
+    `TaskORM.specification_id`'s `ForeignKey(...)` in `db_models.py` --
+    naming it, the later-added side of the cycle, lets SQLAlchemy break the
+    cycle via `ALTER TABLE ADD/DROP CONSTRAINT` for both `create_all` and
+    `drop_all`. Mirrored the same `name=`/`use_alter=True` onto the
+    migration's `op.add_column("tasks", ...)` call so the ORM metadata and
+    the real migration-produced schema agree on the constraint name (safe
+    to edit in place since this migration was introduced this same sprint
+    and has not shipped). Verified: `alembic downgrade -1` / `upgrade head`
+    cycle against live Postgres, a full `scripts/seed.py` fresh-bootstrap
+    run (previously failing, now succeeds), and the full backend suite
+    (297 passed / 4 skipped -- identical to the pre-fix baseline, zero
+    regressions).

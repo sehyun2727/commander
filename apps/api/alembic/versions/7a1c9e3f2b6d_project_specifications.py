@@ -107,7 +107,16 @@ def upgrade() -> None:
 
     op.add_column(
         "tasks",
-        sa.Column("specification_id", sa.String(), sa.ForeignKey("specifications.id"), nullable=True),
+        sa.Column(
+            "specification_id",
+            sa.String(),
+            sa.ForeignKey(
+                "specifications.id",
+                use_alter=True,
+                name="fk_tasks_specification_id",
+            ),
+            nullable=True,
+        ),
     )
 
 
