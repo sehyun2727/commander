@@ -95,8 +95,77 @@ export interface Task {
   branch_name: string | null;
   code_stats: CodeStats | null;
   check_results: CheckOutcome[] | null;
+  specification_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Sprint 12: the Project Specification lifecycle. `status` mirrors
+// core.lifecycle.specification_states.SpecificationStatus verbatim —
+// see components/SpecificationStatusBadge.tsx for the one place that maps
+// it to CEO-facing copy/tone (same pattern as StatusWord.tsx for Missions).
+export interface Specification {
+  id: string;
+  project_id: string;
+  status:
+    | "draft"
+    | "planning"
+    | "clarification_required"
+    | "ready_for_review"
+    | "approved"
+    | "revision_requested"
+    | "rejected"
+    | "cancelled"
+    | "failed";
+  request_text: string;
+  source_task_id: string | null;
+  pm_agent_id: string | null;
+  cto_agent_id: string | null;
+  current_version: number;
+  turn_count: number;
+  clarification_questions: string[] | null;
+  clarification_answers: string[] | null;
+  stop_reason: string | null;
+  decision_comment: string | null;
+  created_at: string;
+  updated_at: string;
+  decided_at: string | null;
+}
+
+export interface SpecificationVersion {
+  id: string;
+  specification_id: string;
+  version: number;
+  title: string;
+  problem_statement: string;
+  goals: string[];
+  non_goals: string[];
+  requirements: string[];
+  acceptance_criteria: string[];
+  technical_approach: string;
+  architecture_components: string[];
+  data_migration_impact: string;
+  security_considerations: string;
+  observability_requirements: string;
+  test_plan: string;
+  risks: { risk: string; mitigation: string }[];
+  dependencies: string[];
+  assumptions: string[];
+  unresolved_questions: string[];
+  implementation_stages: string[];
+  created_at: string;
+}
+
+export interface SpecificationTurn {
+  id: string;
+  specification_id: string;
+  turn_index: number;
+  actor_role: string;
+  role_key: string | null;
+  agent_id: string | null;
+  kind: string;
+  text: string;
+  created_at: string;
 }
 
 export interface Approval {

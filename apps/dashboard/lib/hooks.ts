@@ -4,6 +4,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { api } from "./api";
 import type { HireEmployeeRequest, ProfileUpdateRequest } from "./api";
 import { mutationErrorMessage, useToast } from "@/components/ToastProvider";
+import type { Task } from "./types";
 
 export const keys = {
   companies: ["companies"] as const,
@@ -34,6 +35,10 @@ export const keys = {
   capabilities: ["capabilities"] as const,
   executionSettings: (companyId: string) => ["executionSettings", companyId] as const,
   apiHealth: ["apiHealth"] as const,
+  specifications: (companyId: string) => ["specifications", companyId] as const,
+  specification: (specId: string) => ["specification", specId] as const,
+  specificationTurns: (specId: string) => ["specificationTurns", specId] as const,
+  specificationVersions: (specId: string) => ["specificationVersions", specId] as const,
 };
 
 export function useCompanies() {
@@ -366,11 +371,132 @@ export function useDecideApproval(companyId: string, taskId: string) {
   });
 }
 
+// Project Specifications (Sprint 12) — PM<->CTO planning
+export function useSpecifications(companyId: string) {
+  return useQuery({ queryKey: keys.specifications(companyId), queryFn: () => api.listSpecifications(companyId) });
+}
+
+export function useSpecification(specId: string) {
+  return useQuery({ queryKey: keys.specification(specId), queryFn: () => api.getSpecification(specId) });
+}
+
+export function useSpecificationTurns(specId: string) {
+  return useQuery({
+    queryKey: keys.specificationTurns(specId),
+    queryFn: () => api.listSpecificationTurns(specId),
+  });
+}
+
+export function useSpecificationVersions(specId: string) {
+  return useQuery({
+    queryKey: keys.specificationVersions(specId),
+    queryFn: () => api.listSpecificationVersions(specId),
+  });
+}
+
+export function useStartPlanning(companyId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: (body: { request_text: string; source_task_id?: string | null }) =>
+      api.startPlanning(companyId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.specifications(companyId) });
+      qc.invalidateQueries({ queryKey: keys.timeline(companyId) });
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
+}
+
+export function useAnswerClarification(companyId: string, specId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: (answers: string[]) => api.answerClarification(specId, answers),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.specifications(companyId) });
+      qc.invalidateQueries({ queryKey: keys.specification(specId) });
+      qc.invalidateQueries({ queryKey: keys.specificationTurns(specId) });
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
+}
+
+export function useSubmitSpecificationRevision(companyId: string, specId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: (feedback: string) => api.submitSpecificationRevision(specId, feedback),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.specifications(companyId) });
+      qc.invalidateQueries({ queryKey: keys.specification(specId) });
+      qc.invalidateQueries({ queryKey: keys.specificationTurns(specId) });
+      qc.invalidateQueries({ queryKey: keys.specificationVersions(specId) });
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
+}
+
+export function useApproveSpecification(companyId: string, specId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: () => api.approveSpecification(specId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.specifications(companyId) });
+      qc.invalidateQueries({ queryKey: keys.specification(specId) });
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
+}
+
+export function useRejectSpecification(companyId: string, specId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: (reason?: string) => api.rejectSpecification(specId, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.specifications(companyId) });
+      qc.invalidateQueries({ queryKey: keys.specification(specId) });
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
+}
+
+export function useCancelSpecification(companyId: string, specId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: (reason?: string) => api.cancelSpecification(specId, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.specifications(companyId) });
+      qc.invalidateQueries({ queryKey: keys.specification(specId) });
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
+}
+
+export function useBeginExecution(companyId: string, specId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: () => api.beginExecution(specId),
+    onSuccess: (task: Task) => {
+      qc.invalidateQueries({ queryKey: keys.specifications(companyId) });
+      qc.invalidateQueries({ queryKey: keys.specification(specId) });
+      qc.invalidateQueries({ queryKey: keys.missions(companyId) });
+      qc.invalidateQueries({ queryKey: keys.mission(task.id) });
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
+}
+
 export function invalidateForEvent(
   qc: ReturnType<typeof useQueryClient>,
   companyId: string,
   taskId?: string | null,
-  agentId?: string | null
+  agentId?: string | null,
+  specificationId?: string | null
 ) {
   qc.invalidateQueries({ queryKey: keys.missions(companyId) });
   qc.invalidateQueries({ queryKey: keys.employees(companyId) });
@@ -380,6 +506,7 @@ export function invalidateForEvent(
   qc.invalidateQueries({ queryKey: keys.timelineFeed(companyId) });
   qc.invalidateQueries({ queryKey: keys.companyCosts(companyId) });
   qc.invalidateQueries({ queryKey: keys.models(companyId) });
+  qc.invalidateQueries({ queryKey: keys.specifications(companyId) });
   if (taskId) {
     qc.invalidateQueries({ queryKey: keys.mission(taskId) });
     qc.invalidateQueries({ queryKey: keys.messages(taskId) });
@@ -387,5 +514,10 @@ export function invalidateForEvent(
   }
   if (agentId) {
     qc.invalidateQueries({ queryKey: keys.employeeProfile(agentId) });
+  }
+  if (specificationId) {
+    qc.invalidateQueries({ queryKey: keys.specification(specificationId) });
+    qc.invalidateQueries({ queryKey: keys.specificationTurns(specificationId) });
+    qc.invalidateQueries({ queryKey: keys.specificationVersions(specificationId) });
   }
 }

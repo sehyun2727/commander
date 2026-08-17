@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 12 — PM<->CTO Planning + Project Specification
- Overall: 39/70 (Phase 0 + Phase 1 + Phase 2 + Phase 3 complete; Phase 4-5 not started)
- Now working on: Phase 4 — Dashboard planning/specification UX
+ Overall: 50/70+ (Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 complete; Phase 5 not started)
+ Now working on: Phase 5 — Full verification and documentation
  Last update: 2026-08-17
 ================================================
 
@@ -156,8 +156,48 @@ PHASE 3 — API, Approval Gate, Pipeline Integration    (8/8)
         +11 net, zero regressions); docs/DECISIONS.md #207-210 + this
         PROGRESS.txt update + commit
 
-PHASE 4 — Dashboard Planning/Specification UX         (0/?)
-[ ] not started -- dashboard pages not yet read
+PHASE 4 — Dashboard Planning/Specification UX         (11/11)
+[x] 4.1 regenerate packages/event-schemas/ts/index.ts (Sprint 12 Phase 1
+        EventTypes/payloads were never codegen'd -- CLAUDE.md §9.1 gap,
+        purely additive 71-line diff, verified before use)
+[x] 4.2 lib/types.ts: Task.specification_id; Specification/
+        SpecificationVersion/SpecificationTurn interfaces (verified against
+        live mock-provider payloads, not just the Pydantic response models
+        -- caught SpecificationVersion.risks being
+        {risk,mitigation}[] not string[], DECISIONS #214)
+[x] 4.3 lib/api.ts: listSpecifications/getSpecification/startPlanning/
+        listSpecificationTurns/listSpecificationVersions/
+        answerClarification/submitSpecificationRevision/
+        approveSpecification/rejectSpecification/cancelSpecification/
+        beginExecution
+[x] 4.4 lib/hooks.ts: specifications/specification/specificationTurns/
+        specificationVersions query keys + matching use* hooks (mirroring
+        existing mutation/onError-toast conventions); invalidateForEvent
+        grew a 5th optional specificationId param (DECISIONS #212)
+[x] 4.5 components/RealtimeProvider.tsx: extract specification_id from
+        event.payload, pass through to invalidateForEvent
+[x] 4.6 components/SpecificationStatusBadge.tsx: 9-state status ->
+        {label, tone} map (StatusWord.tsx pattern)
+[x] 4.7 components/StartPlanningForm.tsx (CTO-vacancy check via
+        useEmployees + role === "cto", Rule #16; disabled state explains
+        why, Rule #18 -- DECISIONS #213), SpecificationCard.tsx
+[x] 4.8 app/company/[id]/specifications/page.tsx (list) +
+        specifications/[specificationId]/page.tsx (thin wrapper)
+[x] 4.9 components/SpecificationDetail.tsx: turn transcript, current-
+        version content (dedicated RisksSection for the
+        {risk,mitigation}[] shape), clarification Q&A form, revision/
+        approve/reject actions, Begin Execution action, cancel
+[x] 4.10 components/Sidebar.tsx: "Specifications" nav link (Rule #17)
+[x] 4.11 dashboard typecheck + build both clean; full mock-mode E2E
+         exercised via curl against a real running dev stack (start w/
+         clarification -> answer -> revise -> approve -> begin-execution),
+         every response shape checked against the frontend types; no
+         interactive browser tool available in this environment, so
+         client-side behavior (forms/toasts/query invalidation) was
+         verified by code review + passing typecheck/build, not by
+         observing it in a browser (DECISIONS #215, honestly scoped per
+         CLAUDE.md §16.7); backend suite re-run clean at 297/4 (unchanged,
+         Phase 4 touched no backend code)
 
 PHASE 5 — Full Verification and Documentation         (0/?)
 [ ] not started

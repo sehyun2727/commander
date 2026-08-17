@@ -44,6 +44,16 @@ export enum EventType {
   SYSTEM_HEARTBEAT = "system.heartbeat",
   CONVERSATION_MESSAGE = "conversation.message",
   CONVERSATION_MESSAGE_DELTA = "conversation.message.delta",
+  SPECIFICATION_REQUESTED = "specification.requested",
+  SPECIFICATION_TURN_POSTED = "specification.turn_posted",
+  SPECIFICATION_CLARIFICATION_REQUESTED = "specification.clarification_requested",
+  SPECIFICATION_CLARIFICATION_ANSWERED = "specification.clarification_answered",
+  SPECIFICATION_READY = "specification.ready_for_review",
+  SPECIFICATION_APPROVED = "specification.approved",
+  SPECIFICATION_REVISION_REQUESTED = "specification.revision_requested",
+  SPECIFICATION_REJECTED = "specification.rejected",
+  SPECIFICATION_CANCELLED = "specification.cancelled",
+  SPECIFICATION_FAILED = "specification.failed",
 }
 
 export enum AgentState {
@@ -337,6 +347,57 @@ export interface ConversationMessageDeltaPayload {
   done: boolean;
 }
 
+export interface SpecificationRequestedPayload {
+  specification_id: string;
+  pm_agent_id: string;
+  cto_agent_id: string;
+}
+
+export interface SpecificationTurnPostedPayload {
+  specification_id: string;
+  turn_index: number;
+  role_key: string | null;
+  agent_id: string | null;
+  kind: string;
+}
+
+export interface SpecificationClarificationRequestedPayload {
+  specification_id: string;
+  questions: string[];
+}
+
+export interface SpecificationClarificationAnsweredPayload {
+  specification_id: string;
+}
+
+export interface SpecificationReadyPayload {
+  specification_id: string;
+  version: number;
+}
+
+export interface SpecificationApprovedPayload {
+  specification_id: string;
+  version: number;
+}
+
+export interface SpecificationRevisionRequestedPayload {
+  specification_id: string;
+  version: number;
+}
+
+export interface SpecificationRejectedPayload {
+  specification_id: string;
+}
+
+export interface SpecificationCancelledPayload {
+  specification_id: string;
+}
+
+export interface SpecificationFailedPayload {
+  specification_id: string;
+  reason: string;
+}
+
 export interface Event {
   id: string;
   project_id: string;
@@ -390,6 +451,16 @@ export interface EventPayloadMap {
   "system.heartbeat": SystemHeartbeatPayload;
   "conversation.message": ConversationMessagePayload;
   "conversation.message.delta": ConversationMessageDeltaPayload;
+  "specification.requested": SpecificationRequestedPayload;
+  "specification.turn_posted": SpecificationTurnPostedPayload;
+  "specification.clarification_requested": SpecificationClarificationRequestedPayload;
+  "specification.clarification_answered": SpecificationClarificationAnsweredPayload;
+  "specification.ready_for_review": SpecificationReadyPayload;
+  "specification.approved": SpecificationApprovedPayload;
+  "specification.revision_requested": SpecificationRevisionRequestedPayload;
+  "specification.rejected": SpecificationRejectedPayload;
+  "specification.cancelled": SpecificationCancelledPayload;
+  "specification.failed": SpecificationFailedPayload;
 }
 
 export const TASK_STATE_STATUS_WORD: Record<TaskState, StatusWord> = {

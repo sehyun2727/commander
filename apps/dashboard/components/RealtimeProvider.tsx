@@ -71,7 +71,8 @@ export function RealtimeProvider({ companyId, children }: { companyId: string; c
     setEvents((prev) => (prev.some((e) => e.id === event.id) ? prev : [event, ...prev].slice(0, 100)));
     const taskId = (event.payload as { task_id?: string }).task_id ?? null;
     const agentId = (event.payload as { agent_id?: string }).agent_id ?? null;
-    invalidateForEvent(qc, companyId, taskId, agentId);
+    const specificationId = (event.payload as { specification_id?: string }).specification_id ?? null;
+    invalidateForEvent(qc, companyId, taskId, agentId, specificationId);
   });
 
   return (

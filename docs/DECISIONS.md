@@ -2763,3 +2763,66 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     `resource_owned_by(session_factory, SpecificationORM, ...)` or
     `project_owned_by` before calling `service`, so cross-account access is
     404 (Rule #15) before any of these domain errors can even fire.
+
+### Phase 4 — Dashboard planning/specification UX
+
+211. **`packages/event-schemas/ts/index.ts` regenerated before any dashboard
+    work started.** Sprint 12 Phase 1 added 10 `SPECIFICATION_*` EventTypes
+    and payload models on the Python side but `scripts/generate_ts_schemas.py`
+    was never re-run afterward -- a CLAUDE.md §9.1 compliance gap, not a new
+    schema decision. Confirmed the diff was purely additive (71 insertions,
+    0 deletions, no unrelated changes) before committing it alongside the
+    Phase 4 frontend work rather than as a separate fix.
+212. **`invalidateForEvent()` grew a fifth optional `specificationId` param
+    and now unconditionally invalidates `keys.specifications(companyId)`.**
+    Every other resource in that function (missions/employees/approvals/
+    timeline/costs/models) is already invalidated unconditionally on every
+    event, on the theory that a Specification event is rare enough that an
+    extra list refetch is cheap and simpler than branching on EventType --
+    same reasoning applies here. The specification-id-scoped keys
+    (`specification`/`specificationTurns`/`specificationVersions`) stay
+    conditional, mirroring the existing `taskId`/`agentId` pattern.
+    `RealtimeProvider.tsx` extracts `event.payload.specification_id` the
+    same way it already extracts `task_id`/`agent_id`.
+213. **`StartPlanningForm` checks CTO vacancy client-side via
+    `useEmployees(companyId).some(e => e.role === "cto")`** (Rule #16 --
+    derived from the same `role` field the Roles API already exposes, not a
+    hardcoded template assumption) and disables "Start Planning" with an
+    inline explanation when no CTO is hired, rather than only surfacing the
+    backend's 409 after a click. The backend precondition
+    (`CTOVacantError`) stays the enforcement point; this is purely a Rule
+    #18 "don't make the CEO click a dead button" UX improvement -- a stale
+    employee list (CTO fired/hired in another tab) still hits the 409 and
+    the mutation's `onError` toast still surfaces it.
+214. **`SpecificationVersionResponse.risks` is `[{"risk": string,
+    "mitigation": string}]`, not `string[]`**, unlike every other list
+    field on that response (goals/requirements/etc., which are plain
+    `[string]`) -- confirmed against the orchestrator's `_SPEC_SCHEMA_HINT`
+    prompt contract (`app/modules/planning/orchestrator.py`) and a live
+    mock-mode API call, since the Pydantic response model itself only
+    declares `risks: list` (untyped) and doesn't self-document the shape.
+    `lib/types.ts`'s `SpecificationVersion.risks` and
+    `SpecificationDetail.tsx`'s rendering were written wrong on first pass
+    (as `string[]` via the same generic list-renderer used for every other
+    field) and would have thrown "Objects are not valid as a React child"
+    the first time a real Specification version rendered; caught by
+    curl-driving the real mock-provider E2E flow and inspecting the raw
+    JSON before considering Phase 4 done, not by typecheck/build (both
+    passed against the wrong type, since `string[]` and the actual object
+    shape are structurally different but neither is provably wrong from
+    TypeScript's view without a real payload to check against). Fixed with
+    a dedicated `RisksSection` renderer instead of the shared
+    `VersionListSection`.
+215. **No interactive browser was available in this environment** (no
+    Playwright/browser tool registered), so Phase 4's "verify before
+    reporting completion" step (CLAUDE.md §16.5/§7.5) was done via the
+    strongest tool actually available: a real running dev stack (Postgres +
+    uvicorn + `next dev`), a full curl-driven mock-mode E2E run through
+    every planning endpoint (start w/ clarification -> answer -> revise ->
+    approve -> begin-execution), and fetching each new dashboard route's
+    rendered HTML/dev-server compile log to confirm no server-side crash
+    and correct route resolution. This is explicitly *not* the same claim
+    as interactive browser verification -- form submission, toast
+    rendering, and client-side query invalidation were exercised by code
+    review and the typecheck/build passing, not by observing them fire in
+    a real browser.

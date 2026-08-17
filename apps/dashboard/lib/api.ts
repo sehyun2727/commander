@@ -14,6 +14,9 @@ import type {
   Role,
   Situation,
   SkillTemplate,
+  Specification,
+  SpecificationTurn,
+  SpecificationVersion,
   Starter,
   Task,
   TaskCostSummary,
@@ -202,6 +205,43 @@ export const api = {
   getWorkspaceMerges: (companyId: string, limit = 10) =>
     request<WorkspaceMergeRecord[]>(`/api/projects/${companyId}/workspace/merges?limit=${limit}`),
   getMissionDiff: (taskId: string) => request<DiffResponse>(`/api/tasks/${taskId}/diff`),
+
+  // Project Specifications (Sprint 12) — PM<->CTO planning
+  listSpecifications: (companyId: string) => request<Specification[]>(`/api/projects/${companyId}/specifications`),
+  getSpecification: (specId: string) => request<Specification>(`/api/specifications/${specId}`),
+  startPlanning: (companyId: string, body: { request_text: string; source_task_id?: string | null }) =>
+    request<Specification>(`/api/projects/${companyId}/specifications`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  listSpecificationTurns: (specId: string) =>
+    request<SpecificationTurn[]>(`/api/specifications/${specId}/turns`),
+  listSpecificationVersions: (specId: string) =>
+    request<SpecificationVersion[]>(`/api/specifications/${specId}/versions`),
+  answerClarification: (specId: string, answers: string[]) =>
+    request<Specification>(`/api/specifications/${specId}/clarification-answer`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    }),
+  submitSpecificationRevision: (specId: string, feedback: string) =>
+    request<Specification>(`/api/specifications/${specId}/revision`, {
+      method: "POST",
+      body: JSON.stringify({ feedback }),
+    }),
+  approveSpecification: (specId: string) =>
+    request<Specification>(`/api/specifications/${specId}/approve`, { method: "POST" }),
+  rejectSpecification: (specId: string, reason?: string) =>
+    request<Specification>(`/api/specifications/${specId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? null }),
+    }),
+  cancelSpecification: (specId: string, reason?: string) =>
+    request<Specification>(`/api/specifications/${specId}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? null }),
+    }),
+  beginExecution: (specId: string) =>
+    request<Task>(`/api/specifications/${specId}/begin-execution`, { method: "POST" }),
 
   // Execution Sandbox
   getCapabilities: () => request<Capability>("/api/system/capabilities"),
