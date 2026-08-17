@@ -2659,3 +2659,57 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     provider calls. Chosen as the smallest bound that still lets every
     §9-required planning scenario complete without hitting the ceiling,
     per brief §4.3's "max 6 unless a lower safe bound is justified."
+
+### Phase 2 — PM<->CTO planning orchestration
+
+201. **No dedicated planning DI singleton -- confirmed, not just designed.**
+    `PlanningOrchestrator` is built fresh per call
+    (`session_factory`/`event_bus`/`agent_runtime`/`secrets`), the same
+    shape `build_gateway()` already has, rather than a long-lived registry
+    like `CommanderWorkflowEngine._running`. This works because every
+    planning "turn burst" (`start`, `resume_after_clarification`,
+    `submit_revision`) runs to completion inside one awaited call -- unlike
+    a Mission's background `asyncio.Task`, nothing keeps running between
+    calls, so there is nothing to track across calls. Phase 2 implementation
+    confirms this held with no surprises: no cross-call state was ever
+    needed.
+202. **Clarification (PM) and blocking-feasibility (CTO) collapse into one
+    `SpecificationStatus.CLARIFICATION_REQUIRED` stop condition**, not two
+    separate statuses. Both are "planning cannot continue without CEO
+    input"; the only difference is which turn kind resumes
+    (`resume_stage="pm_analysis"` vs `"cto_review"`), already captured by
+    the existing `resume_stage` column (#195). A second status would have
+    doubled the CEO-facing API/UI surface (Phase 3/4) for a distinction the
+    domain model already expresses structurally.
+203. **Turn budget counts only `actor_role="employee"` rows.** The CEO's own
+    clarification-answer turn is persisted as `actor_role="ceo"` and
+    excluded from the `MAX_PLANNING_TURNS` count (brief §4.3's own
+    definition: "a turn is one persisted PM or CTO contribution"). Counting
+    the CEO's answer would silently shrink the effective PM/CTO budget by
+    one every time a clarification round is used, penalizing the exact
+    path the budget exists to allow.
+204. **Planning turns do not call `costs.record_usage`.** Every other
+    provider call site (missions, conversation replies, reports) records
+    token usage; planning turns deliberately don't yet, since Sprint 12's
+    scope is orchestration + domain, not a new cost-tracking dimension.
+    Revisit in a later sprint if planning cost visibility becomes a CEO-
+    facing requirement -- tracked here rather than silently forgotten.
+205. **`SpecificationTurnORM.kind` vocabulary**: `"analysis"` (PM's initial
+    read), `"review"` (CTO's feasibility pass), `"draft"` (a ready
+    Specification, from either `pm_draft_or_followup` when
+    `ready_to_draft=true` or the terminal `pm_draft`), `"revision"`
+    (`pm_revision_draft`), `"clarification_request"` (PM's questions *or*
+    CTO's blocking reason -- unified per #202), `"clarification_answer"`
+    (both the CEO's resume answer, `actor_role="ceo"`, and the CTO's
+    bounded in-loop follow-up answer, `actor_role="employee"` --
+    distinguished by `actor_role`, not by a second kind value, since both
+    are literally answers to a question raised earlier in the same turn
+    sequence).
+206. **The CTO's bounded follow-up (`cto_followup_answer`) never pauses for
+    the CEO.** `pm_draft_or_followup` with `ready_to_draft=false` moves
+    straight to `cto_followup_answer` then `pm_draft` inside the same `_run`
+    loop -- it's a same-turn-burst PM<->CTO exchange, not a CEO-facing stop
+    condition. Only `pm_analysis` (PM has real clarification questions) and
+    `cto_review` (CTO finds the request infeasible as stated) ever produce
+    `CLARIFICATION_REQUIRED`; every other turn kind is bounded, internal
+    PM<->CTO back-and-forth the CEO only sees afterward as posted turns.

@@ -11,6 +11,7 @@ so swapping providers never changes orchestration logic.
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 from typing import Any, AsyncIterator
 
@@ -67,6 +68,10 @@ def _role_from_ref(model_ref: str) -> str:
         return "reporter"
     if "situation" in model_ref:
         return "situation"
+    # "advisor" is a mock-only voice label, deliberately not the RoleSpec
+    # key "cto" -- see docs/DECISIONS.md #196 (Rule #16).
+    if "advisor" in model_ref:
+        return "advisor"
     return "reviewer"
 
 
@@ -228,6 +233,133 @@ def _situation_text(opts: dict[str, Any]) -> str:
     return base
 
 
+# --- Sprint 12: PM<->CTO planning turns ------------------------------------
+#
+# Every planning turn is requested via `gateway.complete(..., planning_turn_
+# kind=...)` and must return a single JSON object (see the *_PLANNING_
+# CONTRACT text in app/templates/software_company.py) -- the orchestrator
+# parses it, never free text. These fixture markers are literal substrings
+# of the CEO's original request_text, giving tests a deterministic way to
+# steer mock planning down the clarification/follow-up/blocking paths
+# without needing a real provider (§4.11). `already_resumed` (passed by the
+# orchestrator once it re-enters a stage after the CEO answered a
+# clarification question) suppresses every marker so a resumed turn can't
+# re-trigger the same pause forever.
+NEEDS_CLARIFICATION_MARKER = "NEEDS_CLARIFICATION"
+BLOCKING_FEASIBILITY_MARKER = "BLOCKING_FEASIBILITY_ISSUE"
+CTO_FOLLOWUP_MARKER = "CTO_FOLLOWUP_NEEDED"
+
+
+def _mock_specification_fields(request_text: str, note: str = "") -> dict[str, Any]:
+    """One deterministic, fully-populated Specification draft. Reused by
+    every turn kind that ends in a draft (`pm_draft_or_followup` when ready,
+    `pm_draft`, `pm_revision_draft`) so mock mode always produces every
+    field the schema requires (§4.5)."""
+    seed = (request_text.strip() or "the CEO's request")[:80]
+    return {
+        "title": f"Specification: {seed}",
+        "problem_statement": f"The CEO asked for: {seed}.{(' ' + note) if note else ''}",
+        "goals": [f"Deliver what the CEO described: {seed}", "Ship something the Reviewer can audit"],
+        "non_goals": ["Anything not explicitly requested in the CEO's prompt"],
+        "requirements": [f"Implement the core behavior described in: {seed}"],
+        "acceptance_criteria": ["The Engineer's deliverable satisfies every listed requirement"],
+        "technical_approach": "Simulated technical approach (mock provider) -- a scripted placeholder, not a real design.",
+        "architecture_components": ["Existing pipeline (PM -> Engineer -> Reviewer)"],
+        "data_migration_impact": "None expected for this request.",
+        "security_considerations": "No new secrets, credentials, or external surfaces introduced.",
+        "observability_requirements": "Standard Timeline events already emitted by the pipeline are sufficient.",
+        "test_plan": "Reviewer audit plus any automated checks the template already runs.",
+        "risks": [{"risk": "Requirements may be under-specified.", "mitigation": "PM/CTO planning already surfaced open questions below."}],
+        "dependencies": [],
+        "assumptions": ["The CEO's request text is authoritative for scope."],
+        "unresolved_questions": [],
+        "implementation_stages": ["Single mission through the existing pipeline"],
+    }
+
+
+def _pm_analysis_text(opts: dict[str, Any]) -> str:
+    request_text = opts.get("request_text", "")
+    already_resumed = bool(opts.get("already_resumed"))
+    needs_clarification = NEEDS_CLARIFICATION_MARKER in request_text and not already_resumed
+    payload = {
+        "needs_clarification": needs_clarification,
+        "questions": (
+            ["What does success look like for this request?", "Are there any constraints the CTO should know about?"]
+            if needs_clarification
+            else []
+        ),
+        "analysis_summary": f"PM analysis: the CEO's request is \"{request_text.strip()[:200]}\".",
+    }
+    return json.dumps(payload)
+
+
+def _cto_review_text(opts: dict[str, Any]) -> str:
+    request_text = opts.get("request_text", "")
+    already_resumed = bool(opts.get("already_resumed"))
+    blocking = BLOCKING_FEASIBILITY_MARKER in request_text and not already_resumed
+    payload = {
+        "blocking": blocking,
+        "blocking_reason": (
+            "This request is not technically feasible with the current architecture." if blocking else None
+        ),
+        "risks": [] if blocking else ["Low risk -- fits the existing pipeline."],
+        "architecture_notes": (
+            "N/A -- blocked before an architecture could be proposed."
+            if blocking
+            else "Fits the existing PM -> Engineer -> Reviewer pipeline with no new components."
+        ),
+    }
+    return json.dumps(payload)
+
+
+def _pm_draft_or_followup_text(opts: dict[str, Any]) -> str:
+    request_text = opts.get("request_text", "")
+    followup_used = bool(opts.get("followup_used"))
+    needs_followup = CTO_FOLLOWUP_MARKER in request_text and not followup_used
+    if needs_followup:
+        payload: dict[str, Any] = {
+            "ready_to_draft": False,
+            "follow_up_question": "Can you confirm the exact scope boundary for this request?",
+            "specification": None,
+        }
+    else:
+        payload = {
+            "ready_to_draft": True,
+            "follow_up_question": None,
+            "specification": _mock_specification_fields(request_text),
+        }
+    return json.dumps(payload)
+
+
+def _cto_followup_answer_text(opts: dict[str, Any]) -> str:
+    question = opts.get("follow_up_question", "")
+    return json.dumps({"answer": f"Scope confirmed as described; answering: {question.strip()[:200]}"})
+
+
+def _pm_draft_text(opts: dict[str, Any]) -> str:
+    request_text = opts.get("request_text", "")
+    follow_up_answer = opts.get("follow_up_answer", "")
+    note = f"Incorporated CTO follow-up answer: {follow_up_answer}" if follow_up_answer else ""
+    return json.dumps({"specification": _mock_specification_fields(request_text, note)})
+
+
+def _pm_revision_draft_text(opts: dict[str, Any]) -> str:
+    request_text = opts.get("request_text", "")
+    feedback = opts.get("revision_feedback", "")
+    note = f"Revised per CEO feedback: {feedback.strip()}" if feedback else ""
+    return json.dumps({"specification": _mock_specification_fields(request_text, note)})
+
+
+_PLANNING_TEXT_BY_KIND = {
+    "pm_analysis": _pm_analysis_text,
+    "cto_review": _cto_review_text,
+    "pm_draft_or_followup": _pm_draft_or_followup_text,
+    "cto_followup_answer": _cto_followup_answer_text,
+    "pm_draft": _pm_draft_text,
+    "pm_revision_draft": _pm_revision_draft_text,
+}
+
+
 def _flavor_suffix(system: str) -> str:
     """Light personality flavor sniffed from the system prompt's trait text
     (see prompt_builder.traits) — mock provider has no real model to steer
@@ -243,6 +375,10 @@ def _flavor_suffix(system: str) -> str:
 
 
 def _text_for(model_ref: str, system: str, opts: dict[str, Any]) -> str:
+    planning_turn_kind = opts.get("planning_turn_kind")
+    if planning_turn_kind is not None:
+        return _PLANNING_TEXT_BY_KIND[planning_turn_kind](opts)
+
     role = _role_from_ref(model_ref)
     if role == "reporter":
         return _report_text(opts)

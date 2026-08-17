@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 12 — PM<->CTO Planning + Project Specification
- Overall: 24/70 (Phase 0 + Phase 1 complete; Phase 2-5 not started)
- Now working on: Phase 2 — PM <-> CTO planning orchestration
+ Overall: 31/70 (Phase 0 + Phase 1 + Phase 2 complete; Phase 3-5 not started)
+ Now working on: Phase 3 — API, approval gate, pipeline integration
  Last update: 2026-08-17
 ================================================
 
@@ -76,13 +76,48 @@ PHASE 1 — Planning and Specification Domain          (14/14)
 [x] 1.13 update PROGRESS.txt with final Phase 1 counts
 [x] 1.14 commit + push Phase 1
 
-PHASE 2 — PM <-> CTO Planning Orchestration           (0/?)
-[ ] not started -- mock_provider.py planning-turn generators,
-    app/modules/planning/orchestrator.py, app/modules/planning/service.py,
-    turn-kind dispatch (pm_analysis/cto_review/pm_draft_or_followup/
-    cto_followup_answer/pm_draft/pm_revision_draft), resolver integration,
-    clarification fixture markers, blocking-feasibility fixture markers,
-    turn-budget enforcement, structural-guard extension if needed, tests
+PHASE 2 — PM <-> CTO Planning Orchestration           (7/7)
+[x] 2.1 mock_provider.py: 6 planning-turn text generators
+        (_pm_analysis_text.../_pm_revision_draft_text), NEEDS_CLARIFICATION/
+        BLOCKING_FEASIBILITY_ISSUE/CTO_FOLLOWUP_NEEDED fixture markers,
+        already_resumed suppression, _mock_specification_fields() shared
+        deterministic draft body
+[x] 2.2 app/modules/planning/orchestrator.py: PlanningOrchestrator class,
+        built fresh per call (no DI singleton -- confirmed, DECISIONS #201).
+        start/resume_after_clarification/submit_revision/cancel public API;
+        bounded turn loop (pm_analysis -> cto_review -> pm_draft_or_followup
+        -> [cto_followup_answer -> pm_draft] | pm_revision_draft), all
+        dispatched on turn-kind strings, never role-key literals (Rule #16);
+        structured-output parsing/validation per turn kind with bounded
+        retry (MAX_MALFORMED_ATTEMPTS=2); turn budgeting (MAX_PLANNING_
+        TURNS=6, employee turns only, DECISIONS #203); clarification +
+        blocking-feasibility unified into CLARIFICATION_REQUIRED
+        (DECISIONS #202); Employee runtime state cycling per turn
+        (Assigned->Planning->Working->WaitingReview->Completed->Idle) with
+        cleanup on cancel/failure; full event publishing (all 10 Sprint-12
+        EventTypes)
+[x] 2.3 app/modules/planning/service.py: thin per-call wrapper functions
+        (start_planning/resume_after_clarification/submit_revision/
+        cancel_planning) + read helpers (get_specification/
+        list_specifications/list_turns/list_versions/current_version),
+        same plain-function convention as tasks/service.py
+[x] 2.4 tests/test_planning_orchestrator.py -- 14 tests: fast-agreement
+        path, CTOVacantError, clarification pause+resume, blocking-
+        feasibility pause+resume, CTO-followup path (no CEO pause),
+        turn-budget exhaustion (PlanningTurnBudgetExhaustedError /
+        turn_limit_exceeded), malformed-output bounded retry+failure,
+        failed-run releases agents/lock, cancel releases agents/lock,
+        duplicate-start rejected (ActivePlanningExistsError), Employee
+        model_ref override honored, service-layer parity, revision round
+        produces a second version
+[x] 2.5 tests/test_role_hardcoding_guard.py re-run against orchestrator.py
+        -- 6/6 passing, no Rule #16 violations
+[x] 2.6 full suite: 286 passed / 4 skipped (was 272/4 Phase 1 baseline;
+        +14 net, zero regressions)
+[x] 2.7 docs/DECISIONS.md #201-206 (no-DI-singleton confirmation,
+        clarification/blocking-feasibility unification, turn-budget
+        counting rule, cost-tracking deferral, turn kind vocabulary,
+        CTO-followup never pauses for CEO) + PROGRESS.txt update + commit
 
 PHASE 3 — API, Approval Gate, Pipeline Integration    (0/?)
 [ ] not started -- app/modules/planning/routes.py, main.py wiring,
