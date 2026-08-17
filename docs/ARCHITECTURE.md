@@ -55,7 +55,7 @@ Rendering the org as a single tree produces a contradiction, because leadership 
 
 The PM is the organization's representative to the CEO in both phases.
 
-### 1.2 Role vs Employee  *[Sprint 10 ✅ structural split; hiring flow — Sprint 11]*
+### 1.2 Role vs Employee  *[Sprint 10 ✅ structural split; Sprint 11 ✅ hiring flow]*
 
 This separation is the largest structural change in V1.1.
 
@@ -68,13 +68,29 @@ resolution (`employee_resolution.resolve_employee_for_role`) with an
 (`GET /api/projects/{id}/roles`); and the Rule #16 AST guard
 (`tests/test_role_hardcoding_guard.py`). `tools`/`permissions` exist on
 `RoleSpec` as declared, empty fields (`tools=()`) — no real grants are
-wired yet. Still pending: the CTO role, any role beyond PM/Engineer/Reviewer,
-and the CEO-facing "Add Employee" flow below.
+wired yet.
+
+Sprint 11 shipped: a first-class `cto` `RoleSpec` (leadership, singleton,
+`founding=False` — vacant at company creation, hireable by the CEO rather
+than auto-seeded, see `docs/DECISIONS.md` #178); an authoritative hiring
+service (`app/modules/agent_runtime/service.py::hire_employee`) that is the
+only insertion path for new `AgentORM` rows; a database-backed singleton
+lock (`role_singleton_locks`, keyed on `(project_id, role_key)`, one row per
+occupied singleton Role) that makes concurrent singleton hiring race-safe at
+the transaction level rather than via a check-then-insert in application
+code (see §7.2 below and DECISIONS #182); a canonical, typed, server-owned
+skill-template registry (`app/modules/skill_templates/`, 3 entries,
+presentation-only — no runtime capability grant); a hiring/configuration API
+(`POST /api/projects/{id}/agents`, extended `PUT /api/agents/{id}/profile`,
+`GET /api/projects/{id}/skill-templates`); and an `AGENT_HIRED` event. Still
+pending: any role beyond PM/CTO/Engineer/Reviewer, and PM↔CTO planning
+(Sprint 12).
 
 ```
 Template
   └── Role (immutable definition)
         ├── role_key, title, category (leadership | worker)
+        ├── singleton, founding      (occupancy + auto-seed policy)
         ├── prompt contract          (immutable output contract, e.g. trailing Verdict)
         ├── tool grants              (whitelist — see Rule #12)
         ├── permissions              (what organizational actions this role may take)
@@ -83,19 +99,22 @@ Template
         └── default behavior         (founding AgentProfile defaults)
 
 Company
-  └── Employee (instance)
+  └── Employee (instance, created only by hire_employee / founding seed)
         ├── role_key ────────────────▶ Role
         ├── name
-        ├── model_ref                (per-employee model)
-        └── AgentProfile             (personality / working style / decision style / custom instructions)
+        ├── model_ref                (per-employee model; falls back through the
+        │                             3-tier RoutedProviderGateway resolution)
+        └── AgentProfile             (personality / working style / decision style /
+                                       custom instructions / skill_template_key)
 ```
 
 Constraints:
 
-- **Leadership roles are singletons.** Exactly one PM, one CTO, one Reviewer per company. Enforced at the data layer, not by convention. Never zero, never two.
-- **Worker roles are unbounded.** One role may hold many Employees, each on a different model. The PM assigns a Mission to a specific Employee, not to a role.
-- **Roles are data (Rule #16).** No engine branch, prompt, or component may test a hardcoded role name. Adding Designer / QA / DevOps / Security / ML Engineer / Data Analyst / Technical Writer must be a template-data change, never an engine change.
-- **Employee creation:** Add Employee → select Role → select AI model → select skill template → create. The Role supplies behavior; the Employee supplies identity and model.
+- **Leadership roles are singletons.** Exactly one PM, one CTO, one Reviewer per company. Enforced at the data layer via `role_singleton_locks`, not by convention or a service-level check-then-insert. Never zero, never two — including under concurrent hiring requests (see §7.2).
+- **Worker roles are unbounded.** One role may hold many Employees, each on a different model and skill template. The PM assigns a Mission to a specific Employee, not to a role, via the deterministic resolver (§1.2 resolver note below and `employee_resolution.py`).
+- **Roles are data (Rule #16).** No engine branch, prompt, or component may test a hardcoded role name. Adding Designer / QA / DevOps / Security / ML Engineer / Data Analyst / Technical Writer must be a template-data change, never an engine change. The AST guard (`tests/test_role_hardcoding_guard.py`) scans all of `app/` except `app/templates/` and derives its role-key list from the live template, so it automatically covers new Roles and new production modules (skill_templates, agent_runtime) without needing an update.
+- **Employee creation:** Hire Employee → select Role → select AI model → select skill template → create. The Role supplies behavior; the Employee supplies identity, model, and skill template. Role, model, and skill-template options are always read from their respective canonical registries (`TEMPLATE.roles`, `model_registry`, `skill_templates.registry.SKILL_TEMPLATES`) — never duplicated as a second list in a route or a frontend component.
+- **Employee configuration is independent per Employee.** Changing one Employee's `model_ref` or `skill_template_key` (`PUT /api/agents/{id}/profile`) never mutates `RoleSpec` or any other Employee's configuration, and can never transfer the Employee's `role_key` or company ownership (`ProfileUpdateRequest` has no `role`/`project_id` field and `extra="forbid"`).
 
 Employee count caps may exist as a commercial policy later. The architecture assumes none.
 
@@ -194,7 +213,7 @@ This single stream is also what makes Project Memory possible without a second s
 | Execution | `execution.completed` (per-check results) | V1 |
 | Decision | decision created / approved / changes requested / rejected | V1 |
 | Reliability | `task.recovered`, `budget.exceeded` | V1.1 S9 ✅ |
-| Organization | `employee.hired`, `employee.updated`, `role.assigned` | *V1.1 S10–11* |
+| Organization | `agent.profile_updated` (pre-V1.1), `agent.resolved` (S10 ✅), `agent.hired` (S11 ✅) | V1 / V1.1 S10–11 ✅ |
 | Planning | `discussion.turn`, `specification.drafted`, `specification.approved`, `requirement.asked` | *V1.1 S12* |
 | Harness | `tool.called`, `checks.reacted`, `self_correction.attempted` | *V1.1 S16–17* |
 | Memory | `memory.recorded`, `memory.recalled` | *V1.1 S18* |
@@ -362,6 +381,21 @@ Identified by code review at the V1.1 planning gate; **all five items closed in 
 - Password hashes only (bcrypt, cost 12); no plaintext column exists anywhere in the schema. `scripts/export_users.py` never touches `password_hash`.
 - The identity provider is an interface (`IdentityProvider`) with one implementation (`LocalIdentityProvider`, email+password); adding Google OAuth is one new file, not a refactor — the schema already carries the optional `provider_subject` column, NULL for local accounts.
 - The SSE `/stream` route authenticates the same way as any other route (session cookie), which is *why* sessions are cookies and not a bearer token in the first place — `EventSource` cannot set custom headers.
+- New Sprint 11 routes (`POST /api/projects/{id}/agents`, `GET /api/projects/{id}/skill-templates`, extended `PUT /api/agents/{id}/profile`) follow this same rule with no exception: `project_owned_by`/`resource_owned_by` → 404, never a bespoke auth path.
+
+### 7.3 Singleton hiring concurrency  *[V1.1 — Sprint 11 ✅]*
+
+Sprint 10 deferred the singleton-role TOCTOU risk because no reachable
+mutation existed yet (`create_employee` was not exposed through a route).
+Sprint 11's hiring route made the race real, so it is closed at the
+database layer rather than in application code:
+
+- `role_singleton_locks` (`project_id`, `role_key` composite primary key, `agent_id`, `created_at`) holds exactly one row per `(project, singleton role_key)` that is currently occupied.
+- `hire_employee` inserts the new `AgentORM` row and, for `role.singleton is True`, the matching lock row **in the same transaction**. Founding (`create_department`) does the same for the founding PM/Reviewer, so a freshly created company never has a singleton Employee without a corresponding lock row (see `docs/DECISIONS.md` #183 — a gap that would otherwise let the *first* post-founding hire for `"pm"` slip through).
+- Two concurrent `hire_employee` calls for the same `(project_id, role_key)` both attempt the insert; the database's own primary-key uniqueness constraint — not a service-layer check-then-insert — allows exactly one to commit. The loser's `IntegrityError` is caught and converted to `SingletonRoleViolation` → HTTP 409.
+- This guarantee is per-database-engine agnostic in intent (Postgres row-level MVCC settles the race directly; the SQLite test harness additionally needs an explicit `busy_timeout` so the losing writer reaches the same `IntegrityError` instead of an unrelated `database is locked` error — a test-harness-only concern, see `docs/DECISIONS.md` #184).
+- The lock table's protection is derived from `RoleSpec.singleton`, not a hardcoded set of role keys — a new singleton Role added purely as template data (e.g. a future Designer lead) is automatically protected with zero engine changes.
+- No employee-firing flow exists yet, so lock rows are never deleted once created; this is an accepted Sprint 11 scope boundary, not an oversight (see §9 Out of Scope in `docs/prompts/sprint-11.md`).
 
 ---
 

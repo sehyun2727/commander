@@ -96,7 +96,7 @@ After approval, work descends through the organization.
     CEO only if Critical
 ```
 
-## 2.3 Roles vs Employees — the central V1.1 distinction [Sprint 10 ✅ structural separation shipped]
+## 2.3 Roles vs Employees — the central V1.1 distinction [Sprint 10 ✅ structural separation; Sprint 11 ✅ CTO + hiring]
 
 Role and Employee are different concepts.
 
@@ -104,9 +104,19 @@ Sprint 10 shipped the structural split described below: `RoleSpec` as
 frozen, template-owned data; `Employee` (`AgentORM.role_key`) as a CEO-owned
 instance; singleton enforcement; idle-first Role → Employee resolution; a
 read-only Roles API; and an automated guard against hardcoded role-identity
-branches (Rule #16). Still pending later sprints: the CTO role, the
-Backend/Frontend Engineer split, and any CEO-facing "Add Employee" / hiring
-flow (Sprint 11).
+branches (Rule #16).
+
+Sprint 11 shipped: a first-class `cto` `RoleSpec` (leadership, singleton,
+vacant/hireable at founding rather than auto-seeded); a CEO-facing "Hire
+Employee" flow (`POST /api/projects/{id}/agents`) that lets the CEO hire
+multiple Employees into a worker Role and configure each one's model and
+skill template independently, via the same authoritative
+`hire_employee`/`update_profile` services used everywhere else; a
+database-backed singleton lock (`role_singleton_locks`) that makes
+concurrent singleton hiring race-safe; and a canonical, typed,
+server-owned skill-template registry (`app/modules/skill_templates/`).
+Still pending later sprints: the Backend/Frontend Engineer split and any
+role beyond PM/CTO/Engineer/Reviewer, and PM↔CTO planning (Sprint 12).
 
 |              | Owned by | Defines                                                                                | Count             |
 | ------------ | -------- | -------------------------------------------------------------------------------------- | ----------------- |
@@ -1119,7 +1129,7 @@ V1.1 is built through explicit sprint briefs.
 | ----- | -----: | ----------------------------------------------------- |
 | A     |    9 ✅ | Reliability + auth                                    |
 | B     |   10 ✅ | Role / Employee separation                            |
-| B     |     11 | CTO + multi-employee + hiring                         |
+| B     |   11 ✅ | CTO + multi-employee + hiring                         |
 | C     |     12 | PM↔CTO planning + Project Specification               |
 | D     |     13 | CEO↔PM conversation + PM reports + decision authority |
 | D     |     14 | CEO Workspace UI shell                                |

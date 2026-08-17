@@ -2504,3 +2504,88 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     model-options endpoint keyed by `role_key` instead of the registry's
     own vocabulary. Satisfies brief §6.6 ("prefer extending existing
     endpoints over creating duplicate representations") directly.
+
+### Phase 3 — API and runtime integration (retroactive note)
+
+187. **No separate Phase 3 decision log exists because Phase 2 and Phase 3
+    shipped as one commit** (`3f8d3f4`, "atomic CTO/Employee hiring with
+    DB-backed singleton locks") -- `hire_employee`'s persistence/atomicity
+    work (Phase 2) and its route/schema exposure (Phase 3:
+    `POST /api/projects/{id}/agents`, `RoleResponse.model_ref`, the
+    `agents`/`skill-templates` route wiring) were implemented and reasoned
+    about together, since the service was built route-first (the route
+    signature drove what the service needed to validate and return).
+    Decision #186 above, in particular, *is* a Phase 3 (API surface)
+    decision despite sitting under the Phase 2 heading. Recorded here
+    during Phase 5's documentation audit (brief §8 step 15/§13) so the
+    absence of a dedicated "### Phase 3" heading reads as a deliberate
+    accounting choice, not a gap the sprint forgot to document.
+
+### Phase 4 — Dashboard hiring and configuration UX
+
+188. **Occupied singleton Roles stay visible and disabled in the Hire form,
+    labeled "(already hired)", rather than being filtered out of the
+    `<select>`** (`NewEmployeeForm.tsx`) -- CLAUDE.md Rule #18 forbids a
+    CEO action from appearing to do nothing without explanation; an option
+    that silently disappeared once PM/Reviewer/CTO were hired would look
+    like a bug (or make the CEO wonder whether the Role was ever real),
+    not read as "this position is filled." The effective Role selection
+    still auto-advances to the first *hireable* Role
+    (`hireableRoles[0]`) so the common case (hiring into an open worker
+    Role) never requires the CEO to click past a disabled option first.
+189. **Removed the last Rule #16-risk frontend map** -- `EmployeeProfile.tsx`
+    previously hardcoded a `MODEL_ROLE_FOR_AGENT_ROLE` object mapping
+    `role_key` string literals (`"pm"`, `"engineer"`, `"reviewer"`) to
+    model-registry roles (`"planner"`, `"builder"`, `"reviewer"`) so the
+    model-override dropdown knew which model catalog to read. Adding `cto`
+    would have required editing this map by hand, which is exactly the
+    "adding a Role requires an engine/component change" pattern Rule #16
+    forbids for backend code and that the Sprint 10 AST guard cannot see
+    (the guard only scans `apps/api/`, not the dashboard). Fixed by adding
+    `RoleResponse.model_ref` (decision #186) and a small derivation helper,
+    `registryRoleFor(roles, roleKey)` (`lib/utils.ts`), used identically by
+    both `EmployeeProfile.tsx` and `NewEmployeeForm.tsx`. No dashboard code
+    change is required for CTO or any future Role.
+190. **Model/skill-template dropdowns default to "Use company default" /
+    "Default" (empty string), never a pre-selected concrete value** -- for
+    both the hire form and the edit form, submitting with the default
+    selection sends `null`/omitted `model_ref` and lets the server's
+    3-tier resolution or `DEFAULT_SKILL_TEMPLATE_KEY` apply, rather than
+    the frontend guessing and hardcoding a "first option" default. Keeps
+    the default policy server-owned (brief §4.5), consistent with why
+    `RoleResponse.model_ref` and the skill-template registry exist as
+    server data in the first place.
+
+### Phase 5 — Regression, security, documentation (findings)
+
+191. **No implementation bugs found during Phase 5 audit** -- the full
+    regression pass (248 passed / 4 skipped, dashboard typecheck + build
+    clean, live-Postgres migration upgrade-from-Sprint-10 and fresh-bootstrap
+    both verified, AST role-hardcoding guard green, manual read-through of
+    every new route/schema/event payload/mutation hook) found zero auth,
+    ownership, secret-leakage, hardcoding, or silent-failure defects.
+    Nothing required a code fix in Phase 5; the work was verification and
+    documentation sync only, exactly as the brief scopes it (§8 Phase 5,
+    "regression/audit/docs only").
+192. **`WorkflowEngine` received zero Sprint 11 changes** -- confirmed by an
+    empty `git diff --stat` for `apps/api/app/modules/workflow_engine`
+    across the entire sprint (`29fd400..HEAD`). Hiring/configuration logic
+    lives entirely in `agent_runtime`/`agent_profiles`/`skill_templates`,
+    as the brief's constraint #14 requires; there was never a design that
+    risked otherwise, so this is a confirmation, not a course-correction.
+193. **Deliberate Sprint 12+ deferrals, reaffirmed at sprint close** (see
+    brief §9 for the full list; recorded here as the definitive Sprint 11
+    handoff boundary) -- PM↔CTO planning conversations and any CTO
+    "discuss" pipeline stage; Project Specification and Requirement
+    Discovery; CEO↔PM conversation/decision-authority work (Sprint 13); the
+    CEO Workspace UI shell and Widget system (Sprints 14–15); the Agent
+    Harness and any iterative/tool-loop execution (Sprint 16); self-
+    correction (Sprint 17); Project Memory (Sprint 18); employee
+    firing/removal (no safe path exists -- `role_singleton_locks` rows are
+    never deleted, by design, since nothing yet frees one); the
+    Backend/Frontend Engineer split and any Role beyond
+    PM/CTO/Engineer/Reviewer; arbitrary Role creation, Role editing, or
+    arbitrary skill/tool authoring by the CEO; a second company template;
+    multi-user collaboration; and browser-tooling-dependent UI verification
+    (no such tool was available in this environment for Sprint 10 or
+    Sprint 11 -- re-confirmed at Phase 5 via `ToolSearch`).

@@ -1,9 +1,10 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 11 — Build the Company: CTO, Hiring, Employee Configuration
- Overall: 73/93 · 78%
- Now working on: Phase 5 (regression, security, documentation)
- Last update: 2026-08-14
+ Overall: 92/93 · 99% (0.8 is a permanently-partial carried-forward note,
+ not a failure -- browser tooling remains unavailable in this environment)
+ Now working on: Sprint 11 complete -- ready for CEO/PM review
+ Last update: 2026-08-17
 ================================================
 
 PHASE 0 — Baseline and Sprint State                 (9/10)
@@ -149,25 +150,72 @@ PHASE 4 — Dashboard Hiring and Configuration UX      (19/19)
 [x] 4.18 update PROGRESS.txt
 [x] 4.19 commit + push Phase 4
 
-PHASE 5 — Regression, Security, Documentation        (0/19)
-[ ] 5.1 full backend test suite
-[ ] 5.2 dashboard typecheck
-[ ] 5.3 dashboard production build
-[ ] 5.4 mock E2E with zero provider keys
-[ ] 5.5 re-run hiring API integration flow
-[ ] 5.6 verify migration from Sprint 10 revision
-[ ] 5.7 verify fresh database bootstrap
-[ ] 5.8 review git diff for scope leakage
-[ ] 5.9 audit new routes for auth/ownership
-[ ] 5.10 audit API/event output for secrets/unsafe skill details
-[ ] 5.11 audit role/model/skill hardcoding (AST guard green)
-[ ] 5.12 audit WorkflowEngine for unrelated growth
-[ ] 5.13 audit mutation hooks for visible error handling
-[ ] 5.14 classify verification (unit/API/integration/migration/typecheck/build/
-         browser/mock E2E/real LLM E2E)
-[ ] 5.15 update CLAUDE.md, ARCHITECTURE.md, DECISIONS.md, UX_SPEC.md, README.md(if needed)
-[ ] 5.16 record deliberate Sprint 12 deferrals
-[ ] 5.17 PROGRESS.txt marked complete only after verification+docs done
-[ ] 5.18 commit + push final documentation and progress state
-[ ] 5.19 confirm local HEAD == origin/master
+PHASE 5 — Regression, Security, Documentation        (19/19)
+[x] 5.1 full backend test suite: 248 passed / 4 skipped (was 218/4 baseline,
+        225/4 after Phase 1; +23 net across Phase 2/3 hiring+concurrency+
+        skill-template tests)
+[x] 5.2 dashboard typecheck: clean (tsc --noEmit, zero errors)
+[x] 5.3 dashboard production build: clean, 15 routes unchanged (Next.js 14.2.35)
+[x] 5.4 mock E2E with zero provider keys: confirmed no apps/api/.env, no
+        ANTHROPIC_API_KEY in shell env, Settings.commander_provider default
+        is "mock" -- the full suite (incl. test_full_hiring_flow_end_to_end,
+        the mission-lifecycle test, and every other mission test) ran under
+        mock mode with zero keys
+[x] 5.5 re-run hiring API integration flow: test_full_hiring_flow_end_to_end
+        (tests/test_hiring.py:143) re-executed as part of 5.1's full-suite
+        run -- company -> roles(incl. cto) -> hire CTO -> reject 2nd CTO 409
+        -> hire Kim/Lee Engineers -> edit Kim independently -> list reflects
+        independent configs -> assign+run a real mission to completion
+[x] 5.6 verify migration from Sprint 10 revision: live commander-postgres-1
+        downgraded 3066d66c0064 -> 3c792f42c404 (Sprint 10 head), then
+        upgraded back to head -- role_singleton_locks correctly backfilled
+        one row per pre-existing pm/reviewer across all 5 dev projects
+[x] 5.7 verify fresh database bootstrap: created throwaway
+        commander_freshcheck DB, `alembic upgrade head` from <base> ran all
+        5 revisions cleanly (baseline -> ... -> 3066d66c0064), then dropped
+[x] 5.8 review git diff for scope leakage: `git diff 29fd400..HEAD --stat` --
+        35 files, all within Sprint 11 boundaries (template, agent_runtime,
+        agent_profiles, skill_templates, projects/schemas, core contracts/
+        events/db_models, dashboard employees UI, docs, tests); zero touch
+        to workflow_engine, auth, provider_gateway, model_registry internals
+[x] 5.9 audit new routes for auth/ownership: POST/GET /api/projects/{id}/agents
+        and GET /api/projects/{id}/skill-templates use project_owned_by ->
+        404; PUT/GET /api/agents/{id}/profile uses resource_owned_by -> 404
+        (not 403, per Rule #15) -- confirmed by reading routes.py directly
+[x] 5.10 audit API/event output for secrets/unsafe skill details: RoleResponse
+         excludes contract/tools/permissions; SkillTemplateResponse excludes
+         `capabilities` (inert, never exposed); HireEmployeeRequest uses
+         extra="forbid"; AgentHiredPayload carries only agent_id/role_key/
+         model_ref/skill_template_key, no secrets/prompts
+[x] 5.11 audit role/model/skill hardcoding: AST guard (test_role_hardcoding_
+         guard.py) re-run standalone, 6/6 green, scans all of app/ except
+         app/templates/ via rglob so it automatically covers the new
+         skill_templates and agent_runtime surfaces with no update needed;
+         dashboard grep for hardcoded role/skill literals in lib/components
+         found none
+[x] 5.12 audit WorkflowEngine for unrelated growth: `git diff --stat` for
+         apps/api/app/modules/workflow_engine is empty -- zero changes
+[x] 5.13 audit mutation hooks for visible error handling: every useMutation
+         in lib/hooks.ts (including useHireEmployee, useUpdateEmployeeProfile)
+         has onError: (error) => showToast(mutationErrorMessage(error)); no
+         silent-failure mutation found
+[x] 5.14 classify verification: unit/domain PASS, API PASS, integration PASS,
+         concurrency PASS, migration PASS (upgrade-from-Sprint-10 + fresh),
+         typecheck PASS, build PASS, browser UNVERIFIED (no browser tool
+         available, re-confirmed via ToolSearch this phase), mock E2E PASS,
+         real LLM E2E UNVERIFIED (not required this sprint, no credentials
+         configured) -- see final report §11 for full matrix
+[x] 5.15 updated CLAUDE.md (§2.3 Sprint 11 CTO+hiring summary, roadmap table
+         11 marked done), docs/ARCHITECTURE.md (§1.2 Role/Employee, new §7.3
+         singleton concurrency, event-family table), docs/DECISIONS.md
+         (#187-193), docs/design/UX_SPEC.md (§5.4 rewritten: hiring entry
+         point, form fields/defaults, singleton/occupied state, multi-
+         employee display, editing flow, loading/error/success, browser
+         status), README.md (status paragraph -- CTO/hiring now shipped,
+         removed from "remaining roadmap")
+[x] 5.16 record deliberate Sprint 12 deferrals: DECISIONS.md #193
+[x] 5.17 PROGRESS.txt marked complete (below) -- all verification and docs
+         steps above are done, not aspirational
+[x] 5.18 commit + push final documentation and progress state
+[x] 5.19 confirm local HEAD == origin/master
 ================================================

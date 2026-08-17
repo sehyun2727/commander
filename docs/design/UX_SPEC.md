@@ -216,37 +216,59 @@ Still the product's most important component:
 
 V1.1 adds one variant: the **Specification approval** card, whose body is the specification summary rather than a single problem statement.
 
-### 5.4 Employees  *[Sprint 10 ✅ grouped-by-category display; Sprint 11 — CTO, worker-role split, Add Employee]*
+### 5.4 Employees  *[Sprint 10 ✅ grouped-by-category display; Sprint 11 ✅ CTO, hiring, per-Employee configuration]*
 
 Sprint 10 shipped the grouping-by-`Role.category` behavior below for the
 current PM/Engineer/Reviewer roster (`Leadership`/`Engineering` section
 headings, a section hidden entirely when it holds no hired Employee — §10.4).
-The full picture — a second Leadership row (CTO), a worker-role split
-(Backend/Frontend Engineer), and the **+ Add Employee** action — is Sprint 11.
+
+Sprint 11 shipped a second Leadership Role (CTO, vacant/hireable rather
+than auto-seeded — see `docs/DECISIONS.md` #178), the **Hire Employee**
+action, and per-Employee skill-template editing. The Backend/Frontend
+Engineer split shown in the illustrative diagram below is **not yet
+shipped** — Sprint 11 has one `engineer` worker Role, and multiple
+Employees can already be hired into it. The split is deferred to a later
+sprint as data (a template change, not an engine change).
 
 **Roles are positions; Employees are people.** The Employees page shows the org, grouped by role:
 
 ```
 Leadership              (permanent, exactly one each)
   PM        · Jun    · Claude Sonnet
-  CTO       · Mina   · Claude Opus
+  CTO       · Mina   · Claude Opus     (or: vacant — hireable)
   Reviewer  · Tae    · Claude Sonnet
 
 Engineering             (unlimited)
-  Backend Engineer
-    · Kim   · Claude Sonnet
-    · Lee   · GPT-5.5
-  Frontend Engineer
-    · Park  · Gemini
+  Engineer
+    · Kim   · Claude Sonnet · Speed-Focused
+    · Lee   · Claude Sonnet · Research-Focused
 
-                                        [ + Add Employee ]
+                                        [ + Hire Employee ]
 ```
 
-**Add Employee flow:** select Role → select AI model → select skill template → name → create. The Role is a position with fixed behavior; the Employee is a worker with an identity and a model. The UI must make that distinction legible — a CEO should understand that hiring a second Backend Engineer on a different model is a staffing choice, not a configuration change.
+**Hiring entry point:** a single **"+ Hire Employee"** button (`components/NewEmployeeForm.tsx`) above the grouped roster, matching the existing inline expand/collapse pattern used by "+ New Mission." Disabled (not hidden) when every Role is a filled singleton — i.e. there is nothing left to hire.
+
+**Hire form fields:**
+- **Role** — a `<select>` populated from `GET /api/projects/{id}/roles`. Every Role always appears, including occupied singleton Roles; an occupied singleton Role's `<option>` is `disabled` and its label is suffixed `"(already hired)"` rather than removed from the list — the CEO can see the position is filled, not wonder why it vanished.
+- **Employee name** — free-text, required, trimmed before submit. Submit stays disabled until non-empty.
+- **Model** — a `<select>` populated from `GET /api/projects/{id}/models`, scoped to the selected Role's registry role (derived from `RoleResponse.model_ref`, never a hardcoded Role→model map). Defaults to "Use company default."
+- **Skill template** — a `<select>` populated from `GET /api/projects/{id}/skill-templates` (key/title/description only). Defaults to the server-side default when left unset.
+
+**Singleton / occupied state:** the effective Role selection auto-advances past occupied singletons (`hireableRoles[0]`) so the CEO never lands on a disabled option by default; attempting to submit against an occupied singleton is also rejected client-side before the request is sent, and would be rejected server-side (409) regardless.
+
+**Multiple-Employee display:** worker Roles render one card per hired Employee, unbounded; hiring a second, third, … Employee into the same worker Role never disables the Role option.
+
+**Editing flow:** the existing Employee profile page (`EmployeeProfile.tsx`) gained a Skill Template `<select>`, wired to `PUT /api/agents/{id}/profile`'s `skill_template_key` field, alongside the model selector that already existed. Saving shows the same "Saved." confirmation used by the rest of the page. Editing one Employee never changes another Employee's configuration or the Role itself.
+
+**Loading / success / error / empty states:** the Hire button reads "Hiring…" and is disabled while the mutation is pending (no duplicate submission). On success the form collapses and the roster + Timeline refetch. On failure — invalid Role/model/skill, a filled singleton (409), or a network error — the existing global toast/error system surfaces the message; no partial Employee ever appears in the roster. The page's pre-existing loading/empty states are unchanged.
+
+**Add Employee flow (summary):** select Role → select AI model → select skill template → name → create. The Role is a position with fixed behavior; the Employee is a worker with an identity, a model, and a skill template. The UI must make that distinction legible — a CEO should understand that hiring a second Engineer on a different model/skill template is a staffing choice, not a configuration change.
 
 Leadership roles cannot be removed or duplicated; the UI never offers the action.
 
-Future roles (Designer, QA, DevOps, Security, ML Engineer, Data Analyst, Technical Writer, …) appear in the role list only when the template actually defines them.
+Future roles (Designer, QA, DevOps, Security, ML Engineer, Data Analyst, Technical Writer, the Backend/Frontend Engineer split, …) appear in the role list only when the template actually defines them — no dashboard code change required.
+
+**Browser verification status:** UNVERIFIED. No browser automation tool was available in this environment for Sprint 10 or Sprint 11 (re-confirmed at Sprint 11 Phase 0, Phase 4, and Phase 5). Typecheck and production build are green; the hiring flow above is verified at the API/integration level (`tests/test_hiring.py::test_full_hiring_flow_end_to_end`) but the actual rendered UI, click-through, and keyboard/focus behavior have not been observed in a browser.
 
 ---
 
