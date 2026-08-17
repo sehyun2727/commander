@@ -178,7 +178,7 @@ Widget catalog (V1.1 target set — shipped progressively as their data becomes 
 
 ## 5. Organization Experience
 
-### 5.1 From instruction to specification  *[V1.1 — Sprint 12]*
+### 5.1 From instruction to specification  *[V1.1 — Sprint 12 ✅]*
 
 ```
 CEO: "Build a shopping mall."
@@ -197,6 +197,8 @@ CEO: "Build a shopping mall."
 Requirement Discovery is a **feature of the organization, not a form.** The PM asks because a real PM would ask, and asks only what actually matters — the questions themselves are produced by the PM/CTO discussion, not from a fixed checklist.
 
 The Specification presented to the CEO is readable in under two minutes: Goal · Target User · Core Features · Technical Constraints · Acceptance Criteria · Risks. Engineering does not begin before approval.
+
+**As built:** the CEO Workspace / PM conversation surface this section assumes doesn't exist yet (Sprints 13–15), so Sprint 12 shipped the Specification lifecycle as its own **Specifications** Sidebar page (Rule #17) rather than inside a Timeline/conversation view — a list (`/company/[id]/specifications`) with a "Start Planning" action that's disabled with inline guidance when no CTO is hired, and a detail page per Specification showing the PM↔CTO turn transcript, clarification Q&A, version history, and the approve/revision/reject/cancel actions. When the PM conversation surface ships, this page's content is the natural candidate to surface *through* that conversation instead of only next to it; that migration is deferred to whichever of Sprints 13–15 implements it, not assumed here.
 
 ### 5.2 Decisions reach the CEO only when they matter  *[V1.1 — Sprint 13]*
 
@@ -295,6 +297,7 @@ These already exist and continue to; most also project a Widget into the dock. O
 - **Missions** — kanban (Backlog / Developing / Needs your decision / Done) + Mission detail: Meeting transcript, deliverable, decision history. Code missions render the **Change Summary Card** (summary → files → diff, strictly that order) with check results as plain verdict chips. The diff is never the landing view.
 - **Employees** — §5.4.
 - **Decisions** — Pending / History (immutable). History shows the decision, the CEO's comment, and what happened after.
+- **Specifications** *[Sprint 12 ✅]* — §5.1. List + detail for the Project Specification lifecycle; "Start Planning" is disabled with inline guidance when no CTO is hired.
 - **Timeline** — the company's collective memory and the trust engine. Conversation events as meeting bubbles, system events as compact rows, filters, CEO ↔ Technical toggle, digest grouping for consecutive minor events. The feed must never become a log file. V1.1 adds discussion turns, tool calls, and memory recalls to the Technical view.
 - **Reports** — executive memo list + reader; readable in 60 seconds.
 - **Workspace** — the company's real git-backed codebase: file tree, file viewer, merge history. Read-only.

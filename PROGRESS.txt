@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 12 — PM<->CTO Planning + Project Specification
- Overall: 50/70+ (Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 complete; Phase 5 not started)
- Now working on: Phase 5 — Full verification and documentation
+ Overall: 73/73 (Phase 0-5 complete. Sprint 12 done.)
+ Now working on: nothing -- Sprint 12 complete, awaiting next sprint brief
  Last update: 2026-08-17
 ================================================
 
@@ -199,6 +199,116 @@ PHASE 4 — Dashboard Planning/Specification UX         (11/11)
          CLAUDE.md §16.7); backend suite re-run clean at 297/4 (unchanged,
          Phase 4 touched no backend code)
 
-PHASE 5 — Full Verification and Documentation         (0/?)
-[ ] not started
+PHASE 5 — Full Verification and Documentation         (23/23)
+[x] 5.1  full backend suite: 297 passed / 4 skipped (unchanged baseline,
+         re-confirmed after the FK-cycle fix below)
+[x] 5.2  dashboard typecheck (`npx tsc --noEmit`): clean
+[x] 5.3  dashboard production build (`npm run build`): clean, both
+         /specifications and /specifications/[specificationId] routes
+         present in the route manifest
+[x] 5.4  verified migration from Sprint 11 revision: `alembic downgrade -1`
+         (7a1c9e3f2b6d -> 3066d66c0064) then `upgrade head` against live
+         Postgres, both clean
+[x] 5.5  verified fresh database bootstrap: `scripts/seed.py` FOUND A REAL
+         BUG here -- Base.metadata.drop_all() raised CircularDependencyError
+         on the tasks<->specifications FK cycle (tasks.specification_id ->
+         specifications.id, specifications.source_task_id -> tasks.id; the
+         first FK cycle anywhere in db_models.py). Root-caused, fixed, and
+         verified -- see DECISIONS #216. Alembic's own upgrade/downgrade path
+         was unaffected (hand-ordered ops); sqlite's create_all (test suite)
+         was unaffected (sqlite doesn't validate FK targets at CREATE TABLE
+         time). Fix: use_alter=True + name="fk_tasks_specification_id" on
+         TaskORM.specification_id's ForeignKey, mirrored onto the Alembic
+         migration's op.add_column. Re-ran seed.py clean after the fix --
+         demo company "Acme AI" + 5 demo missions seed correctly. Committed
+         separately (90b0181) before continuing Phase 5, then re-ran 5.1-5.3
+         to confirm zero regression.
+[x] 5.6  mock E2E with zero provider keys: covered by
+         test_full_mock_e2e_flow_from_request_to_completed_mission
+         (test_planning_api.py:238) and this session's + Phase 4's curl-
+         driven manual E2E, both against COMMANDER_PROVIDER=mock with no
+         API keys configured
+[x] 5.7  direct-ready and clarification/revision flows: covered by
+         test_fast_agreement_path_reaches_ready_for_review,
+         test_clarification_path_pauses_then_resumes_to_ready,
+         test_blocking_feasibility_path_pauses_then_resumes_to_ready,
+         test_cto_followup_path_reaches_ready_without_ceo_pause,
+         test_revision_round_produces_a_second_version (orchestrator) +
+         test_revision_via_api_produces_a_second_version (API)
+[x] 5.8  execution cannot start before approval: covered by
+         test_begin_execution_requires_approval
+         (test_planning_api.py:171)
+[x] 5.9  existing historical/active mission compatibility: the full 297-
+         test suite (including pre-Sprint-12 mission tests) passes with
+         specification_id defaulting to NULL; scripts/seed.py's 5 demo
+         missions (none created via the planning path) seed and complete
+         correctly post-fix
+[x] 5.10 approval/execution concurrency: covered by
+         test_second_concurrent_start_returns_409,
+         test_approve_is_idempotent_guarded_by_409,
+         test_second_planning_run_rejected_while_one_is_active,
+         test_only_one_active_specification_lock_per_project
+[x] 5.11 auth/ownership audit (Rule #15): independently re-verified --
+         every route in planning/routes.py (10 routes) calls
+         project_owned_by or resource_owned_by(SpecificationORM, ...)
+         before touching data; cross-account access returns 404
+         (test_cross_account_access_returns_404_not_403)
+[x] 5.12 provider output validation/retry-bound audit (Rule #13):
+         MAX_MALFORMED_ATTEMPTS = 2 in orchestrator.py, enforced in
+         _call_turn()'s retry loop before MalformedProviderOutputError
+         triggers cleanup via _fail()
+[x] 5.13 secrets/hidden-reasoning audit: no SPECIFICATION_* event payload
+         carries secrets or raw provider reasoning -- e.g.
+         SpecificationTurnPostedPayload exposes only specification_id/
+         turn_index/role_key/agent_id/kind, never turn text/content
+[x] 5.14 role hardcoding audit (Rule #16): test_role_hardcoding_guard.py
+         re-run explicitly, 6/6 passed -- the AST-based guard scans all of
+         app/ outside templates/ and found zero violations in the new
+         planning module; the one role-branch in orchestrator.py
+         (_role_for_kind) branches on turn *kind* strings
+         ("cto_review"/"pm_analysis"/...), not role identity, and resolves
+         actual role_keys from TEMPLATE data -- allowed under Rule #16's
+         stage-kind exception
+[x] 5.15 WorkflowEngine/module boundary audit (Rule #1): planning module's
+         only cross-module import is workflow_engine's public
+         resolve_employee_for_role re-export
+         (workflow_engine/__init__.py); no planning logic leaked into
+         workflow_engine/engine.py itself
+[x] 5.16 cancellation/failure cleanup audit: _fail() and the
+         CancelledError/exception paths in _run_turn() both call
+         _release_lock() (deletes the active_specification_locks row) and
+         _release_agent_to_idle() for every agent touched, on every exit
+         path (turn-budget exhaustion, malformed-output exhaustion,
+         provider error, explicit cancel)
+[x] 5.17 dashboard mutation error-visibility audit (Rule #18): all 7
+         Sprint-12-added hooks (useStartPlanning, useAnswerClarification,
+         useSubmitSpecificationRevision, useApproveSpecification,
+         useRejectSpecification, useCancelSpecification,
+         useBeginExecution) have onError -> showToast(mutationErrorMessage)
+[x] 5.18 full diff scope audit: `git diff --stat aed4786..HEAD` reviewed
+         file-by-file -- every touched file is new planning
+         infrastructure or a small justified extension point (model
+         registry ref, prompt_builder override param, tasks/service.py
+         specification_id plumbing, workflow_engine's one re-export); no
+         Sprint 13+ features, no unrelated refactors, no dependency bumps
+[x] 5.19 docs updated: CLAUDE.md (§2.3 Sprint 12 shipped summary, §12
+         roadmap table checked off), docs/ARCHITECTURE.md (§4.2 "As built"
+         note, §6.1 planning module row, §7.2 auth line, §8 Planning &
+         Specifications frontend paragraph), README.md (status line +
+         "Hire a CTO..." bullet), docs/design/UX_SPEC.md (§5.1 marked
+         shipped + "As built" divergence note re: Sidebar page vs. not-
+         yet-built CEO Workspace, §7 Specifications sidebar entry),
+         docs/DECISIONS.md (#216, the FK-cycle bug)
+[x] 5.20 Sprint 13+ deferrals: already correctly scoped out and named in
+         CLAUDE.md's own roadmap table (Sprint 13: CEO<->PM conversation +
+         PM reports + decision authority; Sprint 14: CEO Workspace shell;
+         Sprint 15: Widgets) -- no new deferrals surfaced beyond what the
+         roadmap already states; the UX_SPEC #5.1 "As built" note records
+         the specific migration-to-conversation-surface deferral for
+         whichever future sprint implements it
+[x] 5.21 commit/push final documentation (this commit)
+[x] 5.22 confirmed clean intended working tree, local HEAD == origin/master
+         after push
+[x] 5.23 pre-existing docs/prompts rename: already resolved before Phase 5
+         started (not present in current git status); left untouched
 ================================================

@@ -238,7 +238,7 @@ The V1 pipeline (`plan → produce → review`) becomes one instance of a genera
 
 **Built in Sprint 9** as `TEMPLATE.pipeline: tuple[StageSpec, ...]` (`app/templates/software_company.py`). The `software_company` template still ships exactly the 3-stage `plan → produce → review` shape this sprint — `kind` (`"discuss"` is not yet a real stage kind; PM↔CTO discussion is Sprint 12) drives the engine's per-stage event/side-effect dispatch generically, so adding a stage (a second `produce` role in Sprint 11, a `discuss` kind in Sprint 12) is template data, not an engine change. Verified by a test-only 4-stage pipeline (`tests/test_pipeline_stages.py`) built from the real template's three roles, with `produce` appearing twice.
 
-### 4.2 Planning phase  *[V1.1 — Sprint 12]*
+### 4.2 Planning phase  *[V1.1 — Sprint 12 ✅]*
 
 ```
 CEO instruction (vague is fine)
@@ -259,6 +259,26 @@ CEO instruction (vague is fine)
 ```
 
 Requirement Discovery is a first-class behavior: when the specification cannot be completed honestly, the organization asks rather than guesses.
+
+**As built (`app/modules/planning/`):** a `Specification` aggregate moves
+through a 9-state machine (`draft → planning → {clarification_required,
+ready_for_review} → {approved, revision_requested, rejected, cancelled,
+failed}`, `core/lifecycle/specification_states.py`). `PlanningOrchestrator`
+drives the bounded PM↔CTO turn loop (turn-budget and
+`MAX_MALFORMED_ATTEMPTS`-bounded malformed-output retry, both Rule #13);
+a DB-backed `active_specification_locks` row (mirroring Sprint 11's
+singleton-hiring lock pattern) makes concurrent planning runs
+race-safe/rejected with 409 rather than double-running. Each completed
+run produces a versioned `SpecificationVersion` (goals / non_goals /
+requirements / acceptance_criteria / technical_approach /
+architecture_components / risks+mitigations / dependencies / assumptions
+/ unresolved_questions / implementation_stages — a superset of the
+sketch above). The CEO reaches this only through the existing PM
+conversational counterpart (Rule #11) and a dedicated Sidebar
+"Specifications" surface (Rule #17); approval is the sole gate for
+`POST /specifications/{id}/begin-execution`, which creates and assigns a
+Mission stamped with `specification_id` for provenance — pre-Sprint-12
+Missions remain valid with `specification_id = NULL`.
 
 ### 4.3 Decision authority  *[V1.1 — Sprint 13]*
 
@@ -334,7 +354,8 @@ Selective recall is mandatory: injecting the entire history into every prompt wo
 | `core/boot_checks` | Fail-fast startup validation before `init_db()`. | ✅ |
 | `auth` | Local email+password accounts. `IdentityProvider` port + `LocalIdentityProvider`; bcrypt (cost 12) password hashing, no plaintext column anywhere; HttpOnly session cookies, SHA-256 token hash at rest, sliding 7-day expiry / 30-day max age; `register`/`login`/`logout`/`me` routes; `get_current_user` dependency applied to every non-health/non-auth router. | ✅ Sprint 9 |
 | Roles API | `GET /api/projects/{id}/roles` — read-only, template-owned Role data (`key`/`title`/`category`/`singleton`/`description`); no write route, Role is not CEO-owned. Lives in `projects` module, not a standalone `roles` module. | ✅ Sprint 10 |
-| `specifications`, `memory`, `widgets` | — | 🔲 **Do not exist** — Sprints 12–18 |
+| `planning` | PM↔CTO Project Specification lifecycle (§4.2 "As built"): `PlanningOrchestrator` (bounded turn loop, turn-budget + malformed-output-retry guarded per Rule #13), `service` (start/resume/revise/approve/reject/cancel/begin-execution, all ownership-gated), `routes`. DB-backed `active_specification_locks` singleton lock, mirroring Sprint 11's hiring-lock pattern. | ✅ Sprint 12 |
+| `memory`, `widgets` | — | 🔲 **Do not exist** — Sprints 15–18 |
 
 ### 6.2 Lifecycles
 
@@ -382,6 +403,7 @@ Identified by code review at the V1.1 planning gate; **all five items closed in 
 - The identity provider is an interface (`IdentityProvider`) with one implementation (`LocalIdentityProvider`, email+password); adding Google OAuth is one new file, not a refactor — the schema already carries the optional `provider_subject` column, NULL for local accounts.
 - The SSE `/stream` route authenticates the same way as any other route (session cookie), which is *why* sessions are cookies and not a bearer token in the first place — `EventSource` cannot set custom headers.
 - New Sprint 11 routes (`POST /api/projects/{id}/agents`, `GET /api/projects/{id}/skill-templates`, extended `PUT /api/agents/{id}/profile`) follow this same rule with no exception: `project_owned_by`/`resource_owned_by` → 404, never a bespoke auth path.
+- New Sprint 12 `planning` routes (start/list/get/turns/versions/resume/revise/approve/reject/cancel/begin-execution) follow the same rule with no exception — every route resolves ownership via `project_owned_by` or `resource_owned_by(SpecificationORM, ...)` before touching data.
 
 ### 7.3 Singleton hiring concurrency  *[V1.1 — Sprint 11 ✅]*
 
@@ -419,6 +441,8 @@ Rationale: the widget dock already replicates everything Headquarters does; keep
 Cross-cutting: one SSE connection per company, events dedup by id and invalidate queries; generated event types only; `ApiStatusBanner` polls health; SSE connection status surfaces as a "Reconnecting…" pill; a persistent "Simulation mode" badge whenever the company runs on mock.
 
 **Auth (Sprint 9 ✅):** every API call sends `credentials: "include"`; a plain React `AuthProvider` context (mirroring `RealtimeProvider`'s pattern, not a state library) holds the current user and is mounted once in `Providers`. Any 401, from any request anywhere in the app, dispatches a `commander:unauthorized` `window` event that `AuthProvider` alone listens for — clearing local state and redirecting to `/login`, decoupling `lib/api.ts` from React/router. `RequireAuth` gates `/` and `/company/[id]` (and everything under it); `/login` and `/register` are the only unauthenticated routes. Per brief §2.11, the top-right `AccountBadge` is a single click-to-sign-out control, deliberately not a dropdown; a separate email + "Sign out" row lives in the Sidebar footer.
+
+**Planning & Specifications (Sprint 12 ✅):** the Project Specification lifecycle lands as its own Sidebar page (`/company/[id]/specifications`, Rule #17), never bolted onto the PM conversation — a list view (`SpecificationCard` + `StartPlanningForm`, which disables planning client-side when no CTO is hired) and a detail view (`SpecificationDetail`) covering status, the safe PM↔CTO turn transcript, version history, clarification Q&A, and the approve/revision/reject/cancel/begin-execution actions. `invalidateForEvent` grew a `specificationId` param so SSE-pushed `SPECIFICATION_*` events refetch the same way Mission/Employee events already do.
 
 ---
 

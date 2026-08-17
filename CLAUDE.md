@@ -96,7 +96,7 @@ After approval, work descends through the organization.
     CEO only if Critical
 ```
 
-## 2.3 Roles vs Employees — the central V1.1 distinction [Sprint 10 ✅ structural separation; Sprint 11 ✅ CTO + hiring]
+## 2.3 Roles vs Employees — the central V1.1 distinction [Sprint 10 ✅ structural separation; Sprint 11 ✅ CTO + hiring; Sprint 12 ✅ PM↔CTO planning]
 
 Role and Employee are different concepts.
 
@@ -115,8 +115,20 @@ skill template independently, via the same authoritative
 database-backed singleton lock (`role_singleton_locks`) that makes
 concurrent singleton hiring race-safe; and a canonical, typed,
 server-owned skill-template registry (`app/modules/skill_templates/`).
-Still pending later sprints: the Backend/Frontend Engineer split and any
-role beyond PM/CTO/Engineer/Reviewer, and PM↔CTO planning (Sprint 12).
+Sprint 12 shipped the Project Specification lifecycle: a PM↔CTO planning
+orchestration (`app/modules/planning/`) that turns a CEO request into a
+reviewable, versioned `Specification` document through a budgeted turn
+loop (fast agreement, clarification, or blocking-feasibility paths, each
+resuming to `ready_for_review`); a CEO decision gate
+(approve/reject/request-revision/cancel) that only lets an approved
+Specification create and assign a gated Mission via
+`POST /specifications/{id}/begin-execution`; and a CEO-facing
+Specifications surface (Sidebar page, per-Specification detail view,
+turn transcript, version history) reached only through the PM's existing
+conversational counterpart role (Rule #11 — the CEO never talks to the
+CTO directly; the Specification document itself is the CEO's window into
+the PM↔CTO discussion). Still pending later sprints: the Backend/Frontend
+Engineer split and any role beyond PM/CTO/Engineer/Reviewer.
 
 |              | Owned by | Defines                                                                                | Count             |
 | ------------ | -------- | -------------------------------------------------------------------------------------- | ----------------- |
@@ -1130,7 +1142,7 @@ V1.1 is built through explicit sprint briefs.
 | A     |    9 ✅ | Reliability + auth                                    |
 | B     |   10 ✅ | Role / Employee separation                            |
 | B     |   11 ✅ | CTO + multi-employee + hiring                         |
-| C     |     12 | PM↔CTO planning + Project Specification               |
+| C     |   12 ✅ | PM↔CTO planning + Project Specification               |
 | D     |     13 | CEO↔PM conversation + PM reports + decision authority |
 | D     |     14 | CEO Workspace UI shell                                |
 | D     |     15 | Widget system                                         |
