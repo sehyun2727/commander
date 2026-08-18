@@ -241,7 +241,7 @@ PHASE 3 — Harness and AgentRuntime Integration
 [x] 3.8 docs/DECISIONS.md #235 (orchestrator/provider/template design)
         and #236 (engine wiring + the two bugs) recorded
 [x] 3.9 full suite green: 453 passed, 6 skipped in 343.17s
-[ ] 3.10 commit/push Phase 3 checkpoint
+[x] 3.10 commit/push Phase 3 checkpoint
 
 PHASE 4 — Mission Integration and Safe Observability
 [ ] not started
