@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RealtimeProvider } from "@/components/RealtimeProvider";
 import { Sidebar } from "@/components/Sidebar";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -15,6 +15,24 @@ export default function CompanyLayout({
   params: { id: string };
 }) {
   const [navOpen, setNavOpen] = useState(false);
+
+  // Keyboard users can dismiss the mobile drawer with Escape, matching the
+  // backdrop click/close-button affordances already available to pointer
+  // users. Also lock body scroll while the drawer covers the page so the
+  // content behind it doesn't scroll along with it.
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [navOpen]);
 
   return (
     <RequireAuth>

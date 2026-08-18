@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 14 — CEO Workspace UI Shell
- Overall: Phase 0-3 done (Phase 4-5 remaining)
- Now working on: Phase 4 — Responsive, accessibility, workflow polish
+ Overall: Phase 0-4 done (Phase 5 remaining)
+ Now working on: Phase 5 — Regression, audit, documentation
  Last update: 2026-08-18
 ================================================
 
@@ -132,9 +132,36 @@ PHASE 3 — Live Updates and State Integrity            (3/3)
           not independently exercisable without throttling network in a
           real browser (UNVERIFIED per #222, same reasoning as 3.1/3.2)
 
-PHASE 4 — Responsive, Accessibility, Polish           (0/?)
-[ ] 4.1 mobile/desktop pass, keyboard/aria audit
-[ ] 4.2 UNVERIFIED browser interaction note
+PHASE 4 — Responsive, Accessibility, Polish           (2/2)
+[x] 4.1 mobile/desktop pass, keyboard/aria audit -- code-level audit of
+        the shell (only place with real interactive/focus complexity;
+        the workspace cards are read-mostly links, already keyboard-
+        native): mobile drawer given role="dialog" aria-modal, aria-
+        label; Escape key now closes it (layout.tsx); body scroll
+        locked while it's open; focus moves to its close button on
+        open; nav landmark given aria-label="Primary"; active link
+        already had aria-current="page". Fixed a real bug found during
+        this pass: the closed mobile drawer was only translated
+        off-screen (-translate-x-full), so its nav links stayed in the
+        tab order and screen-reader tree even while invisible --
+        switched to invisible/visible (Tailwind, mirrors the lg:hidden
+        pattern already used elsewhere in this codebase) so it's
+        properly removed from both when closed on mobile, while
+        lg:visible keeps the desktop static sidebar unaffected.
+        Re-ran tsc --noEmit and next build clean after these edits;
+        live-reload dev server hit a transient webpack HMR cache error
+        (__webpack_modules__[moduleId] is not a function) unrelated to
+        the change itself -- a full dev-server restart (rm -rf .next)
+        confirmed clean GET 200s for both the landing route and
+        /overview afterward, and a fresh SSE stream still delivered
+        commander-event frames correctly.
+[x] 4.2 UNVERIFIED browser interaction note (brief §4.10): no browser-
+        automation tool exists in this environment (re-confirmed).
+        Actual rendered focus order, visible drawer animation, tap-
+        target sizing, and touch-driven backdrop dismissal were never
+        observed in a real browser this sprint -- only inferred from
+        DOM/ARIA structure, Tailwind class logic, and curl/API/SSE
+        checks. Do not treat 4.1 as a visual or click-through PASS.
 
 PHASE 5 — Regression, Audit, Documentation            (0/?)
 [ ] 5.1 full backend + frontend test/typecheck/build regression

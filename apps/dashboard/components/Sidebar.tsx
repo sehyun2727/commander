@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { useRealtimeConnectionStatus } from "@/components/RealtimeProvider";
 import { useCompany } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth-context";
@@ -19,6 +20,13 @@ export function Sidebar({
   const { data: company } = useCompany(companyId);
   const connectionStatus = useRealtimeConnectionStatus();
   const { user, logout } = useAuth();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Move focus into the drawer when it opens, so keyboard users land
+  // somewhere sensible instead of on a now-hidden-behind-backdrop element.
+  useEffect(() => {
+    if (mobileOpen) closeButtonRef.current?.focus();
+  }, [mobileOpen]);
 
   const links = [
     { href: `/company/${companyId}`, label: "CEO Workspace", exact: true },
@@ -42,8 +50,11 @@ export function Sidebar({
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r border-base-border bg-base-raised transition-transform duration-200 ease-out lg:static lg:z-auto lg:h-screen lg:w-60 lg:shrink-0 lg:translate-x-0 ${
-          mobileOpen ? "translate-x-0" : ""
+        role="dialog"
+        aria-modal={mobileOpen || undefined}
+        aria-label="Company navigation"
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-base-border bg-base-raised transition-transform duration-200 ease-out lg:static lg:z-auto lg:visible lg:h-screen lg:w-60 lg:shrink-0 lg:translate-x-0 ${
+          mobileOpen ? "visible translate-x-0" : "invisible -translate-x-full"
         }`}
       >
         <div className="border-b border-base-border px-5 py-4">
@@ -52,6 +63,7 @@ export function Sidebar({
               ← All Companies
             </Link>
             <button
+              ref={closeButtonRef}
               onClick={onClose}
               className="rounded-md p-1 text-text-faint hover:bg-base-hover hover:text-text lg:hidden"
               aria-label="Close navigation"
@@ -82,7 +94,7 @@ export function Sidebar({
             </span>
           )}
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        <nav aria-label="Primary" className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {links.map((link) => {
             const active = link.exact ? pathname === link.href : pathname.startsWith(link.href);
             return (
