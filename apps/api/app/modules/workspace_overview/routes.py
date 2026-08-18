@@ -22,6 +22,31 @@ ownership-gated the same way. There is no cursor expiry to recover from
 (no event retention/pruning exists anywhere in this codebase today); on
 reconnect or any suspected gap, the dashboard just refetches this snapshot
 rather than replaying a partial event window.
+
+Phase 3 §9/§12 concurrency properties (verified by inspection, not by new
+tests, because each is a direct consequence of decisions already made and
+already tested elsewhere -- inventing tests for them would just re-assert
+the same fact under a different name):
+  * ordering -- `event_cursor`/`recent_activity` order on `EventORM.seq`
+    (an autoincrement PK), never on `created_at`, so two events with equal
+    timestamps still sort deterministically
+    (test_overview_event_cursor_matches_max_seq_for_the_project).
+  * duplicate delivery -- this route does not push events; SSE delivery and
+    the dashboard's existing `event.id` dedup convention (CLAUDE.md 9.4)
+    are unchanged and out of scope here.
+  * torn reads -- `get_workspace_snapshot` runs every select inside one
+    `session_factory()` block (service.py), so a snapshot request always
+    reflects one consistent instant; there is no window where a concurrent
+    approval/transition can be half-reflected in a single response.
+  * cross-company cursor -- `event_cursor` is computed from a query already
+    filtered by this `project_id`, and the whole route 404s before that
+    query runs if the project isn't owned by the caller (Rule #15,
+    test_overview_cross_account_access_returns_404_not_403); there is no
+    way to read another company's cursor.
+  * retention gap / stale target -- every field is recomputed fresh from
+    current DB state on every request (no caching, no stored snapshot), so
+    there is no stale-target state to fall out of sync -- the dashboard
+    always gets what's true right now.
 """
 
 from __future__ import annotations

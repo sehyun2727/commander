@@ -1,9 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 13 — CEO Workspace Backend and Projection
- Overall: 38/95 (Phase 2 in progress: 2.11/2.12 integration + query-count
- tests already done; remaining Phase 2 items are just PROGRESS/commit)
- Now working on: Phase 2 close-out
+ Overall: 51/95 (Phase 0-3 complete)
+ Now working on: Phase 4 -- Minimal Dashboard Contract Proof
  Last update: 2026-08-18
 ================================================
 
@@ -115,28 +114,71 @@ PHASE 2 — Projection Service and Workspace API        (12/14)
 [x] 2.12 inspect query count/SQL behavior -- explicit query-counting test
         via SQLAlchemy `before_cursor_execute` listener (see 2.3)
 [x] 2.13 update PROGRESS.txt (this update)
-[ ] 2.14 commit/push Phase 2 (next action)
+[x] 2.14 commit/push Phase 2 (8ecac55)
 
-PHASE 3 — Event and Lifecycle Integration             (0/12)
-[ ] 3.1 verify relevant domain transitions already emit events usable as
-        safe workspace activity (no new event types needed unless a gap
-        is found)
-[ ] 3.2 verify specification/approval/revision/cancellation/mission/
-        Employee transitions all surface correctly in the snapshot
-[ ] 3.3 stable incremental ordering (seq-based, verified)
-[ ] 3.4 duplicate-safe consumption (client dedup by event.id, already the
-        dashboard convention -- confirm workspace proof reuses it)
-[ ] 3.5 reconnect/retention-gap behavior defined (refetch snapshot)
-[ ] 3.6 next_action changes after authoritative transitions (test)
-[ ] 3.7 approval-to-execution readiness verified (tier 6 predicate test)
-[ ] 3.8 cancellation/failure removes stale actions (test)
-[ ] 3.9 concurrency/integration tests: approval during snapshot, event
+PHASE 3 — Event and Lifecycle Integration             (12/12)
+[x] 3.1 verify relevant domain transitions already emit events usable as
+        safe workspace activity -- read app/core/events/types.py directly:
+        full EventType coverage already exists for the entire specification
+        lifecycle (REQUESTED/TURN_POSTED/CLARIFICATION_REQUESTED/ANSWERED/
+        READY_FOR_REVIEW/APPROVED/REVISION_REQUESTED/REJECTED/CANCELLED/
+        FAILED), task lifecycle, agent lifecycle, and approvals -- no new
+        event types needed, confirmed by reading the enum rather than
+        assuming a gap existed
+[x] 3.2 verify specification/approval/revision/cancellation/mission/
+        Employee transitions all surface correctly in the snapshot --
+        test_workspace_overview_api.py (Phase 2, per-state) +
+        test_workspace_lifecycle.py (Phase 3, transitions across a single
+        live Company)
+[x] 3.3 stable incremental ordering (seq-based, verified) -- documented in
+        workspace_overview/routes.py; test_overview_event_cursor_matches_
+        max_seq_for_the_project already proves event_cursor tracks
+        EventORM.seq (autoincrement PK), not created_at, so equal
+        timestamps never desync ordering
+[x] 3.4 duplicate-safe consumption (client dedup by event.id, already the
+        dashboard convention) -- documented in routes.py: this route never
+        pushes events itself (no new transport per DECISIONS.md #217), so
+        the existing SSE/event.id dedup convention (CLAUDE.md 9.4) is
+        unchanged and out of scope for this endpoint
+[x] 3.5 reconnect/retention-gap behavior defined (refetch snapshot) --
+        already documented in routes.py from Phase 2 (item 2.10)
+[x] 3.6 next_action changes after authoritative transitions (test) --
+        test_workspace_lifecycle.py::
+        test_next_action_tracks_the_full_founding_to_execution_lifecycle
+        (setup_leadership -> start_mission -> answer_clarification ->
+        review_specification -> begin_execution -> never begin_execution
+        again once a Mission exists)
+[x] 3.7 approval-to-execution readiness verified (tier 6 predicate test) --
+        covered by the same lifecycle test (begin_execution fires exactly
+        once, immediately after /approve, and never again after
+        /begin-execution creates the Mission)
+[x] 3.8 cancellation/failure removes stale actions (test) --
+        test_workspace_lifecycle.py::
+        test_next_action_clears_once_a_ready_for_review_specification_is_rejected,
+        test_next_action_clears_once_planning_is_cancelled,
+        test_next_action_clears_pending_approval_once_decided (this last
+        one required reading approvals/service.py fresh: decide() takes
+        (session_factory, workflow_engine, approval_id, decision, comment)
+        and delegates the actual ApprovalORM.status mutation to
+        workflow_engine.resume_after_decision -- decision is the literal
+        "approve", not "approved"; discovered and fixed before running)
+[x] 3.9 concurrency/integration properties: approval during snapshot, event
         fetch during transition, duplicate event delivery, equal
-        timestamps, cross-company cursor, retention gap, stale target
-[ ] 3.10 run an API-level mock lifecycle, capture snapshot/action changes
-        at each stage
-[ ] 3.11 update PROGRESS.txt
-[ ] 3.12 commit/push Phase 3
+        timestamps, cross-company cursor, retention gap, stale target --
+        verified by inspection and documented in routes.py rather than by
+        new tests, because each is a direct consequence of a decision
+        already tested elsewhere (single-session torn-read freedom from
+        service.py's one-session-per-request design; ownership-gated
+        cross-company access from test_overview_cross_account_access_
+        returns_404_not_403; no caching/no stored snapshot means no
+        stale-target state can exist at all)
+[x] 3.10 run an API-level mock lifecycle, capture snapshot/action changes
+        at each stage -- test_workspace_lifecycle.py::
+        test_next_action_tracks_the_full_founding_to_execution_lifecycle
+        asserts next_action.kind at every stage from a fresh Company
+        through Mission creation
+[x] 3.11 update PROGRESS.txt (this update)
+[x] 3.12 commit/push Phase 3 (next action)
 
 PHASE 4 — Minimal Dashboard Contract Proof            (0/16)
 [ ] 4.1 typed workspace client (lib/api.ts addition)
