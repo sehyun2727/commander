@@ -3319,3 +3319,125 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       expected to carry forward as unfinished business; the registry is
       considered structurally complete for V1.1 unless a future sprint
       brief explicitly reopens it.
+
+## Sprint 16 — Secure Agent Harness
+
+233. **Phase 0 threat model, scope, and reuse decisions for the Agent Harness.**
+    - **Trust boundary.** Everything that originates outside this server
+      process's own trusted template/config code is untrusted input to the
+      harness: raw provider output (including any `tool_use` block name/
+      arguments), file paths, patch content, search patterns, validation-
+      profile parameters, repository file contents, sandboxed tool output,
+      environment variables, and DB-stored skill-template/RoleSpec data
+      read back at runtime. Only `TEMPLATE` (software_company.py, code-only)
+      and the new immutable Tool Registry (code-only, this sprint) are
+      trusted sources of what a tool *can* mean. Default posture is deny:
+      an unknown tool name, an unresolvable path, or a missing permission
+      grant is always rejected, never passed through.
+    - **Initial tool set (6 tools), chosen to cover brief §4's read/search/
+      git-inspect/patch/validate surface without inventing capabilities the
+      Engineer pipeline doesn't need yet:** `list_repository`, `read_file`,
+      `search_repository` (read-only, backed by `LocalGitWorkspaceManager
+      .list_tree`/`read_file` — already root-confined via `validation.py`);
+      `inspect_git` (status/diff, backed by `LocalGitWorkspaceManager.diff`,
+      read-only); `apply_patch` (the only write tool — see patch format
+      below); `run_validation` (the only execution tool — see profile reuse
+      below). No `run_shell`/arbitrary-command tool exists or is planned;
+      Rule #9/#12's free-shell prohibition stays absolute.
+    - **Validation profiles reuse `TEMPLATE.checks` (`CheckSpec` tuple:
+      `python-syntax`, `pytest`, `node-test`) instead of a new registry.**
+      These are already server-owned, glob-detected, argv-list commands
+      executed against mission-repository content — exactly the "named
+      profile, bounded params, no free string" shape brief §4.3 requires.
+      Superficially the brief's example names read like Commander's own
+      Makefile targets, but the harness validates a *mission's* generated
+      company code, not Commander's own source, so `TEMPLATE.checks` is
+      the correct existing registry, not a new one.
+    - **Process isolation reuses the existing `DockerSandbox`/
+      `SandboxRunner` port (`sandbox/docker_process.py`) for `run_validation`
+      instead of a new raw-subprocess runner.** It already runs
+      `--network none`, non-root, `--cap-drop ALL`,
+      `--security-opt no-new-privileges`, memory/cpu/pids-limited,
+      timeout-bounded, output-truncated — satisfying nearly all of brief
+      §4.11 today. The harness calls it the same way `_run_checks` already
+      does (`self._sandbox_runner.run_check(name, files, command)`); no
+      duplicate isolation layer is built.
+    - **Structured patch format is full-file-content replacement, not
+      unified-diff hunks.** It reuses the exact `===== FILE: path =====`
+      contract shape the one-shot Engineer path already emits and
+      `parsing.parse_file_blocks` already parses, avoiding a hand-rolled
+      diff/hunk parser (a classic bug source) for no benefit this sprint.
+      `apply_patch` validates every entry (path + content, via
+      `workspace_manager/validation.py`'s existing `validate_path`/
+      `validate_content`, plus a new explicit symlink-write rejection) up
+      front and only writes if the whole patch is valid — reject-whole-
+      patch-on-any-violation, not a filesystem-transaction rollback. This
+      is documented as "pre-validated atomic apply," not literal DB/FS
+      transaction semantics, per CLAUDE.md §16.7 (no over-claiming).
+      Per-file optional base-hash/expected-content checks detect
+      stale-conflict writes.
+    - **`RoleSpec.harness` gains a second literal value, `"tool_loop"`,
+      alongside the existing `"one_shot"`.** Only the `ENGINEER` RoleSpec
+      switches to `"tool_loop"` this sprint; `PM`/`REVIEWER`/`CTO` remain
+      `"one_shot"` — their pipeline stages (`plan`/`review`) have no
+      Sprint 16 tool needs. `RoleSpec.tools` (already `tuple[str,...]`,
+      currently `()` on all four) is populated for `ENGINEER` with the six
+      tool names above.
+    - **`SkillTemplate.capabilities` gains one new uniform value,
+      `"repository_tools"`, added to all three existing templates**
+      (`GENERALIST`, `RESEARCH_FOCUSED`, `SPEED_FOCUSED`) rather than
+      gating basic repository access behind template specialization.
+      Specialization (`"research"`, `"fast_iteration"`) stays orthogonal;
+      this sprint doesn't yet have a capability-differentiated tool to
+      restrict by template, so uniform grant is the honest choice over
+      inventing an artificial split.
+    - **Final tool permission is the intersection**: server global policy
+      (new harness config in `core/config.py`) ∩ RoleSpec.tools ∩
+      skill-template capabilities (`"repository_tools"` required for all
+      six tools) ∩ stage kind (`produce` only — tools are unavailable
+      during `plan`/`review` stages, preserving the planning-stage
+      non-mutation guarantee) ∩ workspace availability (repo must be
+      initialized). Any missing/unresolvable term denies the call.
+    - **`CompletionResult` (core/interfaces/provider_gateway.py) gains two
+      additive, default-valued fields**: `tool_calls: tuple[dict, ...] = ()`
+      and `stop_reason: str = "end_turn"`. Purely additive — every existing
+      caller that only reads `.text` is unaffected. `AnthropicProvider`
+      gains real `tools=[...]` request support and `tool_use`/`tool_result`
+      content-block parsing (currently absent entirely); `MockProvider`
+      gains an `opts`-sniffed deterministic tool-call dispatch, following
+      the same `opts.get(...)`-keyed convention `planning_turn_kind`
+      already uses, so mock mode (Rule #6) can exercise the full tool loop
+      with zero API keys.
+    - **Tool-loop turns use non-streaming `complete()`, not `stream()`.**
+      Intermediate harness reasoning doesn't need character-level SSE to
+      the CEO (Rule #11 — the CEO doesn't watch Engineer-internal turns
+      live), which avoids building streamed tool-use SSE parsing this
+      sprint. Only the final deliverable text (if any) follows the
+      existing streamed `_run_role` path.
+    - **Budget exhaustion reuses the existing `BudgetExceededError` /
+      `_check_budget` / `_block_task_on_budget` mechanism** (mission →
+      `TaskState.BLOCKED`, `BUDGET_EXCEEDED` + `TASK_STATE_CHANGED` events,
+      CEO informed) rather than a parallel blocking pathway. A new
+      harness-specific budget dimension (tool-call iteration count) is
+      added as another `limit_kind`, alongside the existing
+      tokens/usd/seconds kinds.
+    - **`_run_pipeline`'s `produce` stage gains a new branch**: when
+      `role.harness == "tool_loop"` and `task.deliverable_type == "code"`,
+      call a new `_run_engineer_tool_loop` method instead of the existing
+      `_run_role`; every other case (document missions, any non-tool_loop
+      role) is untouched, protecting existing planning/workspace/widget
+      behavior (Sprint 15's Phase 5 regression baseline) from any
+      Sprint 16 regression.
+    - **One commit per Engineer attempt is preserved.** Although
+      `apply_patch` writes/stages files per call, the actual `git commit`
+      is deferred to tool-loop end, matching the existing single-commit-
+      per-attempt semantics the Timeline/Reviewer/`CODE_CHANGED` event
+      already assume — avoiding a flood of per-patch commits that would
+      break those assumptions.
+    - **A new schema migration is required** for durable tool-call audit
+      persistence (Phase 2): a `harness_tool_calls` table (or similar),
+      following the `WorkspacePreferenceORM` pattern (`__tablename__`,
+      `Mapped[...]`/`mapped_column`, docstring citing this entry) —
+      recording tool name, arguments (redacted/bounded), outcome, and
+      timing per call, so Reviewer/CEO evidence and the security audit
+      have a durable record beyond in-memory loop state.

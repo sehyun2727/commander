@@ -1,379 +1,80 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 15 — Safe CEO Workspace Widget System
- Overall: Phases 0-5 complete. Sprint done, pending final commit/push.
- Now working on: Final report and Phase 5 documentation commit
+ Sprint: 16 — Secure Agent Harness
+ Overall: Phase 0 in progress.
+ Now working on: Phase 0 baseline, threat model, and architecture decisions
  Last update: 2026-08-18
 ================================================
 
-PHASE 0 — Baseline and Architecture Decision           (9/9)
-[x] 0.1 verify local HEAD == origin/master (45bcf11, Sprint 14 close);
-        working tree clean except untracked docs/prompts/sprint-15.md;
-        git fetch showed no divergence
-[x] 0.2 baseline backend suite via apps/api/.venv (system `python` lacked
-        asyncpg -- ModuleNotFoundError against app.core.db at collection
-        time; the project venv has it): 336 passed / 4 skipped, matches
-        the Sprint 14 close baseline exactly, zero regressions
-[x] 0.3 dashboard typecheck (tsc --noEmit) and production build both clean
-        on the Sprint 14 baseline (all 19 routes compile), before any
-        Sprint 15 edits
-[x] 0.4 read full sprint-15.md brief (838 lines) in full before starting
-[x] 0.5 re-read Sprint 14's PROGRESS.txt handoff/low-confidence section:
-        Widget system explicitly deferred to this sprint; browser-rendered
-        interaction remains UNVERIFIED (no browser automation tool, #222) --
-        re-confirmed via ToolSearch, same finding still holds
-[x] 0.6 audited auth/ownership model: `get_current_user` (deps.py, session
-        cookie only, never a client-supplied id) + `project_owned_by`
-        (core/ownership.py, Rule #15 -- 404 not 403); `workspace_overview/
-        routes.py` and `skill_templates/routes.py` both already compose
-        these two exactly, no new primitive needed
-[x] 0.7 audited existing settings/preferences patterns: `SettingORM` is a
-        global KV store (not per-user/per-project, wrong shape for this);
-        `SettingsPage.tsx` establishes the one existing explicit-save
-        mutation-UX precedent (Save button, isPending/"Saved." states,
-        window.confirm for destructive actions) -- reused for widget edit
-        mode instead of inventing an autosave pattern; `skill_templates/
-        registry.py` is the direct template for the new widget registry
-        (frozen dataclass tuple + BY_KEY dict, zero per-project state)
-[x] 0.8 audited frontend deps (package.json): no drag-and-drop/sortable
-        library present -- confirms accessible move-up/move-down buttons
-        over introducing a new DnD dependency (brief §4.9/§7.6)
-[x] 0.9 architecture decisions recorded in docs/DECISIONS.md #228:
-        persistence = one JSON column per (user, project) row, not
-        normalized rows; concurrency = integer `revision` body field, not
-        ETag/updated_at; registry = new `workspace_widgets` module mirroring
-        `skill_templates`; 8-widget catalog mapped 1:1 onto Sprint 14's
-        existing components/workspace/* (required: primary_next_action,
-        connection_status); edit/save = explicit Edit mode + Save/Cancel,
-        not autosave; responsive = one canonical order, half/full span
-        packing, no free x/y grid
+PHASE 0 — Baseline, Repository Inspection, and Architecture Decisions
+[x] 0.1 verify local HEAD == origin/master (d3d6425, Sprint 15 close);
+        working tree clean except untracked docs/prompts/sprint-16.md;
+        matches sprint-16.md's stated baseline exactly
+[x] 0.2 baseline backend suite via apps/api/.venv: 373 passed / 4 skipped
+        in 320.30s, matches sprint-16.md's stated baseline exactly
+[x] 0.3 dashboard typecheck (tsc --noEmit) and production build both
+        clean (all 19 routes compile)
+[x] 0.4 read full sprint-16.md brief (874 lines) in full before starting
+[x] 0.5 inventoried subprocess/shell/git call sites via dedicated
+        investigation agent: zero os.system/shell=True/eval/exec/symlink-
+        following calls anywhere in apps/api/app; three subprocess sites,
+        all already argv-list form (boot_checks.py:68,
+        workspace_manager/git_process.py:42, sandbox/docker_process.py:50)
+[x] 0.6 inventoried file-write/patch code: workspace_manager/validation.py
+        (validate_path/validate_content, genuine Path.resolve()+
+        relative_to() root confinement, judged directly reusable) and
+        local_git.py's write_files (best-effort per-file, NOT atomic --
+        new apply_patch tool needs pre-validate-then-write-all-or-reject
+        semantics instead)
+[x] 0.7 inventoried sandbox security utilities: DockerSandbox already
+        --network none, non-root, --cap-drop ALL,
+        --security-opt no-new-privileges, memory/cpu/pids-limited,
+        timeout-bounded, output-truncated -- reused directly for
+        run_validation instead of building a new isolation layer
+[x] 0.8 confirmed RoleSpec.harness ("one_shot" only today), RoleSpec.tools
+        (empty tuple on all 4 roles), and SkillTemplate.capabilities
+        (empty/inert) are pre-scaffolded Sprint 10/11 extension points
+        explicitly intended for this sprint (code comments point at
+        "Sprint 16" directly)
+[x] 0.9 confirmed provider tool-use support is absent entirely: neither
+        AnthropicProvider nor MockProvider sends/parses tool_use content
+        blocks today; CompletionResult has no tool_calls/stop_reason field
+[x] 0.10 read WorkflowEngine's full _run_pipeline (engine.py:620-843,
+         including _block_task_on_budget) to find the exact integration
+         point: a new _run_engineer_tool_loop branch gated on
+         role.harness=="tool_loop" and deliverable_type=="code", alongside
+         (not replacing) the existing _run_role/_land_code_changes path
+[x] 0.11 read core/errors.py's full CommanderError subclass set (naming/
+         docstring convention for new harness error classes) and
+         core/interfaces/agent_runtime.py (confirmed no loop/iteration
+         concept exists there -- tool-loop state lives in workflow_engine
+         or the new harness module)
+[x] 0.12 listed existing relevant tests as the natural home for new
+         harness threat tests (test_workspace_path_safety.py,
+         test_sandbox.py, test_code_missions.py, etc.); confirmed
+         migration head 77037fd534fa, no branch conflicts
+[x] 0.13 recorded Phase 0 architecture decisions in docs/DECISIONS.md
+         (#233): trust boundary, 6-tool initial set, TEMPLATE.checks reuse
+         as validation-profile registry, DockerSandbox reuse for process
+         isolation, full-file-replacement patch format, RoleSpec/
+         skill-template wiring plan, CompletionResult extension plan,
+         non-streaming tool-loop turns, budget reuse, _run_pipeline
+         integration point, one-commit-per-attempt preservation, and the
+         new harness_tool_calls audit migration requirement
+[x] 0.14 replaced PROGRESS.txt with this Sprint 16 live checklist
+[ ] 0.15 commit and push Phase 0 checkpoint
 
-PHASE 1 — Registry, Persistence, and Validation         (14/14)
-[x] 1.1 canonical registry (app/modules/workspace_widgets/registry.py):
-        frozen WidgetDefinition dataclass, 8 widgets (primary_next_action +
-        connection_status required/full, current_focus/pending_attention/
-        planning_summary/missions_summary/organization_summary/
-        recent_activity optional/half), WIDGETS tuple + WIDGETS_BY_KEY dict
-        + REQUIRED_WIDGET_KEYS frozenset, dense unique default_order
-[x] 1.2 typed public schemas (schemas.py): WidgetDefinitionResponse,
-        WidgetPreferenceEntry (order>=0, span Literal["full","half"]),
-        WorkspacePreferences (schema_version/revision/widgets bounded by
-        MAX_WIDGET_ENTRIES/updated_at), WorkspacePreferencesUpdateRequest
-[x] 1.3 preference persistence ORM model (WorkspacePreferenceORM in
-        core/db_models.py, UniqueConstraint(user_id, project_id)) +
-        Alembic migration 77037fd534fa (down_revision 7a1c9e3f2b6d)
-[x] 1.4 default generation + normalization service (service.py:
-        _default_widgets, _normalize -- tolerant, never raises, repairs
-        stored/legacy rows on every GET)
-[x] 1.5 validation (validate_update_entries -- strict, raises
-        DuplicateWidgetError/UnknownWidgetError/MissingWidgetError/
-        RequiredWidgetHiddenError on PUT; known keys, uniqueness, required-
-        visible, span/order bounds all enforced via schemas + service)
-[x] 1.6 optimistic-concurrency update path (integer `revision` body field;
-        mismatch raises core.errors.StaleRevisionError -> 409 in routes.py)
-[x] 1.7 tests: registry immutability / default layout
-        (test_workspace_widgets_registry.py, 5 tests)
-[x] 1.8 tests: malformed/unknown/duplicate entries normalize safely
-        (test_malformed_stored_entries_normalize_safely)
-[x] 1.9 tests: required-widget restoration
-        (test_required_widget_hidden_in_storage_is_restored,
-        test_update_rejects_required_widget_hidden)
-[x] 1.10 tests: new/retired-widget normalization
-        (test_stored_entries_missing_a_widget_get_it_added_back)
-[x] 1.11 tests: stale-revision conflict
-        (test_stale_revision_conflict_is_rejected)
-[x] 1.12 tests: user/company uniqueness + concurrent first-creation
-        (test_preferences_are_isolated_per_project_for_same_user,
-        test_preferences_are_isolated_per_user_for_same_project,
-        test_concurrent_first_creation_yields_exactly_one_row -- genuine
-        asyncio.gather race, mirrors test_employee_singleton.py)
-[x] 1.13 migration verification: upgrade head -> downgrade -1 -> upgrade
-        head round-trip against live local Postgres, all clean
-[x] 1.14 commit/push Phase 1 checkpoint: full backend suite re-run after
-        all Phase 1 work (356 passed, 4 skipped -- 336 baseline + 20 new
-        workspace_widgets tests, zero regressions); committed and pushed
+PHASE 1 — Registry, Authorization, and Guards
+[ ] not started
 
-PHASE 2 — Preferences API and Isolation                 (14/14)
-[x] 2.1 widget-registry endpoint (GET .../workspace/widgets, built during
-        Phase 1's routes.py pass, verified against Phase 2's requirements)
-[x] 2.2 effective-preferences endpoint (GET .../workspace/preferences)
-[x] 2.3 update endpoint (PUT .../workspace/preferences)
-[x] 2.4 reset endpoint (POST .../workspace/preferences/reset)
-[x] 2.5 auth required on all 4 routes (get_current_user, session cookie)
-[x] 2.6 ownership enforced on all 4 routes (project_owned_by, Rule #15 --
-        404 not 403, never a client-supplied user id)
-[x] 2.7 GET responses are always the normalized, authoritative
-        representation (service.get_effective_preferences normalizes on
-        every read)
-[x] 2.8 structured 4xx mapping in routes.py: Duplicate/Unknown/Missing ->
-        400, RequiredWidgetHidden -> 422, oversized widgets list -> 422
-        (enforced structurally by WorkspacePreferencesUpdateRequest's
-        Field(max_length=MAX_WIDGET_ENTRIES))
-[x] 2.9 StaleRevisionError -> 409 with {error, current_revision} body
-[x] 2.10 observability stays presentation-only (Python logging only, no
-        EventBus/Timeline emission -- DECISIONS.md #229)
-[x] 2.11 API/integration tests (test_workspace_widgets_api.py, 17 tests
-        over real HTTP via api_client/harness): unauthenticated 401 x2,
-        cross-account 404, widgets catalog matches registry, default read,
-        valid update + persists across reload, reset, per-company
-        isolation, per-user isolation, unknown/duplicate/missing/
-        required-hidden rejection, stale-revision 409, oversized-payload
-        422, and a business-state-non-mutation check (event_cursor
-        unchanged by preference writes)
-[x] 2.12 live mock-mode API walkthrough via curl against a real uvicorn
-        process + local Postgres: register -> create company -> GET
-        widgets -> GET preferences (default, revision 1) -> PUT (revision
-        bumps to 2) -> PUT with wrong widgets while stale (400, validated
-        before revision check, as designed) -> POST reset (revision 3) ->
-        unauthenticated GET (401) -- all behaved as specified
-[x] 2.13 PROGRESS.txt updated per completed item (this entry)
-[x] 2.14 commit/push Phase 2 checkpoint
+PHASE 2 — Safe Tool Handlers and Audit Persistence
+[ ] not started
 
-PHASE 3 — Registry-Driven Workspace and Edit Mode        (19/19)
-[x] 3.1 converted app/company/[id]/page.tsx from Sprint 14's hardcoded
-        fixed sections to registry-driven composition (WorkspaceWidgetGrid)
-[x] 3.2 reused every existing Sprint 14 widget component unchanged
-        (ConnectionStatusBar, CurrentFocusCard, MissionSummaryCard,
-        OrganizationSummaryCard, PendingAttentionList, PlanningSummaryCard,
-        PrimaryActionPanel, RecentActivityList)
-[x] 3.3 safe static component map added
-        (components/workspace/widgetComponents.tsx --
-        Record<string, ComponentType>, literal keys only, DECISIONS.md #230)
-[x] 3.4 effective-preference queries/hooks added (lib/hooks.ts:
-        useWorkspaceWidgets, useWorkspacePreferences,
-        useUpdateWorkspacePreferences, useResetWorkspacePreferences,
-        isStaleRevisionConflict; lib/api.ts: listWorkspaceWidgets/
-        getWorkspacePreferences/updateWorkspacePreferences/
-        resetWorkspacePreferences; lib/types.ts: WidgetDefinition/
-        WidgetPreferenceEntry/WorkspacePreferences)
-[x] 3.5 distinct edit mode added (components/workspace/WorkspaceEditMode.tsx
-        -- full-page takeover, not a modal, entered/exited via an
-        accessible "Customize Workspace"/"Close" button pair)
-[x] 3.6 reorder controls (Move up/down buttons per visible widget, swap
-        `order` within the visible subset only -- DECISIONS.md #230)
-[x] 3.7 hide/restore controls (Hide button per non-required visible
-        widget; Restore button per hidden-tray widget)
-[x] 3.8 reset-to-default (window.confirm-gated immediate server call,
-        same pattern as SettingsPage.handleArchive)
-[x] 3.9 save/cancel (explicit, not autosave, per DECISIONS.md #228) with
-        isPending "Saving…" state
-[x] 3.10 dirty/saving/success/error states (dirty computed by structural
-        entry comparison; Save disabled when !dirty; inline error banner
-        on non-conflict failures; announcement region on save/reset)
-[x] 3.11 stale-write conflict UX (409 -> amber conflict banner with an
-        explicit "Reload Latest Layout" action; local edits preserved,
-        never silently clobbered or auto-merged)
-[x] 3.12 optimistic rollback: not applicable -- Phase 3 deliberately does
-        NOT use optimistic UI (Save is request-then-commit-locally,
-        matching the explicit-save decision in DECISIONS.md #228); no
-        rollback needed because the UI is never updated ahead of the
-        server's response
-[x] 3.13 company-switch preference isolation (query keys keyed by
-        companyId: keys.workspaceWidgets/workspacePreferences -- switching
-        /company/[id] can never read another company's cached layout)
-[x] 3.14 required-widget removal prevented in the UI (Hide button omitted
-        entirely for entries where catalog.required is true, in addition
-        to the existing server-side RequiredWidgetHiddenError backstop)
-[x] 3.15 no dynamic imports anywhere in the widget system (verified:
-        widgetComponents.tsx is a static literal object, no next/dynamic,
-        no computed import path)
-[x] 3.16 targeted tests supported by existing tooling: none -- confirmed
-        (again, same as Sprint 14) no jest/vitest/testing-library/
-        playwright config or dependency exists anywhere in apps/dashboard;
-        typecheck + build are the only existing frontend verification
-        tools, both run below
-[x] 3.17 typecheck (tsc --noEmit) clean; production build clean, all 19
-        routes compile (/company/[id] included, now 9.48 kB)
-[x] 3.18 PROGRESS.txt updated per completed item (this entry)
-[x] 3.19 commit/push Phase 3 checkpoint
+PHASE 3 — Harness and AgentRuntime Integration
+[ ] not started
 
-PHASE 4 — Failure Isolation, Responsive, and Accessibility (21/21)
-[x] 4.1 per-widget error isolation: new
-        components/workspace/WidgetErrorBoundary.tsx (this codebase's first
-        class component -- React error boundaries require
-        componentDidCatch/getDerivedStateFromError, no hook equivalent
-        exists); WorkspaceWidgetGrid wraps each rendered widget
-        individually so one widget throwing shows a small isolated
-        "couldn't load" card + Retry, never unmounts the rest of the
-        Workspace; no stack trace/payload ever rendered, error only
-        goes to console.error
-[x] 4.2 stronger next-action fallback: WidgetErrorBoundary's `critical`
-        prop (set only for primary_next_action in WorkspaceWidgetGrid)
-        renders a full-width amber card with plain-language copy + a
-        Refresh button instead of the generic small red card, so the
-        CEO's main action degrades safely rather than silently
-        vanishing (brief §4.11)
-[x] 4.3 unsupported-widget fallback formalized: normal mode already
-        omitted unsupported keys safely with a deduped console.warn
-        (Phase 3); edit mode already showed an inline "Unsupported --
-        will not display" badge (Phase 3) -- both re-verified against
-        §7.1's exact requirement list, no gaps found
-[x] 4.4 focus preservation after reorder: boundary-move case (Move
-        up at position 1 / Move down at the end disables the button
-        just pressed) previously dropped focus to <body>; added
-        `focusRequest` state + `buttonRefs` map in WorkspaceEditMode so
-        the still-enabled sibling button (Move down/up) on the same
-        widget is focused after the reordered list re-renders
-[x] 4.5 screen-reader position announcements: aria-live="polite"
-        region (already added Phase 3) announces
-        "<title> moved to position X of Y" on every reorder, plus
-        hide/restore/save/reset outcomes
-[x] 4.6 keyboard-only reorder/hide/restore/reset verified by code
-        inspection: every control is a native <button type="button">
-        with an explicit aria-label (no click-only <div>s anywhere in
-        the widget system), so Tab+Enter/Space operates all of them by
-        default; no drag-and-drop exists, so no keyboard alternative is
-        needed beyond the buttons themselves
-[x] 4.7 mobile edit mode verified by code inspection: EditModeShell
-        and both widget lists use flex-col on mobile / sm:flex-row on
-        desktop, same responsive pattern as the rest of the dashboard
-        (SettingsPage, etc.)
-[x] 4.8 touch-sized controls: Move up/down, Hide, and Restore buttons
-        get min-h-[44px] min-w-[44px] (WCAG 2.5.5) below the `sm`
-        breakpoint, reverting to their original compact size at sm:
-        and above -- desktop Edit Mode is control-dense and this
-        codebase's existing buttons are already well under 44px there,
-        so only the touch-input case needed the fix (DECISIONS.md #231)
-[x] 4.9 desktop and mobile ordering verified by code inspection: both
-        derive from the same sorted `visible` list (WorkspaceWidgetGrid
-        packRows for desktop pairing, mobile just stacks it) -- no
-        separate mobile order exists to drift out of sync
-[x] 4.10 company switching verified by code inspection: keys.
-        workspaceWidgets(companyId)/workspacePreferences(companyId) are
-        keyed by companyId (lib/hooks.ts), so navigating to a different
-        /company/[id] always issues a fresh query under a new key
-[x] 4.11 no cross-company layout/data flash verified by code
-        inspection: none of the workspace queries use
-        placeholderData/keepPreviousData, so a company switch shows
-        WorkspaceSkeleton (isLoading) rather than the previous
-        company's stale widgets momentarily
-[x] 4.12 navigation with unsaved changes verified by code inspection:
-        beforeunload guard (tab close/reload) active only while dirty,
-        window.confirm on Cancel/Close discards intentionally -- no
-        in-app router-level guard exists anywhere in this codebase to
-        extend (DECISIONS.md #230's documented scope boundary)
-[x] 4.13 reset confirmation verified by code inspection:
-        handleReset requires window.confirm before calling the reset
-        mutation, matching SettingsPage.handleArchive's precedent
-[x] 4.14 loading/empty/error/conflict states verified by code
-        inspection: WorkspaceSkeleton (page.tsx) / EditModeShell's
-        pulse skeleton, ErrorState on isError, "Every optional widget
-        is currently visible" empty state for the hidden tray, amber
-        conflict banner + red error banner in WorkspaceEditMode -- all
-        four states have distinct, non-overlapping UI
-[x] 4.15 typecheck (tsc --noEmit) clean after all Phase 4 edits
-[x] 4.16 production build clean after all Phase 4 edits, all 19 routes
-        compile (/company/[id] now 10 kB)
-[x] 4.17 targeted tests supported by existing tooling: none -- same
-        finding as Phase 3, still holds (no jest/vitest/
-        testing-library/playwright in this repo)
-[x] 4.18 browser interaction verification: re-confirmed via ToolSearch
-        that no browser automation tool exists in this environment
-        (same finding as Phase 0's audit)
-[x] 4.19 interactive drag/click/touch/visual checks recorded as
-        UNVERIFIED per CLAUDE.md §16.7 -- everything in this phase
-        that requires literal on-screen/on-device observation (focus
-        ring visibility, actual tap comfort, real screen-reader output)
-        is NOT claimed as verified; only code-level guarantees
-        (semantics, ARIA attributes, query-key isolation, CSS classes)
-        are claimed, and are listed as such above
-[x] 4.20 PROGRESS.txt updated per completed item (this entry)
-[x] 4.21 commit/push Phase 4 checkpoint
+PHASE 4 — Mission Integration and Safe Observability
+[ ] not started
 
-PHASE 5 — Regression, Security Audit, and Documentation  (24/24)
-[x] 5.1 full backend suite (apps/api/.venv pytest -q): 373 passed, 4
-        skipped -- 356 Phase-4-checkpoint baseline + 17 new
-        workspace_widgets tests, zero regressions
-[x] 5.2 frontend tests that exist: none -- confirmed again (no jest/
-        vitest/testing-library/playwright config or dependency anywhere
-        in apps/dashboard, same finding as Phases 3-4)
-[x] 5.3 dashboard typecheck (tsc --noEmit): clean
-[x] 5.4 dashboard production build: clean, all 19 routes compile
-[x] 5.5 Sprint 14->15 migration verified: `alembic current` ->
-        77037fd534fa (head); `alembic downgrade -1` -> `alembic upgrade
-        head` round-trip against live local Postgres, both clean
-[x] 5.6 fresh DB bootstrap verified: dropped schema, `alembic upgrade
-        head` from empty through the full chain (9fd1f513c939 baseline
-        -> 77037fd534fa), then `python scripts/seed.py` from repo root --
-        demo CEO + "Acme AI" company + starter Missions created
-        successfully
-[x] 5.7 mock E2E with zero provider keys: live curl against a real
-        `uvicorn app.main:app` process, COMMANDER_PROVIDER=mock, no API
-        keys set
-[x] 5.8 default/update/refresh/reset/conflict flows verified live: login
-        -> GET widgets catalog (8 items) -> GET preferences (default,
-        revision 1) -> PUT hide current_focus (revision -> 2, persisted
-        on refetch) -> PUT with stale expected_revision:1 while actual
-        was 2 -> 409 {"error":"stale_revision","current_revision":2} ->
-        POST reset (revision -> 3, all visible)
-[x] 5.9 two-company preference isolation verified live: second company
-        created under the same account, preferences confirmed isolated
-        and independently defaulted
-[x] 5.10 two-user isolation verified live: registered a second user
-        (second@commander.local), created a company under that account,
-        confirmed its preferences are independent (revision 1, all
-        visible) of the first user's companies
-[x] 5.11 Workspace snapshot/SSE behavior verified untouched: no Sprint
-        15 commit modifies apps/api/app/modules/workspace_overview/ or
-        apps/dashboard's useEventStream/RealtimeProvider (last touched
-        Sprint 14); useWorkspaceOverview hook is byte-identical, new
-        widget hooks use separate query keys (workspaceWidgets/
-        workspacePreferences vs workspaceOverview)
-[x] 5.12 next-action policy verified server-owned and untouched:
-        workspace_overview/next_action.py's derive() was not modified by
-        Sprint 15 and has no knowledge of widget order/visibility;
-        workspace_widgets/service.py explicitly documents preferences as
-        presentation-only, never consulted by workspace_overview;
-        required-widget enforcement is a registry property
-        (WidgetSpec.required), not next_action tier logic
-[x] 5.13 registry allowlist / dynamic-import audit (dedicated subagent):
-        PASS -- registry.py frozen dataclass tuple, no plugin/dynamic-
-        import capability; widgetComponents.tsx is a static
-        Record<WidgetKey, ComponentType> literal, never next/dynamic or
-        a computed import path
-[x] 5.14 payload bounds / mass-assignment audit (dedicated subagent):
-        PASS -- WorkspacePreferencesUpdateRequest bounds widgets list via
-        Field(max_length=MAX_WIDGET_ENTRIES); only order/visible/span per
-        entry are writable, widget_key is validated against the registry,
-        no other field is client-settable
-[x] 5.15 auth / Rule #15 audit (dedicated subagent): PASS -- all 4 routes
-        compose get_current_user + project_owned_by; cross-account access
-        returns 404 (confirmed live in 5.9/5.10's curl run), never 403
-[x] 5.16 hidden-reasoning/secret/raw-payload exposure audit (dedicated
-        subagent): PASS -- no secret values, provider keys, or raw agent
-        reasoning ever enter the widget preference payload or catalog
-        response; WidgetErrorBoundary sends errors only to console.error,
-        never renders a stack trace or payload into the fallback UI
-[x] 5.17 per-widget failure containment audit (dedicated subagent): PASS
-        -- WorkspaceWidgetGrid wraps each widget individually in
-        WidgetErrorBoundary; one widget's render error cannot cascade to
-        siblings or unmount the Workspace
-[x] 5.18 migration/normalization behavior audit: PASS -- _normalize
-        (service.py) repairs malformed/legacy/retired-widget rows on
-        every read, never raises; covered by
-        test_malformed_stored_entries_normalize_safely and
-        test_stored_entries_missing_a_widget_get_it_added_back (Phase 1)
-[x] 5.19 complete diff inspected for scope leakage: `git diff --stat`
-        from the Sprint 15 baseline (45bcf11) to the Phase 4 checkpoint
-        (a68156b) -- 23 files changed, 3290 insertions(+), 279
-        deletions(-), fully scoped to the new workspace_widgets module,
-        dashboard workspace components, and docs; no engine or
-        unrelated-module changes
-[x] 5.20 documentation updated: CLAUDE.md (§12 roadmap row marked
-        `15 ✅`); docs/ARCHITECTURE.md (new §4.7 widget-system section,
-        module table row, §8 frontend-architecture rewrite);
-        docs/DECISIONS.md (#228-#232); docs/design/UX_SPEC.md (§3/§4
-        "as built" notes distinguishing the shipped widget system from
-        the still-unscheduled PM-conversation-plus-dock target layout);
-        README.md (status paragraph + walkthrough step 3 mention
-        "Customize Workspace")
-[x] 5.21 Sprint 16 boundaries and deferrals recorded (DECISIONS.md #232):
-        no drag-and-drop free-placement canvas, no arbitrary x/y layout,
-        no third-party/marketplace widgets, no widget-level permissions
-        beyond existing Company ownership, no Agent Harness/self-
-        correction/Memory/multi-user collaboration -- matches sprint-
-        15.md §13 Out of Scope; Sprint 16 (Agent Harness, per CLAUDE.md
-        §12) is unrelated to the widget system
-[x] 5.22 commit/push final documentation (this Phase 5 batch)
-[x] 5.23 clean working tree verified after commit
-[x] 5.24 local HEAD == origin/master verified after push
+PHASE 5 — Security Audit, Regression, and Documentation
+[ ] not started
