@@ -2856,3 +2856,69 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     run (previously failing, now succeeds), and the full backend suite
     (297 passed / 4 skipped -- identical to the pre-fix baseline, zero
     regressions).
+
+217. **Sprint 13 Phase 0: no new event transport or forward-cursor fetch
+    endpoint.** The brief (§4.7/§7.2) explicitly permits skipping a new
+    incremental-activity endpoint "unless the existing company SSE
+    endpoint already satisfies this cleanly." It does: `/api/events/stream`
+    already replays the last 50 events on connect and then pushes every
+    new event live, in `EventORM.seq` order, scoped to one company via
+    `project_owned_by`. Sprint 13 therefore adds **no** new event-fetch
+    route. The workspace snapshot's `event_cursor` field is simply the
+    calling project's max `EventORM.seq` at snapshot-generation time -- the
+    same integer already accepted as the `cursor` query param by the
+    existing `GET /api/projects/{project_id}/events` route
+    (`timeline/routes.py`, backed by `EventBus.page()`), so a client that
+    wants to page backward from the snapshot's cursor already has a
+    working, tested mechanism. Reconnect/gap-recovery (§4.8) is handled by
+    the dashboard simply refetching the workspace snapshot -- not by a
+    gap-filling event replay -- because the snapshot is itself always a
+    fresh, authoritative projection, and SSE's own reconnect already
+    replays the last 50 events independently. This keeps Sprint 13 to one
+    read transport (request/response snapshot + range queries) plus the
+    one already-shipped push transport (SSE), per §14's "no second event
+    transport when existing SSE can be extended." The Sprint 13 test
+    matrix's cursor scenarios (equal timestamps, malformed cursor,
+    cross-company reuse, duplicate delivery) are therefore written against
+    the *existing* `EventBus.page()`/`recent()` mechanism the snapshot's
+    cursor value feeds into, not a new endpoint.
+
+218. **Sprint 13 next-action tier 3 ("revision feedback or retry
+    required") has no reachable predicate in the current shipped
+    lifecycle, by design.** Auditing every CEO-actionable signal in the
+    real state machines: `SpecificationStatus.REVISION_REQUESTED` routes
+    back to the PM/CTO turn loop automatically (no CEO action pending --
+    tier 7, "active planning in progress"); a Reviewer's
+    `Approval.status = "changes_requested"` similarly routes the Task back
+    to `IN_PROGRESS` for Engineer rework with no CEO decision pending, and
+    the *next* Approval that eventually needs a CEO decision is already
+    covered by tier 4; and `TaskState.RETRYING` is a legal transition
+    target in `TASK_TRANSITIONS` that no code path in the repository
+    currently produces (confirmed by grep -- `RETRYING` appears only in
+    the enum, the transition table, and one `StatusWord` mapping). Per the
+    brief's own §4.4 rule ("do not invent executable next steps for
+    unsupported product capabilities"), tier 3's precedence slot is kept
+    in `next_action.py`'s ordering (so a future sprint that ships a real
+    retry/rework CEO-facing flow only has to add a predicate, not
+    renumber every other tier) but its predicate function always returns
+    `False` today, with a comment pointing at this entry. This is
+    intentional under-implementation, not a bug.
+
+219. **Sprint 13 projection service lives at `app/modules/workspace/`**,
+    mirroring `planning/`'s internal shape (`schemas.py`, `service.py`,
+    `routes.py`) plus a dedicated `next_action.py` holding the precedence
+    policy as a pure function over a plain-dataclass "facts" input (no ORM
+    objects, no DB access) so it is unit-testable without a database per
+    the brief's §6 "keep next-action policy separately testable." No
+    pre-existing reusable projection/read-model layer was found anywhere
+    in the repository (`situation/service.py` and `reports/service.py`
+    are the closest precedent -- both run several independent sequential
+    `select()` queries per project and assemble a plain dict/schema in
+    Python, never a join-heavy or N+1 pattern -- and Sprint 13's
+    projection service follows the same shape). At-most-one-non-terminal-
+    Specification-per-project is already a real, DB-enforced invariant
+    (`ActiveSpecificationLockORM`, one row per `project_id`, Sprint 12
+    §5.3), so the projection never needs to pick a "most relevant" spec
+    among several concurrently-active ones -- it queries `SpecificationORM`
+    directly by non-terminal status and there is provably at most one
+    match.
