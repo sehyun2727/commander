@@ -3441,3 +3441,41 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       recording tool name, arguments (redacted/bounded), outcome, and
       timing per call, so Reviewer/CEO evidence and the security audit
       have a durable record beyond in-memory loop state.
+
+234. **Phase 2 correction: `apply_patch` commits immediately, superseding
+     #233's "commit deferred to tool-loop end" plan.**
+    - **Why the Phase 0 plan didn't survive contact with the actual
+      `WorkspaceManager` interface.** `list_repository`/`read_file`/
+      `search_repository` all resolve through `git ls-tree`/`git show
+      ref:path`, and `inspect_git` through `git diff` against a ref —
+      every read-shaped tool reads a committed ref, never the working
+      tree. If `apply_patch`'s `git add` were left uncommitted until
+      tool-loop end, every subsequent read/search/diff call in the *same*
+      loop would silently show the branch's state from before the
+      Engineer's own patch — the Engineer would be unable to observe its
+      own edits until the loop was already over. Confirmed empirically:
+      `test_agent_harness_handlers.py::test_apply_patch_writes_all_files`
+      failed with `git show` raising "path exists on disk, but not in
+      '<branch>'" until `apply_patch` was changed to call
+      `workspace_manager.commit(...)` immediately after a non-empty
+      `write_files(...)`.
+    - **New behavior: one commit per successful `apply_patch` call**
+      (message `"apply_patch: N file(s)"`), not one commit per whole
+      Engineer attempt. A tool loop that calls `apply_patch` three times
+      produces three commits on the mission branch, each independently
+      visible to later `read_file`/`inspect_git` calls in the same loop.
+    - **Consequence deferred to Phase 3/4, recorded here so it isn't
+      rediscovered as a surprise:** the one-shot pipeline's
+      `code_stats` (files_added/modified/deleted, additions/deletions)
+      comes from a single `CommitResult` today (`engine.py`'s
+      `_land_code_changes`). For a tool-loop attempt with multiple
+      `apply_patch` commits, Phase 3/4's mission-finalization step must
+      compute `code_stats` from `workspace_manager.diff(project_id,
+      branch_name)` (branch vs. base, summed across the whole attempt)
+      instead of trusting the last individual `CommitResult`, or Reviewer/
+      Timeline evidence will undercount multi-patch attempts.
+    - **Rule #3 (observability) is unaffected:** every `apply_patch`
+      call still gets exactly one `harness_tool_calls` audit row
+      regardless of how many git commits it produces underneath —
+      audit persistence (`audit.record_tool_call`) and git commit
+      granularity are intentionally decoupled.

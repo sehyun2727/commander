@@ -383,3 +383,32 @@ class WorkspacePreferenceORM(Base):
     widgets: Mapped[list] = mapped_column(JSON)  # list[{widget_key, visible, order, span}]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class HarnessToolCallORM(Base):
+    """Sprint 16 §4/§9, DECISIONS.md #233: a durable audit record of one
+    Agent Harness tool call, independent of in-memory tool-loop state, so
+    Reviewer/CEO evidence and the security audit have a record beyond the
+    lifetime of a single pipeline run.
+
+    `arguments_summary` deliberately never stores full file content (a
+    30-file `apply_patch` call could otherwise duplicate ~7.5MB of mission
+    code per audit row) -- only a bounded, tool-specific summary (see
+    `agent_harness/audit.py`). `output_excerpt` is the same bounded text
+    already returned to the provider (`output.bound_output`), not a
+    separate unbounded copy."""
+
+    __tablename__ = "harness_tool_calls"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id"), index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"), index=True)
+    call_id: Mapped[str] = mapped_column(String)
+    tool_name: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String)  # "success" | "denied" | "error"
+    arguments_summary: Mapped[dict] = mapped_column(JSON)
+    output_excerpt: Mapped[str] = mapped_column(Text)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_seconds: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)

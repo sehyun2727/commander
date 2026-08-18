@@ -24,6 +24,7 @@ from .budget import HarnessBudget
 class ToolRunContext:
     project_id: str
     task_id: str
+    agent_id: str
     repo_root: Path
     branch_name: str
     role: RoleSpec

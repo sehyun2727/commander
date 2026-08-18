@@ -15,6 +15,7 @@ def _make_context(tmp_path: Path) -> ToolRunContext:
     return ToolRunContext(
         project_id="proj-1",
         task_id="task-1",
+        agent_id="agent-1",
         repo_root=tmp_path,
         branch_name="mission/abcd1234",
         role=ENGINEER,

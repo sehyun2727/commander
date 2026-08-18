@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 16 — Secure Agent Harness
- Overall: Phase 0-1 complete.
- Now working on: Phase 2 -- safe tool handlers and audit persistence
+ Overall: Phase 0-2 complete.
+ Now working on: Phase 3 -- harness orchestrator and AgentRuntime integration
  Last update: 2026-08-18
 ================================================
 
@@ -128,10 +128,66 @@ PHASE 1 — Registry, Authorization, and Guards
          checkpoint
 
 PHASE 2 — Safe Tool Handlers and Audit Persistence
-[ ] not started
-
-PHASE 2 — Safe Tool Handlers and Audit Persistence
-[ ] not started
+[x] 2.1 core/db_models.py: HarnessToolCallORM (harness_tool_calls table) --
+        project_id/task_id/agent_id (FK'd), call_id, tool_name, status
+        ("success"|"denied"|"error"), arguments_summary (JSON, bounded,
+        never full file content), output_excerpt, error_detail,
+        duration_seconds, created_at (indexed); docstring cites
+        DECISIONS.md #233
+[x] 2.2 alembic/versions/b1f4c8d5e9a2_harness_tool_calls.py on top of head
+        77037fd534fa; verified upgrade/downgrade/upgrade round-trip
+        against the real dev Postgres container (commander-postgres-1)
+[x] 2.3 agent_harness/audit.py: summarize_arguments (tool-specific,
+        content-free: apply_patch keeps file_count+paths only,
+        read/list/search keep non-content args, run_validation keeps
+        profile only, inspect_git keeps nothing, unknown tools keep
+        sorted key names) + record_tool_call (persists one
+        HarnessToolCallORM row per call)
+[x] 2.4 agent_harness/handlers.py: list_repository, read_file,
+        search_repository, inspect_git, apply_patch, run_validation --
+        every handler takes ToolRunContext + already-validated args,
+        calls WorkspaceManager/SandboxRunner directly, bounds output via
+        output.bound_output; apply_patch pre-validates every file via
+        guards.py before writing any (reject-whole-patch-on-any-
+        violation) and detects stale writes via optional
+        expected_content
+[x] 2.5 ToolRunContext gained an explicit agent_id field (context.py) --
+        the audit row's agent_id FK needs the acting Employee's real
+        agents.id, not RoleSpec.key (a role identifier like "engineer",
+        not a DB row id); caught before it could reach a real FK
+        violation against Postgres
+[x] 2.6 dispatch_tool_call: single entry point -- schema-validate ->
+        authorize -> run handler -> bound output -> persist an audit row
+        in `finally` so every outcome (success/denied/error, including
+        malformed args and unknown tool names) is recorded exactly once
+[x] 2.7 DECISIONS.md #234: apply_patch commits immediately after a
+        non-empty write_files, correcting #233's "commit deferred to
+        tool-loop end" plan -- discovered via a real test failure
+        (list_repository/read_file/inspect_git all resolve through a
+        committed git ref via `git ls-tree`/`git show`/`git diff`, never
+        the working tree, so an uncommitted apply_patch would be
+        invisible to the Engineer's own next read in the same loop);
+        Phase 3/4 must compute code_stats from a branch-vs-base diff
+        rather than a single CommitResult for multi-patch attempts
+[x] 2.8 new tests: test_agent_harness_handlers.py (16) and
+        test_agent_harness_audit.py (6) against the real LocalGitWorkspace-
+        Manager + FakeSandbox (harness fixture), not hand-rolled fakes --
+        bounded list/read/search, path-escape rejection, reject-whole-
+        patch-on-any-violation, stale-conflict (expected_content)
+        detection, run_validation's execution-disabled/unknown-profile/
+        success paths, and dispatch_tool_call's full lifecycle
+        (success/denied/malformed-args/unknown-tool all producing
+        exactly one audit row with the correct status)
+[x] 2.9 full backend regression suite: 451 collected, 445 passed / 6
+        skipped, zero failures. Verified via isolated collection: the
+        377 non-agent_harness tests are byte-for-byte the original
+        Sprint 0 baseline (373 passed + 4 skipped) with zero regressions
+        anywhere outside this module; all 74 agent_harness tests
+        (Phase 1's 8 files + this phase's 2 new files, handlers.py=16 +
+        audit.py=6) pass, skip count unchanged (2 Windows symlink-
+        privilege skips from Phase 1's guards tests, none new)
+[x] 2.10 update PROGRESS.txt (this file) and commit/push Phase 2
+         checkpoint
 
 PHASE 3 — Harness and AgentRuntime Integration
 [ ] not started
