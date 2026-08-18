@@ -1,432 +1,96 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 13 — CEO Workspace Backend and Projection
- Overall: 95/95 (Phase 0-5 complete -- sprint done)
- Now working on: (complete)
+ Sprint: 14 — CEO Workspace UI Shell
+ Overall: 12/12 Phase 0 (Phase 1-5 not started)
+ Now working on: Phase 1 — Responsive shell and navigation
  Last update: 2026-08-18
 ================================================
 
-PHASE 0 — Baseline and Read-Model Design             (13/14)
-[x] 0.1 verify local HEAD == origin/master (f81cc7a, Sprint 12 close)
-[x] 0.2 confirm working tree state (docs/prompts/sprint-13.md added by CEO;
-        docs/prompts/sprint10.md -> sprint-10.md rename + sprint-12.md
-        present, unrelated to Sprint 13)
-[x] 0.3 read full sprint-13.md brief (742 lines) in full before starting
-[x] 0.4 baseline backend suite: 297 passed / 4 skipped (matches Sprint 12 close)
-[ ] 0.5 dashboard typecheck/build baseline run (deferred to Phase 4/5 --
-        no frontend files touched yet in Phase 0)
-[ ] 0.6 fresh seed/bootstrap re-verification (deferred to Phase 2/5 once
-        the workspace module exists to bootstrap against)
-[x] 0.7 inspected domain lifecycles/APIs/events/SSE: core/ownership.py,
-        core/lifecycle/{task_states,agent_states,specification_states}.py,
-        modules/approvals/service.py (+ workflow_engine.engine._mark_pending_approval
-        for the real Approval.status value set), modules/timeline/routes.py,
-        modules/event_bus/bus.py, modules/realtime/routes.py,
-        modules/planning/service.py (ActiveSpecificationLockORM invariant),
-        db_models.py (ProjectORM/AgentORM/RoleSingletonLockORM/TaskORM/
-        SpecificationORM/SpecificationVersionORM), templates/software_company.py
-        (RoleSpec.category/singleton, ROLES/ROLES_BY_KEY, PIPELINE),
-        projects/routes.py + schemas.py (existing read-only Roles API)
-[x] 0.8 identified authoritative source for every proposed workspace field
-        (see DECISIONS.md #219 field map; dashboard query/hook architecture
-        still to be confirmed directly in Phase 4, not blocking Phase 1-3)
-[x] 0.9 confirmed event ordering key (EventORM.seq, autoincrement PK) and
-        retention behavior (no pruning/retention limit exists anywhere)
-[x] 0.10 cursor/incremental-update contract decided: reuse existing SSE +
-        existing GET /api/projects/{id}/events cursor route; no new
-        event-fetch endpoint or transport -- DECISIONS.md #217
-[x] 0.11 next-action precedence mapped to real lifecycle predicates for
-        all 10 tiers, including the tier-3 "no reachable predicate today"
-        finding -- DECISIONS.md #218
-[ ] 0.12 minimal frontend proof scope (deferred to Phase 4 design step)
-[x] 0.13 N+1/indexing audit against situation/service.py + reports/service.py
-        precedent (sequential independent selects, no joins, Python-side
-        assembly) -- adopted for workspace/service.py, DECISIONS.md #219
-[x] 0.14 PROGRESS.txt replaced with Sprint 13 live checklist (this file)
-[x] 0.15 commit + push Phase 0 checkpoint (e72c657)
+PHASE 0 — Baseline and UX Audit                       (12/12)
+[x] 0.1 verify local HEAD == origin/master (88196f2, Sprint 13 close);
+        working tree clean except untracked docs/prompts/sprint-14.md
+[x] 0.2 baseline backend suite: 336 passed / 4 skipped (matches Sprint 13
+        close, no regressions)
+[x] 0.3 dashboard typecheck (tsc --noEmit) and production build both clean
+        on the Sprint 13 baseline, before any Sprint 14 edits
+[x] 0.4 read full sprint-14.md brief (767 lines) in full before starting
+[x] 0.5 confirmed no browser-automation tool exists in this environment
+        (ToolSearch, re-checked) -- browser/click-through verification will
+        be recorded UNVERIFIED per §4.10, same finding as Sprint 13 (#222)
+[x] 0.6 audited current shell/routes/components: app/company/[id]/layout.tsx
+        (fixed w-60 Sidebar, zero responsive handling -- primary gap),
+        app/company/[id]/page.tsx (Headquarters -- DecisionCard,
+        SituationReport, StatCard, TimelineFeed), overview/page.tsx (Sprint
+        13 proof page), RealtimeProvider.tsx (found company-switch state
+        bug, see DECISIONS.md #224), useEventStream.ts (3-state
+        ConnectionStatus, no stale/offline distinction, see #225),
+        Sidebar.tsx, AccountBadge.tsx, StatusPill/StatusWord.tsx,
+        AgentAvatar.tsx, DecisionCard.tsx, MissionCard.tsx,
+        SpecificationCard.tsx, SpecificationStatusBadge.tsx,
+        TimelineFeed.tsx, lib/auth-context.tsx, lib/utils.ts, lib/hooks.ts
+        (full), lib/types.ts (WorkspaceSnapshot family, L279-405),
+        tailwind.config.ts (no custom breakpoints, fixed dark theme), no
+        frontend test framework exists (confirmed, none added)
+[x] 0.7 identified /company/[id]/workspace as a PRE-EXISTING, unrelated
+        route (git-backed Repository browser, workspace_manager module) --
+        not to be touched; confirmed via DECISIONS.md #220 this collision
+        was already anticipated at the API level
+[x] 0.8 mapped every next_action.kind (next_action.py, 10 reachable + 1
+        reserved-unreachable tier) to its real route: all already resolve
+        to existing pages (specifications/[id], missions/[id], decisions,
+        employees, missions) via the module's own _spec_route/
+        _mission_route/_decisions_route/_employees_route/_missions_route
+        builders -- no unmapped/dead target found
+[x] 0.9 pending_actions item schemas carry no `route` field (only IDs) --
+        frontend must build their deep links itself from fixed templates
+        mirroring next_action.py's route builders; decided display order
+        mirrors next_action.py's own tier comment (DECISIONS.md #226)
+[x] 0.10 desktop/mobile information architecture decided: single DOM tree,
+        two composition blocks gated by `hidden lg:grid` / `lg:hidden`
+        (mobile = linear stack per brief §5, desktop = grouped 2-col rows)
+        rather than fighting CSS `order` across a shared grid
+[x] 0.11 query/subscription lifecycle: reuse useWorkspaceOverview (30s
+        poll) + invalidateForEvent's existing workspaceOverview(companyId)
+        entry as-is; add RealtimeProvider invalidation on
+        reconnecting/stale -> open transition (§4.7); company switch fixed
+        via RealtimeProvider key={companyId} remount (§4.8, #224)
+[x] 0.12 recorded DECISIONS.md #223-226 (landing-route replacement instead
+        of redirect-first staging, RealtimeProvider remount fix,
+        ConnectionStatus stale/heartbeat tracking, pending-action route
+        construction); this Phase 0 checkpoint commit
 
-PHASE 1 — Public Schemas and Projection Policy        (11/11)
-[x] 1.1 typed public workspace schemas (schema_version, summaries, focus,
-        pending_actions, next_action, planning/mission summaries,
-        recent_activity, event_cursor, generated_at) --
-        app/modules/workspace_overview/schemas.py
-[x] 1.2 explicit schema_version field (SCHEMA_VERSION = 1)
-[x] 1.3 bounded summary models (recent missions/activity/pending/employees
-        capped with documented limits -- MAX_RECENT_MISSIONS=10,
-        MAX_ACTIVE_MISSIONS=10, MAX_RECENT_ACTIVITY=20, MAX_EMPLOYEES=25)
-[x] 1.4 pending-action derivation (clarification/spec-review/approval/
-        failure-setup) as pure functions over facts -- next_action.derive()
-[x] 1.5 deterministic next-action policy (next_action.py, 10-tier order,
-        pure dataclass-facts input, no DB access)
-[x] 1.6 safe deep-link targets (route/resource-type/id per action kind --
-        _spec_route/_mission_route/_decisions_route/_employees_route/
-        _missions_route in next_action.py, matching real dashboard routes)
-[x] 1.7 activity summary serialization (safe-field allowlist enforced --
-        ActivityItem exposes only id/seq/type/kind/actor_role/actor_name/
-        reason/created_at, never EventORM.payload; verified by
-        test_workspace_schemas.py)
-[x] 1.8 event cursor encoding/validation (reuse EventORM.seq int per
-        DECISIONS.md #217 -- no new encoding; WorkspaceSnapshot.event_cursor
-        is a plain int, malformed values rejected by Pydantic validation)
-[x] 1.9 pure/domain tests: precedence (10 tiers), deterministic selection,
-        no-action state, missing-target handling (focus/next_action never
-        desync), safe serialization (forbidden-field-name audit across the
-        whole schema tree), cursor round-trip, malformed cursor, stable
-        ordering -- test_workspace_next_action.py (15) +
-        test_workspace_schemas.py (5) = 20 tests, all passing
-[x] 1.10 update PROGRESS.txt (this update)
-[x] 1.11 commit/push Phase 1 (next action)
+PHASE 1 — Responsive Shell and Navigation             (0/?)
+[ ] 1.1 Sidebar.tsx: mobile drawer (fixed+translate, backdrop, close-on-nav)
+        + desktop static, rename root nav label "Headquarters" -> "CEO
+        Workspace", drop "Overview (Preview)" entry
+[ ] 1.2 new MobileHeader.tsx: compact header, hamburger, AccountBadge
+[ ] 1.3 layout.tsx: wire mobile header + drawer state, RealtimeProvider
+        key={companyId}, active-route indication preserved
+[ ] 1.4 typecheck/build checkpoint
 
-PHASE 2 — Projection Service and Workspace API        (12/14)
-[x] 2.1 company-scoped projection service --
-        app/modules/workspace_overview/service.py: get_workspace_snapshot()
-[x] 2.2 load snapshot data through bounded, sequential queries (~11 selects
-        in one session, no per-row queries)
-[x] 2.3 avoid obvious N+1 patterns (verified: test_overview_service_issues_
-        a_bounded_fixed_number_of_queries asserts <=15 SELECTs regardless
-        of row count)
-[x] 2.4 add indexes only if justified by an observed pattern -- no new
-        index added; no N+1/slow-scan pattern observed at this data scale
-[x] 2.5 produce coherent snapshot + cursor
-[x] 2.6 add GET /api/projects/{project_id}/workspace/overview route
-        (workspace_overview_router registered in main.py)
-[x] 2.7 confirm existing SSE covers incremental activity (no new route
-        needed per DECISIONS.md #217) -- documented explicitly in
-        workspace_overview/routes.py module docstring
-[x] 2.8 enforce auth + ownership (project_owned_by, 404 not 403) -- tested
-        (unauthenticated 401, unknown company 404, cross-account 404)
-[x] 2.9 structured errors: unknown company -> 404. No pagination/limit
-        input surface exists on this endpoint (single project_id path
-        param only -- documented in routes.py), so there is nothing to
-        malform; every list in the snapshot is server-bounded, not
-        client-paged.
-[x] 2.10 invalid/expired cursor recovery semantics documented in
-        routes.py -- no expiry possible (no retention pruning exists
-        anywhere); reconnect/gap suspicion -> dashboard refetches this
-        snapshot rather than replaying a partial event window
-[x] 2.11 API/integration tests (test_workspace_overview_api.py, 15 tests):
-        unauthenticated, unknown company, cross-company denial, fresh
-        company (vacant leadership before start_mission), leadership
-        filled (start_mission), clarification required, ready for review,
-        approved/ready-to-execute, active mission, mission failure,
-        pending approval, bounded recent missions/activity, no raw
-        payload leakage, event_cursor == max(EventORM.seq)
-[x] 2.12 inspect query count/SQL behavior -- explicit query-counting test
-        via SQLAlchemy `before_cursor_execute` listener (see 2.3)
-[x] 2.13 update PROGRESS.txt (this update)
-[x] 2.14 commit/push Phase 2 (8ecac55)
+PHASE 2 — Core Workspace Sections                     (0/?)
+[ ] 2.1 lib/utils.ts: next-action kind tone map, safe-route allowlist,
+        pending-action route builders, connection-status label helpers
+[ ] 2.2 useEventStream.ts: stale ConnectionStatus + lastMessageAt
+[ ] 2.3 RealtimeProvider.tsx: expose lastMessageAt, reconnect-triggered
+        workspace invalidation
+[ ] 2.4 components/workspace/*: PrimaryActionPanel, CurrentFocusCard,
+        PendingAttentionList, PlanningSummaryCard, MissionSummaryCard,
+        OrganizationSummaryCard, RecentActivityList, ConnectionStatusBar
+[ ] 2.5 app/company/[id]/page.tsx: real Workspace composition
+[ ] 2.6 app/company/[id]/overview/page.tsx: redirect() to landing route
+[ ] 2.7 typecheck/build checkpoint
 
-PHASE 3 — Event and Lifecycle Integration             (12/12)
-[x] 3.1 verify relevant domain transitions already emit events usable as
-        safe workspace activity -- read app/core/events/types.py directly:
-        full EventType coverage already exists for the entire specification
-        lifecycle (REQUESTED/TURN_POSTED/CLARIFICATION_REQUESTED/ANSWERED/
-        READY_FOR_REVIEW/APPROVED/REVISION_REQUESTED/REJECTED/CANCELLED/
-        FAILED), task lifecycle, agent lifecycle, and approvals -- no new
-        event types needed, confirmed by reading the enum rather than
-        assuming a gap existed
-[x] 3.2 verify specification/approval/revision/cancellation/mission/
-        Employee transitions all surface correctly in the snapshot --
-        test_workspace_overview_api.py (Phase 2, per-state) +
-        test_workspace_lifecycle.py (Phase 3, transitions across a single
-        live Company)
-[x] 3.3 stable incremental ordering (seq-based, verified) -- documented in
-        workspace_overview/routes.py; test_overview_event_cursor_matches_
-        max_seq_for_the_project already proves event_cursor tracks
-        EventORM.seq (autoincrement PK), not created_at, so equal
-        timestamps never desync ordering
-[x] 3.4 duplicate-safe consumption (client dedup by event.id, already the
-        dashboard convention) -- documented in routes.py: this route never
-        pushes events itself (no new transport per DECISIONS.md #217), so
-        the existing SSE/event.id dedup convention (CLAUDE.md 9.4) is
-        unchanged and out of scope for this endpoint
-[x] 3.5 reconnect/retention-gap behavior defined (refetch snapshot) --
-        already documented in routes.py from Phase 2 (item 2.10)
-[x] 3.6 next_action changes after authoritative transitions (test) --
-        test_workspace_lifecycle.py::
-        test_next_action_tracks_the_full_founding_to_execution_lifecycle
-        (setup_leadership -> start_mission -> answer_clarification ->
-        review_specification -> begin_execution -> never begin_execution
-        again once a Mission exists)
-[x] 3.7 approval-to-execution readiness verified (tier 6 predicate test) --
-        covered by the same lifecycle test (begin_execution fires exactly
-        once, immediately after /approve, and never again after
-        /begin-execution creates the Mission)
-[x] 3.8 cancellation/failure removes stale actions (test) --
-        test_workspace_lifecycle.py::
-        test_next_action_clears_once_a_ready_for_review_specification_is_rejected,
-        test_next_action_clears_once_planning_is_cancelled,
-        test_next_action_clears_pending_approval_once_decided (this last
-        one required reading approvals/service.py fresh: decide() takes
-        (session_factory, workflow_engine, approval_id, decision, comment)
-        and delegates the actual ApprovalORM.status mutation to
-        workflow_engine.resume_after_decision -- decision is the literal
-        "approve", not "approved"; discovered and fixed before running)
-[x] 3.9 concurrency/integration properties: approval during snapshot, event
-        fetch during transition, duplicate event delivery, equal
-        timestamps, cross-company cursor, retention gap, stale target --
-        verified by inspection and documented in routes.py rather than by
-        new tests, because each is a direct consequence of a decision
-        already tested elsewhere (single-session torn-read freedom from
-        service.py's one-session-per-request design; ownership-gated
-        cross-company access from test_overview_cross_account_access_
-        returns_404_not_403; no caching/no stored snapshot means no
-        stale-target state can exist at all)
-[x] 3.10 run an API-level mock lifecycle, capture snapshot/action changes
-        at each stage -- test_workspace_lifecycle.py::
-        test_next_action_tracks_the_full_founding_to_execution_lifecycle
-        asserts next_action.kind at every stage from a fresh Company
-        through Mission creation
-[x] 3.11 update PROGRESS.txt (this update)
-[x] 3.12 commit/push Phase 3 (next action)
+PHASE 3 — Live Updates and State Integrity            (0/?)
+[ ] 3.1 verify SSE-driven refetch + 30s poll fallback both work
+[ ] 3.2 verify company-switch leaves no stale flash
+[ ] 3.3 loading/empty/error states per §6
 
-PHASE 4 — Minimal Dashboard Contract Proof            (16/16)
-[x] 4.1 typed workspace client (lib/api.ts addition) -- api.getWorkspaceOverview,
-        plus full WorkspaceSnapshot type tree in lib/types.ts mirroring
-        schemas.py 1:1 (named to match the backend Pydantic model, distinct
-        from WorkspaceFileEntry/WorkspaceMergeRecord which belong to the
-        unrelated git Repository browser -- DECISIONS.md #220)
-[x] 4.2 snapshot query (lib/hooks.ts addition) -- useWorkspaceOverview,
-        30s refetchInterval fallback (same pattern as useSituation),
-        keys.workspaceOverview added
-[x] 4.3 incremental event/SSE integration (reuse RealtimeProvider) --
-        keys.workspaceOverview added to invalidateForEvent() so any
-        persisted event over the existing SSE connection refetches the
-        snapshot; no new transport (DECISIONS.md #217)
-[x] 4.4 reconnect/refetch fallback -- the 30s poll in 4.2 plus
-        RealtimeProvider's existing EventSource auto-reconnect (browser
-        native retry) cover the case where an SSE gap is missed entirely
-[x] 4.5 minimal overview/proof surface -- new additive route
-        app/company/[id]/overview/page.tsx, explicitly labelled "(Preview)"
-        in its header and Sidebar link so it can't be confused with the
-        final Sprint 14 CEO Workspace shell; does not touch the existing
-        Headquarters page (app/company/[id]/page.tsx)
-[x] 4.6 show next action + deep link -- renders next_action.title/
-        explanation/urgency and a "Go there ->" Link to next_action.route
-        verbatim from the server response
-[x] 4.7 show concise pending/organization/mission/planning/activity
-        summaries -- pending-action count, employee counts, active mission
-        count, planning status, leadership roster, recent_activity feed
-[x] 4.8 loading/empty/degraded/visible-error states -- isLoading text,
-        ErrorState on isError, EmptyState for zero recent_activity
-[x] 4.9 keep existing pages/navigation intact -- purely additive Sidebar
-        entry; no existing route/component modified besides the
-        invalidateForEvent() one-line addition (4.3)
-[x] 4.10 avoid recreating next-action precedence in frontend code -- the
-        page only renders next_action.kind/title/explanation/route as
-        opaque server-provided strings; no urgency/kind switch statement
-        chooses what to show next, only how to color an already-given
-        urgency label
-[x] 4.11 run typecheck -- `npm run typecheck` (tsc --noEmit): clean, no
-        errors
-[x] 4.12 run production build -- `npm run build`: succeeded,
-        /company/[id]/overview listed in the route table (2.88 kB,
-        113 kB First Load JS)
-[x] 4.13 browser verification -- no browser-automation tool is available
-        in this environment (checked via tool search); interactive
-        click-through/visual verification is UNVERIFIED. What WAS verified
-        instead, against real running dev servers (API on :8000 with
-        COMMANDER_PROVIDER=mock, dashboard on :3000, Postgres already up
-        via docker compose -- not the pytest harness): a live curl-driven
-        walkthrough (register -> create company -> GET .../workspace/overview)
-        returned a correct real snapshot (vacant CTO, auto-seeded PM/
-        Reviewer/Engineer, founding activity, next_action=setup_leadership);
-        curl against /company/{id}/overview returned HTTP 200 with no
-        server-side crash/error markers, and correctly showed the
-        RequireAuth client-side gate (expected for an unauthenticated curl
-        request, since Commander auth is a session cookie the SPA checks
-        client-side, not an SSR-blocking check)
-[x] 4.14 (see 4.13) -- UNVERIFIED claim stated honestly, strongest actually-
-        performed check (live curl walkthrough) reported instead of a false
-        browser-verified claim, per CLAUDE.md §7.5/§16.7
-[x] 4.15 update PROGRESS.txt (this update)
-[x] 4.16 commit/push Phase 4 (next action)
+PHASE 4 — Responsive, Accessibility, Polish           (0/?)
+[ ] 4.1 mobile/desktop pass, keyboard/aria audit
+[ ] 4.2 UNVERIFIED browser interaction note
 
-PHASE 5 — Regression, Audit, and Documentation        (21/21)
-[x] 5.1 full backend tests -- 336 passed, 4 skipped (0 regressions vs.
-        Phase 3's 336/4 checkpoint; re-run twice for stability, both
-        exit 0)
-[x] 5.2 dashboard typecheck -- `tsc --noEmit` clean
-[x] 5.3 dashboard production build -- `next build` succeeded;
-        /company/[id]/overview registered as a dynamic (ƒ) route, no
-        build warnings/errors
-[x] 5.4 verify migration from Sprint 12 -- no new Alembic migration this
-        sprint (`git diff --stat e72c657..HEAD -- apps/api/alembic/` is
-        empty; workspace_overview is a pure read-projection, no new
-        tables). `alembic upgrade head` against the running dev DB is a
-        no-op (already at head) -- confirms nothing pending.
-[x] 5.5 verify fresh database bootstrap + seed -- ran the real
-        `scripts/seed.py` against the live Docker Postgres: dropped
-        schema, replayed the full migration chain from `baseline` (no
-        migration name skipped), founded "Acme AI" with realistic
-        mission history (approved/completed, changes-requested->
-        approved/completed, rejected/cancelled, pending-approval,
-        backlog). Real bootstrap, not the pytest harness.
-[x] 5.6 run mock E2E with zero provider keys -- started a real uvicorn
-        process (COMMANDER_PROVIDER unset -> mock default, no
-        ANTHROPIC_API_KEY anywhere in env/.env) against the freshly
-        seeded DB; logged in as the seeded demo CEO and fetched
-        GET .../workspace/overview -- returned a correct, richly
-        populated real snapshot (see 5.7)
-[x] 5.7 verify snapshot states across planning->review->approval->
-        execution -- live-verified the approval->execution edge beyond
-        what test_workspace_lifecycle.py covers in-harness: fetched the
-        seeded company's overview mid-flow (next_action=review_approval,
-        pending_actions.approval populated, missions.active=["Add search
-        bar"]), then POSTed a real approval decision
-        (POST /approvals/{id}/decision decision=approve) through the
-        real API, then re-fetched the overview and confirmed
-        pending_actions.approval->null, missions.active->[], and
-        next_action correctly fell through the precedence chain to the
-        next real tier (setup_leadership, vacant CTO) -- not a
-        hand-picked test fixture, the actual seeded org state. The
-        earlier planning/clarification/revision/specification-review
-        tiers are covered by test_workspace_next_action.py (Phase 2) and
-        test_workspace_lifecycle.py (Phase 3) against real Planning/
-        Specification state machines; not re-derived here to avoid
-        duplicating those tests.
-[x] 5.8 verify clarification and revision flows -- covered by
-        test_workspace_next_action.py's clarification-tier tests and
-        test_workspace_lifecycle.py's specification-turn integration
-        tests (Phase 2/3); cross-referenced, not re-run standalone here
-[x] 5.9 verify cancellation and failure cleanup -- covered by
-        test_workspace_lifecycle.py's cancellation/failure-path tests
-        (Phase 3); cross-referenced
-[x] 5.10 verify auth and company isolation -- live-verified beyond the
-        test harness: registered a second real account ("intruder"),
-        confirmed GET .../workspace/overview for the first account's
-        company returns 404 (not 403, per Rule #15) for the second
-        account, and 401 for a fully unauthenticated request (no
-        session cookie)
-[x] 5.11 verify cursor resume, duplicate delivery, gap recovery --
-        resolved by inspection in Phase 3 (routes.py docstring +
-        PROGRESS.txt 3.9): event_cursor is the existing seq-ordered
-        event stream's cursor (no new transport), SSE dedup is by
-        event.id (existing dashboard behavior, lib/hooks.ts), and a
-        30s refetchInterval on useWorkspaceOverview provides gap
-        recovery independent of the SSE connection state -- no new
-        mechanism introduced, so no new failure mode to test beyond
-        what the existing event-stream tests already cover
-[x] 5.12 audit response bounds and obvious N+1 behavior -- grepped
-        service.py: every list field is bounded by a fixed constant
-        (MAX_ACTIVE_MISSIONS, MAX_RECENT_MISSIONS, MAX_RECENT_ACTIVITY,
-        MAX_EMPLOYEES); a dedicated query-count test
-        (test_workspace_overview_api.py, "N+1" docstring) asserts a
-        fixed query count regardless of data volume
-[x] 5.13 audit hidden reasoning/secrets/unsafe metadata -- grepped
-        workspace_overview/*.py for secret/api_key/token/password/
-        prompt -- zero matches outside comments explicitly stating the
-        schema is CEO-safe (schemas.py:3-6)
-[x] 5.14 audit generic-action/mutation leakage -- exactly one route
-        exists in routes.py (GET .../workspace/overview); no
-        POST/PUT/DELETE anywhere in the module
-[x] 5.15 audit frontend for duplicated lifecycle policy -- grepped
-        overview/page.tsx for next_action.kind branching -- zero
-        matches; the page only switches on the already-server-provided
-        `urgency` string for cosmetic color, and renders next_action's
-        title/explanation/route fields verbatim as documented in the
-        page's own top-of-file comment
-[x] 5.16 inspect complete diff for scope leakage -- `git diff --stat
-        e72c657..HEAD -- apps/api apps/dashboard`: exactly the intended
-        15 files (workspace_overview/*, 4 new test files, and the Phase
-        4 frontend stack); no unrelated module touched
-[x] 5.17 update CLAUDE.md, PROGRESS.txt, README.md, docs/ARCHITECTURE.md,
-        docs/DECISIONS.md, docs/design/UX_SPEC.md --
-        CLAUDE.md: added workspace_overview to the §5 module list;
-          corrected the stale Sprint 13 roadmap row (was "CEO<->PM
-          conversation + PM reports + decision authority", which is not
-          what shipped) to "CEO Workspace backend projection +
-          next_action policy", marked 13 (checkmark).
-        docs/ARCHITECTURE.md: added new §4.3 "CEO Workspace backend
-          projection [Sprint 13 (checkmark)]" describing the projection
-          service, next_action precedence policy, bounds, and Rule #15/
-          SSE reuse; retagged the pre-existing Minor/Major/Critical
-          "Decision authority" section (renumbered 4.3->4.4) from a
-          stale "[V1.1 -- Sprint 13]" to "[V1.1 -- not yet scheduled]"
-          since no such classification exists in code (confirmed by
-          grep) and it was never this sprint's scope; renumbered
-          Harness 4.4->4.5, Self-correction 4.5->4.6; added
-          workspace_overview to the §6.1 module table; added a short
-          note under §8 documenting the /overview preview page's
-          temporary, non-final status.
-        docs/design/UX_SPEC.md: retagged §5.2 (same stale Minor/Major/
-          Critical Sprint-13 mislabel) to "not yet scheduled"; added an
-          "Overview (Preview)" bullet to §7 Sidebar Pages describing the
-          Phase 4 proof page as temporary and pointing at
-          ARCHITECTURE.md §4.3.
-        README.md: no changes -- dev workflow (`make` targets) unchanged
-          this sprint (verified: `git diff --stat` against README.md is
-          empty).
-        docs/DECISIONS.md: added #221 (documents the stale-tag
-          correction above -- found during doc sync, not part of this
-          sprint's code, corrected for Rule #10 accuracy) and #222
-          (documents the no-browser-automation-tool finding and the
-          curl-walkthrough verification actually performed, per
-          CLAUDE.md §7.5/§16.7).
-[x] 5.18 record Sprint 14 boundaries and deferrals -- see "SPRINT 14
-        HANDOFF" section below
-[x] 5.19 commit/push final documentation (next action)
-[x] 5.20 verify clean working tree (post-commit)
-[x] 5.21 verify local HEAD == origin/master (post-push)
-
-================================================
-DESIGN DECISIONS RECORDED THIS SPRINT (docs/DECISIONS.md)
-217. No new event transport/forward-cursor endpoint -- reuse SSE +
-     existing GET /events?cursor= route.
-218. next_action tier 3 has no reachable predicate in the current shipped
-     lifecycle; kept as a documented no-op slot, not invented.
-219. New workspace projection module (schemas.py, service.py, routes.py,
-     next_action.py); sequential-select projection pattern from
-     situation/reports precedent; ActiveSpecificationLockORM guarantees
-     at most one non-terminal Specification per project.
-220. Correction to #219: module lives at app/modules/workspace_overview/
-     (not app/modules/workspace/) and the route is
-     GET /api/projects/{project_id}/workspace/overview, because
-     app/modules/workspace_manager/ already owns /workspace/{tree,file,
-     merges} for the git-backed Repository browser -- avoids a name/route
-     vocabulary collision between "Repository (Workspace)" and "Dashboard
-     (CEO Workspace)" per CLAUDE.md's terminology table.
-221. Phase 5 doc sync found and corrected a pre-existing stale tag
-     (unrelated to this sprint's code): ARCHITECTURE.md §4.3 and
-     UX_SPEC.md §5.2 mislabeled the not-yet-built Minor/Major/Critical
-     decision-tier classification as "Sprint 13"; retagged "not yet
-     scheduled" and added a proper §4.3 describing what actually shipped.
-222. No browser-automation tool exists in this environment; interactive
-     click-through of the Phase 4 proof page is UNVERIFIED. Strongest
-     verification actually performed: a real mock-mode, zero-key process
-     (fresh seed + live uvicorn) walkthrough covering the full snapshot
-     contract, a live approval-decision state transition, and auth/
-     company-isolation checks (404/401).
-================================================
-
-SPRINT 14 HANDOFF -- boundaries and deferrals
-- This sprint shipped ONLY the backend projection (workspace_overview
-  module) and a minimal, explicitly-labeled proof page
-  (/company/[id]/overview, "Workspace Overview (Preview)"). It is NOT
-  the CEO Workspace shell -- no PM conversation surface, no Widget Dock,
-  no layout matching docs/design/UX_SPEC.md §3's mockup.
-- Sprint 14 owns: the real CEO Workspace shell (PM-conversation-primary
-  layout + Widget Dock scaffold), consuming the same WorkspaceSnapshot
-  contract this sprint built. The proof page should be REMOVED (not
-  extended/styled) once the real shell lands on the same or an
-  overlapping route -- see UX_SPEC.md §7's "Overview (Preview)" bullet
-  and ARCHITECTURE.md §8's proof-of-contract note, both flagged
-  temporary at write time.
-- next_action's precedence policy (app/modules/workspace_overview/
-  next_action.py) is the single source of truth for "what does the CEO
-  do next." Sprint 14's shell must render it verbatim, never recompute
-  it from raw Mission/Specification/Approval state -- this is already
-  the rule the Phase 4 proof page follows and it must not regress.
-- Tier 3 of next_action (see DECISIONS.md #218) still has no reachable
-  predicate in the shipped lifecycle. Do not invent a fake trigger for
-  it in Sprint 14 just to fill the slot -- wire it only if a real
-  future feature needs it.
-- The Minor/Major/Critical CEO-decision-tier classification described
-  in ARCHITECTURE.md §4.4 / UX_SPEC.md §5.2 remains unbuilt and
-  unscheduled -- it is not Sprint 14's responsibility unless a future
-  sprint brief explicitly assigns it.
-- Interactive browser verification of the Phase 4 proof page was never
-  performed (no browser-automation tool in this environment, see
-  DECISIONS.md #222). If Sprint 14 reuses any of this sprint's frontend
-  code (types.ts, api.ts, hooks.ts additions), a first real click-through
-  is still outstanding and worth doing early in that sprint.
+PHASE 5 — Regression, Audit, Documentation            (0/?)
+[ ] 5.1 full backend + frontend test/typecheck/build regression
+[ ] 5.2 CLAUDE.md / ARCHITECTURE.md / UX_SPEC.md sync
+[ ] 5.3 final commit + push + remote HEAD confirmation

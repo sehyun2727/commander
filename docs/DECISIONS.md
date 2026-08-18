@@ -2977,3 +2977,86 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     #15). This proves the backend contract and route wiring are correct
     under real conditions; it does not prove the page renders correctly
     in an actual browser.
+
+## Sprint 14 — CEO Workspace UI shell
+
+223. **The frontend "CEO Workspace" (this sprint's primary landing surface)
+    replaces the existing Headquarters page in place at the company
+    landing route (`/company/[id]`), rather than living at a new URL that
+    the landing route redirects to.** Decision #220 already reserved the
+    product-noun distinction at the API level ("Dashboard" -> "CEO
+    Workspace" vs. "Repository" -> "Workspace", CLAUDE.md §3); this sprint
+    carries the same distinction into routing and the Sidebar. The
+    Sprint 13 proof page (`/company/[id]/overview`) is superseded by the
+    real implementation and becomes a plain server-side `redirect()` to
+    `/company/[id]` — the route is not deleted (§4.1's "do not delete
+    existing routes" / "preserve direct URLs"), but it no longer has a
+    distinct implementation. The pre-existing `/company/[id]/workspace`
+    route (git-backed Repository browser, `workspace_manager`) is
+    untouched and keeps its own Sidebar entry ("Workspace"); the new
+    landing route's Sidebar entry is labeled "CEO Workspace" to keep the
+    two visually distinct despite the shared English word. §4.1's
+    "introduce the Workspace first, redirect the landing route only after
+    verifying" staged-rollout language describes a safe *process* for
+    deploying behind a live product; since this repo ships each sprint as
+    one gated commit (typecheck + build + audit before push, per CLAUDE.md
+    §7.5), replacing the landing route's content directly is equivalent in
+    outcome and simpler, with no intermediate broken state ever reachable.
+
+224. **`RealtimeProvider` is remounted (via `key={companyId}` in
+    `app/company/[id]/layout.tsx`) whenever the active company changes.**
+    Phase 0 audit found `RealtimeProvider`'s `events`/`streaming` React
+    state was never cleared on a company switch — because Next.js App
+    Router does not unmount a shared layout when only a dynamic segment
+    param changes, the old company's buffered Timeline events and
+    in-flight streaming replies could stay in memory and flash into the
+    new company's Workspace/Timeline for one render. `key={companyId}`
+    forces a clean remount (fresh `useState`, a closed-then-reopened
+    `EventSource`) exactly on company switch and nowhere else, satisfying
+    §4.8 ("never flash another company's data") without hand-rolling a
+    manual reset effect.
+
+225. **`useEventStream`'s `ConnectionStatus` gained a fourth state,
+    `"stale"`, computed client-side from SSE heartbeat silence, and the
+    hook now also returns `lastMessageAt`.** §4.7 requires the CEO be able
+    to distinguish live / reconnecting / stale-degraded / offline / last-
+    updated, but the existing 3-state enum only covered live/reconnecting
+    (browser `EventSource` auto-retries and only ever reports `error`,
+    never a distinct "gave up" state — decision predates this sprint).
+    The backend already emits a `heartbeat` SSE frame every 15s
+    (`realtime/routes.py`) purely to keep idle connections alive; this
+    frame was previously ignored entirely. It's now used, alongside real
+    `commander-event` frames, to update `lastMessageAt`; a 5s interval
+    flips status to `stale` if `status === "open"` and more than ~40s
+    (≈3 missed heartbeats) has passed with no frame at all — a real signal
+    of a silently-dead connection the browser hasn't noticed yet, distinct
+    from a healthy-but-quiet company. `navigator.onLine === false` is
+    surfaced as a separate "offline" UI state at the component layer
+    (not folded into `ConnectionStatus`, since it's a browser/network fact
+    independent of any one SSE connection). On any transition back to
+    `"open"` from `"reconnecting"`/`"stale"`, `RealtimeProvider` now also
+    invalidates the Workspace snapshot query, so a resumed connection
+    always pulls a fresh server snapshot rather than trusting whatever
+    partial event history was missed during the gap (§4.7's "when event
+    continuity is uncertain, refetch a fresh snapshot").
+
+226. **Pending-attention deep links are built client-side from fixed path
+    templates, not a server-supplied `route` field**, because
+    `WorkspaceSnapshot.pending_actions`' four item schemas
+    (`PendingClarification`/`PendingSpecificationReview`/
+    `PendingApprovalItem`/`PendingFailure`, `workspace_overview/schemas.py`)
+    were designed to carry only identifying fields, not a route — only
+    `next_action` carries a `route`. The new `lib/utils.ts` helpers mirror
+    `next_action.py`'s own `_spec_route`/`_mission_route`/`_decisions_route`
+    string templates exactly (same `/company/{id}/...` shapes, only IDs
+    already present in the trusted snapshot response are interpolated).
+    This is the same trust/construction pattern `MissionCard` and
+    `SpecificationCard` already use for their own links, not a new
+    precedence computation — §4.5's "do not duplicate the server
+    precedence algorithm" governs *which* item is most urgent (still
+    server-decided, via `next_action` and the fixed display order below),
+    not how an already-identified item's URL is spelled. Display order for
+    the (at most four, independently-nullable) pending items is fixed as
+    clarification, specification review, approval, failure — the same
+    relative tier order `next_action.py`'s own comment documents (tiers
+    1/2/4/5) — rather than re-deriving urgency from scratch.
