@@ -353,6 +353,56 @@ analyze repo → plan → modify → run_checks → react to results → commit 
 
 A failed check no longer waits for the CEO. The Employee reacts inside its budget; if it still fails, the Reviewer's feedback routes through PM judgment (§4.4) and only reaches the CEO when Critical.
 
+### 4.7 CEO Workspace widget system  *[V1.1 — Sprint 15 ✅]*
+
+`app/modules/workspace_widgets/` (`registry.py`, `schemas.py`,
+`service.py`, `routes.py`) lets the CEO reorder, hide, and restore
+optional CEO Workspace widgets per company, without ever letting the
+frontend choose *what* renders or *which* business data is shown —
+only *which subset, in what order* (Rule #17, `docs/DECISIONS.md` #228).
+
+- **Registry.** `registry.py` defines a frozen, immutable, server-owned
+  8-widget catalog (`WidgetDefinition` frozen dataclass tuple +
+  `WIDGETS_BY_KEY` dict) mapping 1:1 onto Sprint 13's
+  `WorkspaceSnapshot` fields and Sprint 14's existing
+  `components/workspace/*`. Two widgets (`primary_next_action`,
+  `connection_status`) are `required` and cannot be hidden; the other
+  six are optional. There is no path for a client to introduce a new
+  widget key, a plugin, or an arbitrary component reference (§13 "No
+  plugin system").
+- **Persistence.** One JSON-column row per `(user_id, project_id)` in
+  `workspace_preferences` (migration `77037fd534fa`), not normalized
+  per-widget rows — `docs/DECISIONS.md` #228. Every GET renormalizes
+  the stored value defensively (`_normalize`, never raises — drops
+  unknown/retired keys, restores required-but-hidden widgets,
+  deterministically appends new default widgets a returning CEO has
+  never seen), so a schema drift between releases can never crash a
+  read.
+- **Concurrency.** An integer `revision` field, not ETag/`updated_at`
+  (`docs/DECISIONS.md` #228). A PUT with a stale `expected_revision`
+  raises `StaleRevisionError` → `409 {error, current_revision}`; the
+  frontend never auto-merges or silently discards the CEO's unsaved
+  edits on conflict (`components/workspace/WorkspaceEditMode.tsx`).
+- **Frontend composition.** `/company/[id]` (Sprint 14's shell) is now
+  registry-driven: `WorkspaceWidgetGrid` renders the CEO's effective,
+  normalized, visible/ordered widget list through a static, literal
+  `Record<string, ComponentType>` (`widgetComponents.tsx`) — the single
+  place a `widget_key` string becomes a rendered component, never a
+  dynamic import or computed path. `WorkspaceEditMode` is a distinct
+  full-page edit mode (explicit Save/Cancel, not autosave, matching
+  `SettingsPage`'s existing mutation-UX precedent) with move-up/down
+  reorder controls (no drag-and-drop dependency exists in this
+  codebase), hide/restore, and a confirm-gated reset-to-default. Each
+  rendered widget is wrapped in its own `WidgetErrorBoundary` so one
+  widget's render failure degrades to a small isolated retry card
+  instead of crashing the whole Workspace; the primary-action slot gets
+  a stronger, non-dismissable fallback rather than silently
+  disappearing (`docs/DECISIONS.md` #231).
+- **Observability stays presentation-only.** Preference lifecycle
+  transitions are logged via Python `logging` only, not the EventBus or
+  Timeline (`docs/DECISIONS.md` #229) — a widget layout choice is not
+  company history per Rule #14.
+
 ---
 
 ## 5. Project Memory  *[V1.1 — Sprint 18]*
@@ -401,7 +451,8 @@ Selective recall is mandatory: injecting the entire history into every prompt wo
 | Roles API | `GET /api/projects/{id}/roles` — read-only, template-owned Role data (`key`/`title`/`category`/`singleton`/`description`); no write route, Role is not CEO-owned. Lives in `projects` module, not a standalone `roles` module. | ✅ Sprint 10 |
 | `planning` | PM↔CTO Project Specification lifecycle (§4.2 "As built"): `PlanningOrchestrator` (bounded turn loop, turn-budget + malformed-output-retry guarded per Rule #13), `service` (start/resume/revise/approve/reject/cancel/begin-execution, all ownership-gated), `routes`. DB-backed `active_specification_locks` singleton lock, mirroring Sprint 11's hiring-lock pattern. | ✅ Sprint 12 |
 | `workspace_overview` | CEO Workspace read-only snapshot projection + `next_action` precedence policy (§4.3 "As built"). One route: `GET /projects/{id}/workspace/overview`. No new table, no mutation route, no server-side cache. | ✅ Sprint 13 |
-| `memory`, `widgets` | — | 🔲 **Do not exist** — Sprints 15–18 |
+| `workspace_widgets` | CEO Workspace widget catalog + per-(user, company) layout preferences (§4.7 "As built"). Frozen 8-widget registry, one JSON-column preference row per `(user_id, project_id)`, integer-`revision` optimistic concurrency. Four routes under `/projects/{id}/workspace/widgets` and `/projects/{id}/workspace/preferences`. Presentation-only — never a second source of business truth. | ✅ Sprint 15 |
+| `memory` | — | 🔲 **Does not exist** — Sprint 18 |
 
 ### 6.2 Lifecycles
 
@@ -471,13 +522,13 @@ database layer rather than in application code:
 
 Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark, Render-inspired calm.
 
-**V1.1 target layout** (detailed in UX_SPEC §3–§4): entering a company presents **the PM conversation as the primary surface**, with a customizable **Widget Dock** beside it and a thin sidebar for deeper pages. New CEO-facing capability lands as a Widget or a Sidebar page (Rule #17) — never bolted onto the conversation. This remains the longer-term direction; the Widget Dock itself ships in Sprint 15, not Sprint 14.
+**V1.1 target layout** (detailed in UX_SPEC §3–§4): entering a company presents **the PM conversation as the primary surface**, with a customizable **Widget Dock** beside it and a thin sidebar for deeper pages. New CEO-facing capability lands as a Widget or a Sidebar page (Rule #17) — never bolted onto the conversation. This remains the longer-term direction; Sprint 15 shipped configurable widgets *within* the existing Sprint 14 Workspace shell, not the PM-conversation-plus-dock layout itself — that restructure is still unscheduled.
 
-**CEO Workspace shell (Sprint 14 ✅):** `/company/[id]` — the company landing route — is a responsive summary-card shell (`app/company/[id]/page.tsx`, `components/workspace/*`) built directly on Sprint 13's `WorkspaceSnapshot`/`next_action` contract, replacing the old Headquarters page in place. It is an interim shape, not yet the PM-conversation-plus-Widget-Dock layout above: a `PrimaryActionPanel` renders the server's `next_action` verbatim (title/explanation/route/urgency, never recomputed client-side) as the one primary CTA, followed by `CurrentFocusCard`, `PendingAttentionList` (bounded, fixed display order mirroring `next_action.py`'s own tiers — clarification → specification_review → approval → failure), `PlanningSummaryCard`, `MissionSummaryCard`, `OrganizationSummaryCard`, and a bounded `RecentActivityList`. Mobile (`<lg`) renders these as a linear stack via `Sidebar`'s new drawer navigation (hamburger + `MobileHeader`); desktop renders grouped two-column rows. `ConnectionStatusBar` surfaces live/reconnecting/stale/offline using a new SSE-heartbeat-driven `ConnectionStatus` state (§8 cross-cutting, below). `RealtimeProvider` is now keyed on `companyId` so switching companies fully remounts the SSE connection and buffered event/streaming-reply state instead of reusing stale state from the previous company. The old `/company/[id]/overview` proof-of-contract page (§8 prior text) is now a plain `redirect()` to this route, kept only so existing deep links still resolve (`docs/DECISIONS.md` #223).
+**CEO Workspace shell (Sprint 14 ✅, registry-driven since Sprint 15 ✅):** `/company/[id]` — the company landing route — is a responsive widget grid (`app/company/[id]/page.tsx`, `components/workspace/*`) built directly on Sprint 13's `WorkspaceSnapshot`/`next_action` contract, replacing the old Headquarters page in place. It is still an interim shape, not yet the PM-conversation-plus-Widget-Dock layout above: `WorkspaceWidgetGrid` renders whichever widgets the CEO's `workspace_widgets` preferences (§4.7) mark visible, in the CEO's own order, always with `PrimaryActionPanel` (the server's `next_action`, verbatim, never recomputed client-side) required and pinned. The seven other Sprint 14 cards — `ConnectionStatusBar` (also required), `CurrentFocusCard`, `PendingAttentionList`, `PlanningSummaryCard`, `MissionSummaryCard`, `OrganizationSummaryCard`, `RecentActivityList` — are all now optional, reorderable, hideable widgets rather than a fixed sequence. Mobile (`<lg`) stacks the same visible/ordered list single-column; desktop packs consecutive half-span widgets two per row via `WorkspaceWidgetGrid`'s `packRows`, giving full-span widgets their own row — one canonical order drives both, not separate per-breakpoint layouts (`docs/DECISIONS.md` #228). `ConnectionStatusBar` surfaces live/reconnecting/stale/offline using an SSE-heartbeat-driven `ConnectionStatus` state (§8 cross-cutting, below), unchanged since Sprint 14. `RealtimeProvider` is keyed on `companyId` so switching companies fully remounts the SSE connection and buffered event/streaming-reply state instead of reusing stale state from the previous company; the widget preference queries are independently keyed on `companyId` too, so a company switch cannot show another company's cached layout. The old `/company/[id]/overview` proof-of-contract page (§8 prior text) is now a plain `redirect()` to this route, kept only so existing deep links still resolve (`docs/DECISIONS.md` #223).
 
-Its blocks still map onto the eventual Widget Dock the same way the old Headquarters blocks did — cards become Widgets, not new concepts:
+Its blocks still map onto the eventual Widget Dock the same way the old Headquarters blocks did — cards become Widgets, not new concepts (this mapping is now closer to literal, since Sprint 15 made them actual configurable widgets rather than a fixed sequence):
 
-| Sprint 14 Workspace card | V1.1 Widget Dock destination |
+| Sprint 14/15 Workspace widget | V1.1 Widget Dock destination |
 |---|---|
 | `PendingAttentionList` / `PrimaryActionPanel` | Pending Approvals widget + the "needs your decision" section of the PM Report |
 | `PlanningSummaryCard` / `MissionSummaryCard` | PM Report (UX_SPEC §3.2) + Progress widget |

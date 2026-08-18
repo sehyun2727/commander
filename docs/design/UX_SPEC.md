@@ -92,7 +92,7 @@ Commander App
 
 ## 3. The CEO Workspace — the core screen  *[V1.1 — Sprints 13–15]*
 
-**Sprint 14 status:** the layout below (PM conversation as primary surface + Widget Dock) is the target for the end of this three-sprint span, not what Sprint 14 alone ships. Sprint 14 shipped the responsive Workspace *shell* at `/company/[id]` — a bounded set of summary cards (`PrimaryActionPanel`, `CurrentFocusCard`, `PendingAttentionList`, `PlanningSummaryCard`, `MissionSummaryCard`, `OrganizationSummaryCard`, `RecentActivityList`; see `docs/ARCHITECTURE.md` §8) driven by the same `next_action`/`WorkspaceSnapshot` contract this section describes — deliberately without a PM conversation surface or a customizable Widget Dock, both of which are Sprint 15 scope. The mapping from today's cards to tomorrow's Widgets is in `docs/ARCHITECTURE.md` §8.
+**Sprint 14/15 status:** the layout below (PM conversation as primary surface + Widget Dock) remains the target shape for a later, still-unscheduled restructure — it did not ship in Sprint 14 or Sprint 15. Sprint 14 shipped the responsive Workspace *shell* at `/company/[id]` — a bounded set of summary cards (`PrimaryActionPanel`, `CurrentFocusCard`, `PendingAttentionList`, `PlanningSummaryCard`, `MissionSummaryCard`, `OrganizationSummaryCard`, `RecentActivityList`; see `docs/ARCHITECTURE.md` §8) driven by the same `next_action`/`WorkspaceSnapshot` contract this section describes — deliberately without a PM conversation surface or a customizable Widget Dock. Sprint 15 made those same optional cards into a registry-driven **widget system** *within* that existing shell: the CEO can reorder, hide, and restore them via a "Customize Workspace" edit mode, with layout persisted per (CEO, Company) — see §4's "As built" note and `docs/ARCHITECTURE.md` §4.7. The PM-conversation-plus-dock layout itself is still not built. The mapping from today's cards to tomorrow's Widgets is in `docs/ARCHITECTURE.md` §8.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -175,6 +175,8 @@ Widget catalog (V1.1 target set — shipped progressively as their data becomes 
 | Mission Tree | Project → Mission → Task progress | Sprint 19 |
 | Architecture | current architecture decisions | Sprint 12 |
 | Sprint | current sprint state | Sprint 18 |
+
+**As built (Sprint 15):** there is no separate dock alongside a PM conversation yet — the target layout above is unbuilt. Instead, Sprint 15 turned the Sprint 14 Workspace shell's optional summary cards into the widget catalog itself: a frozen, server-owned registry of 8 widgets (`current_focus`, `pending_attention`, `planning_summary`, `mission_summary`, `organization_summary`, `recent_activity`, plus the two required widgets `primary_next_action` and `connection_status`), each mapped 1:1 to today's cards (`docs/ARCHITECTURE.md` §4.7, §8). "Customize Workspace" opens an edit mode — not a `+` catalog picker — with move-up/move-down reordering and hide/restore for the 6 optional widgets; the 2 required widgets can never be hidden or reordered away from their fixed position. There is no add/remove of *new* widget types and no per-widget catalog of not-yet-real widgets (Timeline, Employees, Costs, Payroll, Token Usage, Reports, Risks, Repository Activity, Mission Tree, Architecture, Sprint) — those rows above remain the V1.1 target set, not what Sprint 15 shipped. Layout persists per `(user_id, project_id)` with optimistic-concurrency conflict handling, matching the CEO-per-Company scoping this section describes.
 
 ---
 

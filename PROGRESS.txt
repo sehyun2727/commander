@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 15 — Safe CEO Workspace Widget System
- Overall: Phases 0-4 done, starting Phase 5.
- Now working on: Phase 5 — Regression, Security Audit, and Documentation
+ Overall: Phases 0-5 complete. Sprint done, pending final commit/push.
+ Now working on: Final report and Phase 5 documentation commit
  Last update: 2026-08-18
 ================================================
 
@@ -280,4 +280,100 @@ PHASE 4 — Failure Isolation, Responsive, and Accessibility (21/21)
 [x] 4.20 PROGRESS.txt updated per completed item (this entry)
 [x] 4.21 commit/push Phase 4 checkpoint
 
-PHASE 5 — Regression, Security Audit, and Documentation  (0/24)
+PHASE 5 — Regression, Security Audit, and Documentation  (24/24)
+[x] 5.1 full backend suite (apps/api/.venv pytest -q): 373 passed, 4
+        skipped -- 356 Phase-4-checkpoint baseline + 17 new
+        workspace_widgets tests, zero regressions
+[x] 5.2 frontend tests that exist: none -- confirmed again (no jest/
+        vitest/testing-library/playwright config or dependency anywhere
+        in apps/dashboard, same finding as Phases 3-4)
+[x] 5.3 dashboard typecheck (tsc --noEmit): clean
+[x] 5.4 dashboard production build: clean, all 19 routes compile
+[x] 5.5 Sprint 14->15 migration verified: `alembic current` ->
+        77037fd534fa (head); `alembic downgrade -1` -> `alembic upgrade
+        head` round-trip against live local Postgres, both clean
+[x] 5.6 fresh DB bootstrap verified: dropped schema, `alembic upgrade
+        head` from empty through the full chain (9fd1f513c939 baseline
+        -> 77037fd534fa), then `python scripts/seed.py` from repo root --
+        demo CEO + "Acme AI" company + starter Missions created
+        successfully
+[x] 5.7 mock E2E with zero provider keys: live curl against a real
+        `uvicorn app.main:app` process, COMMANDER_PROVIDER=mock, no API
+        keys set
+[x] 5.8 default/update/refresh/reset/conflict flows verified live: login
+        -> GET widgets catalog (8 items) -> GET preferences (default,
+        revision 1) -> PUT hide current_focus (revision -> 2, persisted
+        on refetch) -> PUT with stale expected_revision:1 while actual
+        was 2 -> 409 {"error":"stale_revision","current_revision":2} ->
+        POST reset (revision -> 3, all visible)
+[x] 5.9 two-company preference isolation verified live: second company
+        created under the same account, preferences confirmed isolated
+        and independently defaulted
+[x] 5.10 two-user isolation verified live: registered a second user
+        (second@commander.local), created a company under that account,
+        confirmed its preferences are independent (revision 1, all
+        visible) of the first user's companies
+[x] 5.11 Workspace snapshot/SSE behavior verified untouched: no Sprint
+        15 commit modifies apps/api/app/modules/workspace_overview/ or
+        apps/dashboard's useEventStream/RealtimeProvider (last touched
+        Sprint 14); useWorkspaceOverview hook is byte-identical, new
+        widget hooks use separate query keys (workspaceWidgets/
+        workspacePreferences vs workspaceOverview)
+[x] 5.12 next-action policy verified server-owned and untouched:
+        workspace_overview/next_action.py's derive() was not modified by
+        Sprint 15 and has no knowledge of widget order/visibility;
+        workspace_widgets/service.py explicitly documents preferences as
+        presentation-only, never consulted by workspace_overview;
+        required-widget enforcement is a registry property
+        (WidgetSpec.required), not next_action tier logic
+[x] 5.13 registry allowlist / dynamic-import audit (dedicated subagent):
+        PASS -- registry.py frozen dataclass tuple, no plugin/dynamic-
+        import capability; widgetComponents.tsx is a static
+        Record<WidgetKey, ComponentType> literal, never next/dynamic or
+        a computed import path
+[x] 5.14 payload bounds / mass-assignment audit (dedicated subagent):
+        PASS -- WorkspacePreferencesUpdateRequest bounds widgets list via
+        Field(max_length=MAX_WIDGET_ENTRIES); only order/visible/span per
+        entry are writable, widget_key is validated against the registry,
+        no other field is client-settable
+[x] 5.15 auth / Rule #15 audit (dedicated subagent): PASS -- all 4 routes
+        compose get_current_user + project_owned_by; cross-account access
+        returns 404 (confirmed live in 5.9/5.10's curl run), never 403
+[x] 5.16 hidden-reasoning/secret/raw-payload exposure audit (dedicated
+        subagent): PASS -- no secret values, provider keys, or raw agent
+        reasoning ever enter the widget preference payload or catalog
+        response; WidgetErrorBoundary sends errors only to console.error,
+        never renders a stack trace or payload into the fallback UI
+[x] 5.17 per-widget failure containment audit (dedicated subagent): PASS
+        -- WorkspaceWidgetGrid wraps each widget individually in
+        WidgetErrorBoundary; one widget's render error cannot cascade to
+        siblings or unmount the Workspace
+[x] 5.18 migration/normalization behavior audit: PASS -- _normalize
+        (service.py) repairs malformed/legacy/retired-widget rows on
+        every read, never raises; covered by
+        test_malformed_stored_entries_normalize_safely and
+        test_stored_entries_missing_a_widget_get_it_added_back (Phase 1)
+[x] 5.19 complete diff inspected for scope leakage: `git diff --stat`
+        from the Sprint 15 baseline (45bcf11) to the Phase 4 checkpoint
+        (a68156b) -- 23 files changed, 3290 insertions(+), 279
+        deletions(-), fully scoped to the new workspace_widgets module,
+        dashboard workspace components, and docs; no engine or
+        unrelated-module changes
+[x] 5.20 documentation updated: CLAUDE.md (§12 roadmap row marked
+        `15 ✅`); docs/ARCHITECTURE.md (new §4.7 widget-system section,
+        module table row, §8 frontend-architecture rewrite);
+        docs/DECISIONS.md (#228-#232); docs/design/UX_SPEC.md (§3/§4
+        "as built" notes distinguishing the shipped widget system from
+        the still-unscheduled PM-conversation-plus-dock target layout);
+        README.md (status paragraph + walkthrough step 3 mention
+        "Customize Workspace")
+[x] 5.21 Sprint 16 boundaries and deferrals recorded (DECISIONS.md #232):
+        no drag-and-drop free-placement canvas, no arbitrary x/y layout,
+        no third-party/marketplace widgets, no widget-level permissions
+        beyond existing Company ownership, no Agent Harness/self-
+        correction/Memory/multi-user collaboration -- matches sprint-
+        15.md §13 Out of Scope; Sprint 16 (Agent Harness, per CLAUDE.md
+        §12) is unrelated to the widget system
+[x] 5.22 commit/push final documentation (this Phase 5 batch)
+[x] 5.23 clean working tree verified after commit
+[x] 5.24 local HEAD == origin/master verified after push

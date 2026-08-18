@@ -3256,3 +3256,66 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       carryover across company switches) and reported as UNVERIFIED for
       literal on-screen/on-device behavior, per CLAUDE.md §16.7 — not
       claimed as browser-verified.
+
+232. **Sprint 15 Phase 5 regression, security, and documentation findings.**
+    - **Zero test regressions.** Full backend suite: 373 passed, 4 skipped
+      (up from the pre-sprint 356 passed / 4 skipped baseline — 17 new
+      tests added across `workspace_widgets` registry, service, routes,
+      and migration coverage). No dashboard test runner exists in this
+      repo (same finding as prior sprints); `make test`'s frontend leg is
+      typecheck + build only, both green.
+    - **Independent security audit (dedicated subagent, not self-audit)**
+      covering registry allowlist immutability, static-component-map-only
+      widget rendering (no dynamic import/`eval`), payload bounds and mass
+      assignment on the preferences `PUT`, Rule #15 ownership scoping,
+      secret/hidden-reasoning non-exposure, and per-widget failure
+      containment — all 6 areas passed with file:line evidence (e.g.
+      `registry.py:26-141`, `widgetComponents.tsx:24-43`, `schemas.py:44,50`,
+      `routes.py:34-86`, `service.py:177-207`, `WorkspaceWidgetGrid.tsx:71-76`).
+      A dedicated agent was used specifically so the audit would not just
+      re-confirm the implementer's own Phase 1-4 assumptions.
+    - **Live mock-mode E2E (curl against a real uvicorn + Postgres
+      process, zero API keys, per Rule #6)** exercised the full CEO-facing
+      preference lifecycle end to end: default catalog/preferences →
+      update (hide a widget, revision bump) → persistence across refetch
+      → stale-`expected_revision` conflict (`409 stale_revision`) → reset
+      → cross-account access on a second CEO/company (`404`, confirming
+      Rule #15 — not `403`) → per-user preference isolation → unauthenticated
+      access (`401`). This is API-level verification, not browser-level;
+      reported as such per CLAUDE.md §16.7, since no browser automation
+      tool exists in this environment (consistent with #227/#231's
+      findings).
+    - **Migration round-trip and fresh-bootstrap both verified.**
+      `alembic downgrade -1` / `alembic upgrade head` round-trips cleanly;
+      a fully fresh database (`alembic upgrade head` from an empty schema
+      through `scripts/seed.py`) applies the whole chain from the V1
+      baseline (`9fd1f513c939`) through the Sprint 15 migration
+      (`77037fd534fa`) without error and seeds the demo Company correctly.
+    - **Diff scope check.** `git diff --stat` from the pre-sprint baseline
+      to the Phase 4 checkpoint: 23 files changed, all within the new
+      `workspace_widgets` module, dashboard workspace components, and
+      docs — no engine or unrelated-module changes, confirming no scope
+      leakage into Sprint 16+ territory.
+    - **Documentation sync (CLAUDE.md Rule #10).** `docs/ARCHITECTURE.md`
+      gained a new §4.7 describing the widget registry, persistence,
+      concurrency, frontend composition, and observability model, plus an
+      updated §8 frontend-architecture description and module table row;
+      `docs/design/UX_SPEC.md` §3/§4 gained "as built" notes clarifying
+      that Sprint 15 shipped widget configurability *within* the existing
+      Sprint 14 shell, not the target PM-conversation-plus-dock layout
+      those sections describe (that restructure remains unscheduled);
+      `README.md`'s status paragraph and walkthrough step 3 were updated
+      to mention the new "Customize Workspace" capability; `CLAUDE.md`'s
+      §12 roadmap table was marked `15 ✅`.
+    - **Sprint 16 boundaries — explicitly not built, matching sprint-15.md
+      §13 Out of Scope.** No drag-and-drop free-placement canvas, no
+      arbitrary x/y layout (widgets remain a single ordered list packed
+      into rows by `span`), no third-party/uploaded/marketplace widgets,
+      no widget-level permissions beyond the existing Company-ownership
+      check, no Agent Harness, no self-correction loop, no organizational
+      Memory, and no multi-user collaboration on one Company. Per
+      CLAUDE.md's V1.1 Roadmap (§12), Sprint 16 is the Agent Harness —
+      unrelated to the widget system — so no further widget work is
+      expected to carry forward as unfinished business; the registry is
+      considered structurally complete for V1.1 unless a future sprint
+      brief explicitly reopens it.
