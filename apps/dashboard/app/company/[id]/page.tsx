@@ -1,125 +1,93 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo } from "react";
-import { DecisionCard } from "@/components/DecisionCard";
 import { ErrorState } from "@/components/ErrorState";
-import { useRealtimeEvents } from "@/components/RealtimeProvider";
-import { SituationReport } from "@/components/SituationReport";
-import { agentStatusWord, taskStatusWord } from "@/components/StatusWord";
-import { TimelineFeed } from "@/components/TimelineFeed";
-import { useApprovals, useCompanyCosts, useEmployees, useMissions, useTimeline } from "@/lib/hooks";
-import { StatusWord as StatusWordToken } from "@/lib/types";
-import { formatUsd } from "@/lib/utils";
+import { ConnectionStatusBar } from "@/components/workspace/ConnectionStatusBar";
+import { CurrentFocusCard } from "@/components/workspace/CurrentFocusCard";
+import { MissionSummaryCard } from "@/components/workspace/MissionSummaryCard";
+import { OrganizationSummaryCard } from "@/components/workspace/OrganizationSummaryCard";
+import { PendingAttentionList } from "@/components/workspace/PendingAttentionList";
+import { PlanningSummaryCard } from "@/components/workspace/PlanningSummaryCard";
+import { PrimaryActionPanel } from "@/components/workspace/PrimaryActionPanel";
+import { RecentActivityList } from "@/components/workspace/RecentActivityList";
+import { useWorkspaceOverview } from "@/lib/hooks";
 
-const TERMINAL_TOKENS: StatusWordToken[] = [StatusWordToken.COMPLETED, StatusWordToken.FAILED, StatusWordToken.CANCELLED];
-
-function StatCard({ label, value, href }: { label: string; value: string | number; href: string }) {
+function WorkspaceSkeleton() {
   return (
-    <Link
-      href={href}
-      className="block rounded-xl border border-base-border bg-base-card p-4 shadow-panel transition hover:border-accent/50"
-    >
-      <p className="text-xs uppercase tracking-wide text-text-faint">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-text">{value}</p>
-    </Link>
+    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
+      <div className="mb-6 h-8 w-64 animate-pulse rounded bg-base-hover" />
+      <div className="mb-6 h-28 animate-pulse rounded-xl bg-base-hover" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="h-40 animate-pulse rounded-xl bg-base-hover" />
+        <div className="h-40 animate-pulse rounded-xl bg-base-hover" />
+      </div>
+    </main>
   );
 }
 
-export default function HeadquartersPage({ params }: { params: { id: string } }) {
+// Sprint 14: the real CEO Workspace, replacing the previous Headquarters
+// page as the company landing destination (§4.1, DECISIONS.md #223). Every
+// value here comes straight from the Sprint 13 WorkspaceSnapshot contract
+// -- this page never recomputes next_action's precedence, only renders it.
+export default function WorkspacePage({ params }: { params: { id: string } }) {
   const companyId = params.id;
-  const { data: missions, isError: missionsError } = useMissions(companyId);
-  const { data: employees, isError: employeesError } = useEmployees(companyId);
-  const { data: approvals, isError: approvalsError } = useApprovals(companyId);
-  const { data: timelinePage, isError: timelineError } = useTimeline(companyId);
-  const { data: costs } = useCompanyCosts(companyId);
-  const liveEvents = useRealtimeEvents();
-  const isError = missionsError || employeesError || approvalsError || timelineError;
+  const { data: snapshot, isLoading, isError, refetch } = useWorkspaceOverview(companyId);
 
-  const activeMissions = missions?.filter((t) => !TERMINAL_TOKENS.includes(taskStatusWord(t.state))).length ?? 0;
-  const risksOpen = missions?.filter((t) => taskStatusWord(t.state) === StatusWordToken.FAILED).length ?? 0;
-  const employeesWorking =
-    employees?.filter((e) => agentStatusWord(e.state) !== StatusWordToken.IDLE).length ?? 0;
-  const pending = approvals?.filter((a) => a.status === "pending") ?? [];
-  const missionById = useMemo(() => new Map((missions ?? []).map((t) => [t.id, t])), [missions]);
-  const employeeById = useMemo(() => new Map((employees ?? []).map((e) => [e.id, e])), [employees]);
+  if (isLoading) {
+    return <WorkspaceSkeleton />;
+  }
 
-  const feedEvents = liveEvents.length > 0 ? liveEvents : timelinePage?.items ?? [];
-
-  if (isError) {
+  if (isError || !snapshot) {
     return (
-      <main className="mx-auto max-w-5xl px-8 py-10">
-        <header className="mb-8">
-          <h1 className="text-2xl font-semibold text-text">Headquarters</h1>
+      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
+        <header className="mb-6">
+          <h1 className="text-2xl font-semibold text-text">CEO Workspace</h1>
         </header>
-        <ErrorState description="Couldn't load Headquarters. Try refreshing in a moment." />
+        <ErrorState description="Couldn't load the CEO Workspace. Try refreshing in a moment." />
       </main>
     );
   }
 
+  const { project, organization, focus, pending_actions, next_action, planning, missions, recent_activity } = snapshot;
+
   return (
-    <main className="mx-auto max-w-5xl px-8 py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold text-text">Headquarters</h1>
-        <p className="mt-1 text-sm text-text-muted">Live view of everything happening across your company.</p>
+    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-10">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold text-text">{project.name}</h1>
+          <p className="mt-1 text-sm text-text-muted">CEO Workspace — everything that needs you, in one place.</p>
+        </div>
+        <ConnectionStatusBar />
       </header>
 
-      <section className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-text">CEO Decisions</h2>
-        {pending.length > 0 ? (
-          <div className="space-y-3">
-            {pending.map((approval) => (
-              <DecisionCard
-                key={approval.id}
-                approval={approval}
-                companyId={companyId}
-                missionTitle={missionById.get(approval.task_id)?.title ?? "Mission"}
-                reviewerColor={
-                  (approval.reviewer_agent_id && employeeById.get(approval.reviewer_agent_id)?.avatar_color) ||
-                  undefined
-                }
-                codeStats={missionById.get(approval.task_id)?.code_stats}
-                checkResults={missionById.get(approval.task_id)?.check_results}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="rounded-xl border border-base-border bg-base-card p-4 text-sm text-text-faint shadow-panel">
-            Nothing needs your decision.
-          </p>
-        )}
-      </section>
-
-      <div className="mb-8">
-        <SituationReport companyId={companyId} />
+      <div className="mb-6">
+        <PrimaryActionPanel nextAction={next_action} companyId={companyId} onRefresh={() => refetch()} />
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <StatCard label="Missions active" value={activeMissions} href={`/company/${companyId}/missions`} />
-        <StatCard
-          label="Employees working now"
-          value={employeesWorking}
-          href={`/company/${companyId}/employees`}
-        />
-        <StatCard label="Risks open" value={risksOpen} href={`/company/${companyId}/missions`} />
-        <StatCard
-          label="Payroll (this month)"
-          value={formatUsd(costs?.month_total_usd ?? 0)}
-          href={`/company/${companyId}/employees`}
-        />
+      {/* Mobile: single-column priority stack (§5). */}
+      <div className="grid grid-cols-1 gap-4 lg:hidden">
+        <PendingAttentionList pending={pending_actions} companyId={companyId} />
+        <CurrentFocusCard focus={focus} companyId={companyId} />
+        <PlanningSummaryCard planning={planning} companyId={companyId} />
+        <MissionSummaryCard missions={missions} companyId={companyId} />
+        <OrganizationSummaryCard organization={organization} companyId={companyId} />
+        <RecentActivityList items={recent_activity} />
       </div>
 
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Timeline</h2>
-          <Link href={`/company/${companyId}/timeline`} className="text-xs text-accent hover:text-accent-hover">
-            Open full Timeline →
-          </Link>
+      {/* Desktop: grouped two-column rows (§5). */}
+      <div className="hidden lg:block">
+        <div className="grid grid-cols-2 gap-4">
+          <CurrentFocusCard focus={focus} companyId={companyId} />
+          <PendingAttentionList pending={pending_actions} companyId={companyId} />
         </div>
-        <div className="rounded-xl border border-base-border bg-base-card px-4 shadow-panel">
-          <TimelineFeed events={feedEvents} />
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <PlanningSummaryCard planning={planning} companyId={companyId} />
+          <MissionSummaryCard missions={missions} companyId={companyId} />
         </div>
-      </section>
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <OrganizationSummaryCard organization={organization} companyId={companyId} />
+          <RecentActivityList items={recent_activity} />
+        </div>
+      </div>
     </main>
   );
 }

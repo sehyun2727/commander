@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 14 — CEO Workspace UI Shell
- Overall: 12/12 Phase 0 (Phase 1-5 not started)
- Now working on: Phase 1 — Responsive shell and navigation
+ Overall: Phase 0-3 done (Phase 4-5 remaining)
+ Now working on: Phase 4 — Responsive, accessibility, workflow polish
  Last update: 2026-08-18
 ================================================
 
@@ -59,32 +59,78 @@ PHASE 0 — Baseline and UX Audit                       (12/12)
         ConnectionStatus stale/heartbeat tracking, pending-action route
         construction); this Phase 0 checkpoint commit
 
-PHASE 1 — Responsive Shell and Navigation             (0/?)
-[ ] 1.1 Sidebar.tsx: mobile drawer (fixed+translate, backdrop, close-on-nav)
+PHASE 1 — Responsive Shell and Navigation             (4/4)
+[x] 1.1 Sidebar.tsx: mobile drawer (fixed+translate, backdrop, close-on-nav)
         + desktop static, rename root nav label "Headquarters" -> "CEO
         Workspace", drop "Overview (Preview)" entry
-[ ] 1.2 new MobileHeader.tsx: compact header, hamburger, AccountBadge
-[ ] 1.3 layout.tsx: wire mobile header + drawer state, RealtimeProvider
+[x] 1.2 new MobileHeader.tsx: compact header, hamburger, AccountBadge
+[x] 1.3 layout.tsx: wire mobile header + drawer state, RealtimeProvider
         key={companyId}, active-route indication preserved
-[ ] 1.4 typecheck/build checkpoint
+[x] 1.4 typecheck/build checkpoint (clean, see Phase 2's combined run)
 
-PHASE 2 — Core Workspace Sections                     (0/?)
-[ ] 2.1 lib/utils.ts: next-action kind tone map, safe-route allowlist,
+PHASE 2 — Core Workspace Sections                     (7/7)
+[x] 2.1 lib/utils.ts: next-action kind tone map, safe-route allowlist,
         pending-action route builders, connection-status label helpers
-[ ] 2.2 useEventStream.ts: stale ConnectionStatus + lastMessageAt
-[ ] 2.3 RealtimeProvider.tsx: expose lastMessageAt, reconnect-triggered
+[x] 2.2 useEventStream.ts: stale ConnectionStatus + lastMessageAt
+[x] 2.3 RealtimeProvider.tsx: expose lastMessageAt, reconnect-triggered
         workspace invalidation
-[ ] 2.4 components/workspace/*: PrimaryActionPanel, CurrentFocusCard,
+[x] 2.4 components/workspace/*: PrimaryActionPanel, CurrentFocusCard,
         PendingAttentionList, PlanningSummaryCard, MissionSummaryCard,
         OrganizationSummaryCard, RecentActivityList, ConnectionStatusBar
-[ ] 2.5 app/company/[id]/page.tsx: real Workspace composition
-[ ] 2.6 app/company/[id]/overview/page.tsx: redirect() to landing route
-[ ] 2.7 typecheck/build checkpoint
+[x] 2.5 app/company/[id]/page.tsx: real Workspace composition
+[x] 2.6 app/company/[id]/overview/page.tsx: redirect() to landing route
+[x] 2.7 typecheck/build checkpoint: `tsc --noEmit` clean, `next build`
+        clean (all routes compile, including untouched
+        /company/[id]/workspace repo-browser route unaffected)
 
-PHASE 3 — Live Updates and State Integrity            (0/?)
-[ ] 3.1 verify SSE-driven refetch + 30s poll fallback both work
-[ ] 3.2 verify company-switch leaves no stale flash
-[ ] 3.3 loading/empty/error states per §6
+PHASE 3 — Live Updates and State Integrity            (3/3)
+[x] 3.1 SSE-driven refetch + 30s poll fallback: live-verified SSE frame
+        delivery (commander-event/heartbeat) against a running API+DB;
+        confirmed by code that every persisted event still runs through
+        the pre-existing invalidateForEvent(qc, companyId, ...) which
+        includes keys.workspaceOverview(companyId) (Sprint 13, reused
+        as-is), plus new reconnect/stale->open transition triggers a
+        forced invalidateQueries on the same key (RealtimeProvider.tsx
+        L88-95) so a connection that may have missed events is never
+        silently stale; useWorkspaceOverview's 30s poll (lib/hooks.ts,
+        pre-existing) is an independent fallback path, unchanged. Full
+        client-side "UI actually updates on screen" behavior is
+        UNVERIFIED (no browser automation tool in this environment,
+        #222) -- this is a code-level + wire-level verification, not a
+        rendered-DOM observation.
+[x] 3.2 company-switch stale-flash mitigation: RealtimeProvider is now
+        mounted with key={companyId} in layout.tsx, so React fully
+        unmounts/remounts the SSE connection, event buffer, and
+        streaming-reply state on every company switch instead of
+        reusing stale state (DECISIONS.md #224). Visual "no flash"
+        confirmation itself is UNVERIFIED (no browser automation) --
+        the remount mechanism is the mitigation on record, not an
+        observed screenshot.
+[x] 3.3 loading/empty/error states per §6, live-checked against a real
+        API+DB (not just reading component code):
+        - error: GET /api/projects/{unknown-uuid}/workspace/overview ->
+          404 {"detail":"Company not found"} (Rule #15 -- not 403);
+          page.tsx's isError branch renders ErrorState on any non-2xx,
+          confirmed by reading the query's error path (Sprint 13 hook)
+        - empty: created a brand-new company via POST /api/projects
+          (founding roster only, zero missions/specs/activity beyond
+          founding events, CTO vacant) and fetched its live
+          /workspace/overview: missions.active=[], planning.active=
+          false, pending_actions all null, focus={role,cto,vacant},
+          next_action=setup_leadership/"Hire a CTO". Cross-checked
+          every affected component's empty-state branch: MissionSummary
+          Card ("No active missions."), PlanningSummaryCard ("No active
+          planning."), PendingAttentionList ("Nothing pending."),
+          CurrentFocusCard/OrganizationSummaryCard (vacant CTO shown in
+          amber, "View ->" routes to /employees), PrimaryActionPanel
+          (known kind + safe route -> real CTA link, not the generic
+          fallback). curl'd the page shell itself (200, no server
+          exception) and confirmed dashboard dev log shows a clean
+          compile/200 for this company id with no runtime errors.
+        - loading: WorkspaceSkeleton (pulse blocks, no premature empty-
+          state flash) verified by reading page.tsx's isLoading branch;
+          not independently exercisable without throttling network in a
+          real browser (UNVERIFIED per #222, same reasoning as 3.1/3.2)
 
 PHASE 4 — Responsive, Accessibility, Polish           (0/?)
 [ ] 4.1 mobile/desktop pass, keyboard/aria audit

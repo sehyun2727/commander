@@ -1,4 +1,4 @@
-import type { AgentProfile, CheckOutcome, Event } from "./types";
+import type { AgentProfile, CheckOutcome, Event, PendingFailure } from "./types";
 
 export type Tone = "green" | "amber" | "red" | "gray";
 
@@ -150,6 +150,69 @@ export function checksSummary(results: CheckOutcome[]): { label: string; tone: T
   if (failed > 0) return { label: `${failed} of ${total} check${total === 1 ? "" : "s"} failed`, tone: "red" };
   if (passed === total) return { label: total === 1 ? "Check passed" : `All ${total} checks passed`, tone: "green" };
   return { label: `${passed} of ${total} checks passed`, tone: "amber" };
+}
+
+// Sprint 14 §4.4: visual treatment per next_action.kind, keyed by the exact
+// strings next_action.py's `derive()` returns (app/modules/workspace_overview
+// /next_action.py). This is a *rendering* map, not a precedence recompute --
+// the server has already decided which one kind wins; this only decides
+// what color it gets. Any kind not in this map is unknown-to-the-frontend
+// (a future server-added tier) and must degrade to a generic safe state
+// rather than guess a treatment (§4.4 "unknown future action kinds").
+const NEXT_ACTION_KIND_TONE: Record<string, Tone> = {
+  answer_clarification: "amber",
+  review_specification: "amber",
+  review_approval: "amber",
+  resolve_planning_failure: "red",
+  resolve_mission_failure: "red",
+  begin_execution: "green",
+  monitor_planning: "gray",
+  monitor_mission: "gray",
+  setup_leadership: "amber",
+  start_mission: "gray",
+  no_action: "gray",
+};
+
+export function isKnownNextActionKind(kind: string): boolean {
+  return kind in NEXT_ACTION_KIND_TONE;
+}
+
+export function nextActionTone(kind: string): Tone {
+  return NEXT_ACTION_KIND_TONE[kind] ?? "gray";
+}
+
+// §4.4: routes must never be constructed from arbitrary/external authority.
+// next_action.route always comes from the server's own allowlisted builders
+// (next_action.py's _spec_route/_mission_route/_decisions_route/etc, all
+// fixed `/company/{id}/...` templates) — this just double-checks the shape
+// before rendering a Link, so a malformed/future value can't ever put an
+// external or unrelated URL behind a CEO-facing button.
+export function isSafeInternalRoute(companyId: string, route: string | null | undefined): route is string {
+  return typeof route === "string" && route.startsWith(`/company/${companyId}`);
+}
+
+// §4.5: pending_actions' item schemas carry identifying IDs but no route —
+// only next_action does. These mirror next_action.py's own route builders
+// exactly (same fixed templates, same trusted IDs) so the Workspace's
+// pending-attention list can deep-link without inventing new authority
+// (DECISIONS.md #226). Not a precedence computation: order among pending
+// items is fixed display order, not a recomputed "which one is most urgent."
+export function pendingClarificationRoute(companyId: string, specificationId: string): string {
+  return `/company/${companyId}/specifications/${specificationId}`;
+}
+
+export function pendingSpecificationReviewRoute(companyId: string, specificationId: string): string {
+  return `/company/${companyId}/specifications/${specificationId}`;
+}
+
+export function pendingApprovalRoute(companyId: string): string {
+  return `/company/${companyId}/decisions`;
+}
+
+export function pendingFailureRoute(companyId: string, failure: PendingFailure): string {
+  return failure.resource_type === "specification"
+    ? `/company/${companyId}/specifications/${failure.resource_id}`
+    : `/company/${companyId}/missions/${failure.resource_id}`;
 }
 
 export function relativeTime(iso: string): string {

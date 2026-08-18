@@ -1,8 +1,8 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, useContext, useState } from "react";
-import { invalidateForEvent } from "@/lib/hooks";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { invalidateForEvent, keys } from "@/lib/hooks";
 import { EventType } from "@/lib/types";
 import type { Event } from "@/lib/types";
 import type { ConnectionStatus } from "@/lib/useEventStream";
@@ -10,6 +10,7 @@ import { useEventStream } from "@/lib/useEventStream";
 
 const RealtimeEventsContext = createContext<Event[]>([]);
 const ConnectionStatusContext = createContext<ConnectionStatus>("connecting");
+const LastEventAtContext = createContext<number | null>(null);
 
 interface StreamingReply {
   agentId: string;
@@ -28,9 +29,14 @@ export function useStreamingReply(taskId: string): StreamingReply | null {
   return useContext(StreamingRepliesContext)[taskId] ?? null;
 }
 
-/** Live status of this company's SSE connection, for a small "Reconnecting..." indicator. */
+/** Live status of this company's SSE connection, for a small "Reconnecting.../stale" indicator. */
 export function useRealtimeConnectionStatus(): ConnectionStatus {
   return useContext(ConnectionStatusContext);
+}
+
+/** Timestamp (ms) of the last SSE frame received (event or heartbeat), for a "last updated" readout. */
+export function useRealtimeLastEventAt(): number | null {
+  return useContext(LastEventAtContext);
 }
 
 export function RealtimeProvider({ companyId, children }: { companyId: string; children: React.ReactNode }) {
@@ -38,7 +44,7 @@ export function RealtimeProvider({ companyId, children }: { companyId: string; c
   const [events, setEvents] = useState<Event[]>([]);
   const [streaming, setStreaming] = useState<Record<string, StreamingReply>>({});
 
-  const connectionStatus = useEventStream(companyId, (event) => {
+  const { status: connectionStatus, lastMessageAt } = useEventStream(companyId, (event) => {
     if (event.type === EventType.CONVERSATION_MESSAGE_DELTA) {
       const payload = event.payload as { text: string; agent_id?: string; task_id?: string; done?: boolean };
       const taskId = payload.task_id;
@@ -75,11 +81,26 @@ export function RealtimeProvider({ companyId, children }: { companyId: string; c
     invalidateForEvent(qc, companyId, taskId, agentId, specificationId);
   });
 
+  // §4.7 "when event continuity is uncertain, refetch a fresh snapshot":
+  // a resumed connection may have missed events entirely, so incremental
+  // per-event invalidation alone isn't trustworthy — pull a fresh Workspace
+  // snapshot the moment the connection comes back from reconnecting/stale.
+  const prevStatusRef = useRef<ConnectionStatus>(connectionStatus);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    if (connectionStatus === "open" && (prev === "reconnecting" || prev === "stale")) {
+      qc.invalidateQueries({ queryKey: keys.workspaceOverview(companyId) });
+    }
+    prevStatusRef.current = connectionStatus;
+  }, [connectionStatus, companyId, qc]);
+
   return (
     <ConnectionStatusContext.Provider value={connectionStatus}>
-      <RealtimeEventsContext.Provider value={events}>
-        <StreamingRepliesContext.Provider value={streaming}>{children}</StreamingRepliesContext.Provider>
-      </RealtimeEventsContext.Provider>
+      <LastEventAtContext.Provider value={lastMessageAt}>
+        <RealtimeEventsContext.Provider value={events}>
+          <StreamingRepliesContext.Provider value={streaming}>{children}</StreamingRepliesContext.Provider>
+        </RealtimeEventsContext.Provider>
+      </LastEventAtContext.Provider>
     </ConnectionStatusContext.Provider>
   );
 }
