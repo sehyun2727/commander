@@ -305,11 +305,11 @@ access, unit-testable in isolation) over a plain-dataclass "facts" input:
 ```
 
 The policy is the single source of truth for "what does the CEO do
-next" — consumers (the Sprint 14 CEO Workspace shell, the Phase 4 proof
-page) must render `next_action` verbatim and must never recompute or
-branch on Mission/Specification/Approval state to reach the same
-conclusion themselves (that would create a second, driftable copy of
-the precedence rules).
+next" — consumers (the Sprint 14 CEO Workspace shell) must render
+`next_action` verbatim and must never recompute or branch on
+Mission/Specification/Approval state to reach the same conclusion
+themselves (that would create a second, driftable copy of the
+precedence rules).
 
 All list fields (`missions.active`, `missions.recent`, `recent_activity`,
 `organization.employees`) are bounded by fixed constants
@@ -471,22 +471,22 @@ database layer rather than in application code:
 
 Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark, Render-inspired calm.
 
-**V1.1 target layout** (detailed in UX_SPEC §3–§4): entering a company presents **the PM conversation as the primary surface**, with a customizable **Widget Dock** beside it and a thin sidebar for deeper pages. New CEO-facing capability lands as a Widget or a Sidebar page (Rule #17) — never bolted onto the conversation.
+**V1.1 target layout** (detailed in UX_SPEC §3–§4): entering a company presents **the PM conversation as the primary surface**, with a customizable **Widget Dock** beside it and a thin sidebar for deeper pages. New CEO-facing capability lands as a Widget or a Sidebar page (Rule #17) — never bolted onto the conversation. This remains the longer-term direction; the Widget Dock itself ships in Sprint 15, not Sprint 14.
 
-**V1 as-built surfaces** (all real, all shipping today): My Companies · Headquarters · Missions kanban + detail · Employees + profile · Timeline (CEO/Technical toggle, filters, digest grouping) · Decisions (Pending/History) · Reports · Workspace browser · Company Settings. Most of these are not discarded in V1.1 — they become Sidebar pages, and their summaries become Widgets. **Headquarters is the one exception: it is absorbed into the CEO Workspace rather than surviving as its own page.** Same route (`/company/[id]`), same purpose, different shape — a conversation-plus-widget-dock replaces a standalone dashboard. Its four blocks map as:
+**CEO Workspace shell (Sprint 14 ✅):** `/company/[id]` — the company landing route — is a responsive summary-card shell (`app/company/[id]/page.tsx`, `components/workspace/*`) built directly on Sprint 13's `WorkspaceSnapshot`/`next_action` contract, replacing the old Headquarters page in place. It is an interim shape, not yet the PM-conversation-plus-Widget-Dock layout above: a `PrimaryActionPanel` renders the server's `next_action` verbatim (title/explanation/route/urgency, never recomputed client-side) as the one primary CTA, followed by `CurrentFocusCard`, `PendingAttentionList` (bounded, fixed display order mirroring `next_action.py`'s own tiers — clarification → specification_review → approval → failure), `PlanningSummaryCard`, `MissionSummaryCard`, `OrganizationSummaryCard`, and a bounded `RecentActivityList`. Mobile (`<lg`) renders these as a linear stack via `Sidebar`'s new drawer navigation (hamburger + `MobileHeader`); desktop renders grouped two-column rows. `ConnectionStatusBar` surfaces live/reconnecting/stale/offline using a new SSE-heartbeat-driven `ConnectionStatus` state (§8 cross-cutting, below). `RealtimeProvider` is now keyed on `companyId` so switching companies fully remounts the SSE connection and buffered event/streaming-reply state instead of reusing stale state from the previous company. The old `/company/[id]/overview` proof-of-contract page (§8 prior text) is now a plain `redirect()` to this route, kept only so existing deep links still resolve (`docs/DECISIONS.md` #223).
 
-| V1 Headquarters block | V1.1 destination |
+Its blocks still map onto the eventual Widget Dock the same way the old Headquarters blocks did — cards become Widgets, not new concepts:
+
+| Sprint 14 Workspace card | V1.1 Widget Dock destination |
 |---|---|
-| Decision strip (hero) | Pending Approvals widget + the "needs your decision" section of the PM Report |
-| Situation Report | PM Report (UX_SPEC §3.2) |
-| Vitals (4 tiles) | Progress · Employees · Risks · Costs widgets |
-| Timeline excerpt | Timeline widget |
+| `PendingAttentionList` / `PrimaryActionPanel` | Pending Approvals widget + the "needs your decision" section of the PM Report |
+| `PlanningSummaryCard` / `MissionSummaryCard` | PM Report (UX_SPEC §3.2) + Progress widget |
+| `OrganizationSummaryCard` | Employees widget |
+| `RecentActivityList` | Timeline widget |
 
-**Sprint 13 proof-of-contract page:** `/company/[id]/overview` ("Workspace Overview (Preview)", reached from the Sidebar) renders the `WorkspaceSnapshot` verbatim — it exists only so the backend projection (§4.3) has a real running consumer before the Sprint 14 shell is built. It is explicitly not the CEO Workspace shell described above and will be replaced, not extended, when Sprint 14 ships the PM-conversation-plus-Widget-Dock layout.
+Rationale: the eventual widget dock already replicates everything this shell does; keeping both a Workspace shell and a separate Headquarters would be a direct duplication and would force the CEO to guess which screen to check.
 
-Rationale: the widget dock already replicates everything Headquarters does; keeping both would be a direct duplication and would force the CEO to guess which screen to check.
-
-Cross-cutting: one SSE connection per company, events dedup by id and invalidate queries; generated event types only; `ApiStatusBanner` polls health; SSE connection status surfaces as a "Reconnecting…" pill; a persistent "Simulation mode" badge whenever the company runs on mock.
+Cross-cutting: one SSE connection per company (remounted on `companyId` change, Sprint 14), events dedup by id and invalidate queries; generated event types only; `ApiStatusBanner` polls health; SSE connection status is a 4-state `ConnectionStatus` (`connecting|open|reconnecting|stale`, Sprint 14) — `stale` is derived client-side from ~40s of silence across both real events and the server's 15s heartbeat frame, and a connection that returns to `open` from `reconnecting`/`stale` forces a fresh Workspace snapshot fetch (missed events during the gap can't be trusted to arrive individually); a persistent "Simulation mode" badge whenever the company runs on mock.
 
 **Auth (Sprint 9 ✅):** every API call sends `credentials: "include"`; a plain React `AuthProvider` context (mirroring `RealtimeProvider`'s pattern, not a state library) holds the current user and is mounted once in `Providers`. Any 401, from any request anywhere in the app, dispatches a `commander:unauthorized` `window` event that `AuthProvider` alone listens for — clearing local state and redirecting to `/login`, decoupling `lib/api.ts` from React/router. `RequireAuth` gates `/` and `/company/[id]` (and everything under it); `/login` and `/register` are the only unauthenticated routes. Per brief §2.11, the top-right `AccountBadge` is a single click-to-sign-out control, deliberately not a dropdown; a separate email + "Sign out" row lives in the Sidebar footer.
 

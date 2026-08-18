@@ -42,7 +42,7 @@ To start from a truly empty Commander instead of the seeded demo, skip `make see
 
 1. Sign in (demo account above, or register a new one) — every page except `/login` and `/register` requires a session.
 2. On `/`, found a Company — give it a name and, optionally, a sentence about what it should build. If you fill in the second field, Commander skips straight to a live starter Mission instead of an empty kanban.
-3. Land on Headquarters (`/company/[id]`). You'll see your three Employees introduce themselves in the Timeline, a Decision strip (empty until something needs you), and a PM-voiced Situation Report.
+3. Land on the CEO Workspace (`/company/[id]`) — a single server-derived view of what needs you next (approve a decision, hire a vacant leadership role, answer a question), plus current focus, pending attention, planning/mission status, organization headcount, and recent activity, responsive down to mobile.
 4. Open **Missions**, create one (or use a one-click starter), and assign it. Watch the PM → Engineer → Reviewer pipeline run live — streaming replies, then (for code Missions) a real commit on a mission branch, then automated checks if the template has any that match, then a Reviewer verdict.
 5. When it reaches **Decisions**, review the Change Summary and diff (never raw deliverable text), then Approve, Request changes, or Reject. Approving a code Mission merges its branch.
 6. Browse the Company's actual codebase under **Workspace**, check **Payroll** for real token spend, and pull an on-demand **Daily Report** or **Situation Report** any time.
@@ -153,4 +153,4 @@ docs/prompts/      sprint briefs
 
 ## Product terminology
 
-The UI speaks Commander's own vocabulary; the code speaks conventional engineering terms. If you're reading code and UI side by side: Project↔Company, User↔CEO, Repository↔Workspace, Task↔Mission, Issue↔Risk, Chat↔Meeting, Agent↔Employee, Dashboard↔Headquarters, Log↔Timeline, Configuration↔Company Settings, Review↔Audit, Approval↔CEO Decision. Full table in `CLAUDE.md`.
+The UI speaks Commander's own vocabulary; the code speaks conventional engineering terms. If you're reading code and UI side by side: Project↔Company, User↔CEO, Repository↔Workspace, Task↔Mission, Issue↔Risk, Chat↔Meeting, Agent↔Employee, Dashboard↔CEO Workspace, Log↔Timeline, Configuration↔Company Settings, Review↔Audit, Approval↔CEO Decision. Full table in `CLAUDE.md`.

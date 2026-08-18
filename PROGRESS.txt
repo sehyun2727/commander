@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 14 — CEO Workspace UI Shell
- Overall: Phase 0-4 done (Phase 5 remaining)
- Now working on: Phase 5 — Regression, audit, documentation
+ Overall: Phase 0-5 done. Sprint 14 complete.
+ Now working on: done -- see Sprint 15 handoff at end of Phase 5
  Last update: 2026-08-18
 ================================================
 
@@ -163,7 +163,78 @@ PHASE 4 — Responsive, Accessibility, Polish           (2/2)
         DOM/ARIA structure, Tailwind class logic, and curl/API/SSE
         checks. Do not treat 4.1 as a visual or click-through PASS.
 
-PHASE 5 — Regression, Audit, Documentation            (0/?)
-[ ] 5.1 full backend + frontend test/typecheck/build regression
-[ ] 5.2 CLAUDE.md / ARCHITECTURE.md / UX_SPEC.md sync
-[ ] 5.3 final commit + push + remote HEAD confirmation
+PHASE 5 — Regression, Audit, Documentation            (3/3)
+[x] 5.1 full backend + frontend test/typecheck/build regression:
+        backend `pytest -q`: 336 passed, 4 skipped (306.77s) -- identical
+        to the Sprint 13 close baseline, zero regressions, zero new
+        tests (frontend-only sprint, no backend touched -- confirmed via
+        `git diff --stat` against the pre-sprint HEAD showing zero
+        apps/api/ changes and zero alembic/versions/ changes, so no
+        migration/fresh-bootstrap check was needed this sprint); no
+        frontend test framework exists (unchanged from Phase 0); `tsc
+        --noEmit` clean; `next build` clean (all 19 routes compile,
+        including the untouched /company/[id]/workspace repo-browser
+        route); mock E2E already running with zero provider keys the
+        whole sprint (COMMANDER_PROVIDER=mock, every live company
+        response shows "provider":"mock") -- live-observed a real
+        PM-assign -> Reviewer-audit -> pending_approval cycle run end to
+        end over SSE during verification, entirely on the mock provider.
+        Additional live Workspace-state coverage beyond Phase 3: hit
+        Acme AI's live /workspace/overview mid-cycle and got
+        next_action.kind=review_approval (route=/company/{id}/decisions,
+        matches pendingApprovalRoute exactly), pending_actions.approval
+        populated, missions.active=["Add search bar" @ pending_approval],
+        focus={task, pending_approval} -- cross-checked against
+        PrimaryActionPanel/PendingAttentionList/CurrentFocusCard/
+        MissionSummaryCard's handling of each field, all correct.
+        Planning/clarification/specification-review/failure states were
+        not independently forced this sprint (would require deep
+        backend state manipulation out of scope for a frontend sprint)
+        -- coverage for those rests on Phase 3's empty-state check plus
+        static code audit of each component's branch for that field,
+        not a second live-observed state transition.
+[x] 5.2 audits: next-action targets already fully mapped (Phase 0.8);
+        frontend never recomputes precedence -- PrimaryActionPanel
+        renders next_action verbatim, PendingAttentionList's order is a
+        fixed display constant mirroring next_action.py's own tier
+        comments, not a recomputation (DECISIONS.md #226); no hidden
+        reasoning/raw payloads/secrets rendered anywhere in
+        components/workspace/* (RecentActivityList only ever reads
+        actor_name/kind/reason/created_at, never event.payload); all
+        list fields bounded client-side to match/undercut the server's
+        own bounds (RecentActivityList slice(0,10), MissionSummaryCard
+        slice(0,5), PendingAttentionList inherently <=4 fixed fields);
+        responsive overflow -- truncate used throughout on
+        names/titles/reasons, single grid-cols-1 stack on mobile;
+        company isolation -- unknown/cross-account company id returns
+        404 {"detail":"Company not found"}, not 403 (Rule #15, live-
+        verified this phase); full diff vs pre-sprint14 HEAD (88196f2)
+        touches only apps/dashboard/, docs/, PROGRESS.txt -- zero
+        widgets/drag-and-drop/Agent-Harness/self-correction/org-memory/
+        new-backend-domain scope leakage (§12 Out of Scope respected).
+        Docs synced: CLAUDE.md (roadmap row 14 -> checked), README.md
+        (Headquarters -> CEO Workspace description + terminology table
+        entry, both stale before this pass), docs/ARCHITECTURE.md §8
+        (replaced the now-inaccurate "Sprint 13 proof page" paragraph
+        with the actual shipped shell description + Widget-mapping
+        table + 4-state ConnectionStatus note), docs/design/UX_SPEC.md
+        (added a "Sprint 14 status" note under §3 clarifying the shell
+        shipped is an interim card layout, not yet the PM-conversation-
+        plus-Widget-Dock target; retired the "Overview (Preview)"
+        bullet to describe the redirect), docs/DECISIONS.md #227
+        (mobile drawer accessibility fix).
+[x] 5.3 final commit + push + remote HEAD confirmation -- see commits
+        below; pushed to origin/master; remote HEAD verified equal to
+        local HEAD after push.
+
+Sprint 15 boundaries (recorded, not implemented): Widget system/registry,
+drag-and-drop layout, saved personal layouts, PM-conversation-as-primary-
+surface -- all explicitly deferred per sprint-14.md §12 and restated in
+UX_SPEC.md's new §3 status note. Low-confidence areas for Sprint 15 to be
+aware of: planning/clarification/specification-review/failure Workspace
+states were verified by static code audit this sprint, not by a second
+live state transition (only empty/setup and active-mission/approval were
+directly observed); all browser-rendered interaction (focus order, drawer
+animation, tap targets, visual responsive breakpoints) remains UNVERIFIED
+in this sprint's environment (no browser automation tool) and should get
+a real click-through pass whenever one becomes available.

@@ -3060,3 +3060,22 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     clarification, specification review, approval, failure — the same
     relative tier order `next_action.py`'s own comment documents (tiers
     1/2/4/5) — rather than re-deriving urgency from scratch.
+
+227. **The closed mobile nav drawer uses `invisible`/`visible`, not just
+    `-translate-x-full`, so it's excluded from the tab order and
+    accessibility tree while off-canvas.** A Phase 4 keyboard/aria audit
+    of `Sidebar.tsx` found that transform-only hiding leaves the drawer's
+    links technically present and focusable even though they're
+    positioned off-screen, so a keyboard or screen-reader user tabbing
+    through the closed page would land on invisible nav targets before
+    reaching page content. Fixed by adding Tailwind's `invisible`/
+    `visible` (i.e. `visibility: hidden/visible`) alongside the existing
+    translate classes, gated the same way the codebase's established
+    `lg:hidden`/`hidden lg:block` responsive pattern already is, so the
+    desktop static sidebar (`lg:visible`) is unaffected regardless of
+    the mobile `mobileOpen` state. Also added: Escape-to-close, a body
+    scroll lock while the drawer covers the page, and moving focus to
+    the drawer's close button on open — none of these existed before
+    this pass. Browser/screen-reader behavior itself is UNVERIFIED (no
+    browser automation tool in this environment, #222); this is a
+    DOM/ARIA-structure-level fix, not an observed assistive-tech pass.

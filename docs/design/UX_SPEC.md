@@ -92,6 +92,8 @@ Commander App
 
 ## 3. The CEO Workspace — the core screen  *[V1.1 — Sprints 13–15]*
 
+**Sprint 14 status:** the layout below (PM conversation as primary surface + Widget Dock) is the target for the end of this three-sprint span, not what Sprint 14 alone ships. Sprint 14 shipped the responsive Workspace *shell* at `/company/[id]` — a bounded set of summary cards (`PrimaryActionPanel`, `CurrentFocusCard`, `PendingAttentionList`, `PlanningSummaryCard`, `MissionSummaryCard`, `OrganizationSummaryCard`, `RecentActivityList`; see `docs/ARCHITECTURE.md` §8) driven by the same `next_action`/`WorkspaceSnapshot` contract this section describes — deliberately without a PM conversation surface or a customizable Widget Dock, both of which are Sprint 15 scope. The mapping from today's cards to tomorrow's Widgets is in `docs/ARCHITECTURE.md` §8.
+
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  ▾ Acme AI                                    Search      ⊕  ⚙  (S)  │
@@ -302,7 +304,7 @@ These already exist and continue to; most also project a Widget into the dock. O
 - **Reports** — executive memo list + reader; readable in 60 seconds.
 - **Workspace** — the company's real git-backed codebase: file tree, file viewer, merge history. Read-only.
 - **Company Settings** — provider, write-only API key field, per-role model reassignment, execution sandbox toggle, resource limits.
-- **Overview (Preview)** *[Sprint 13 ✅, temporary]* — `/company/[id]/overview`. Renders the `WorkspaceSnapshot` backend contract (`docs/ARCHITECTURE.md` §4.3) verbatim as a plain read-only page, purely so the projection has a real consumer before §3's CEO Workspace shell exists. Not styled to product polish, not a Widget, and will be removed/replaced when Sprint 14 ships §3.
+- **`/company/[id]/overview`** *[Sprint 13 proof page, retired Sprint 14]* — the CEO Workspace shell (§3, this sprint's interim shape) now lives at the company landing route itself. This URL is kept only as a `redirect()` to `/company/[id]` so pre-Sprint-14 deep links still resolve; it is not a page a CEO is ever routed to.
 
 ---
 
