@@ -1,12 +1,13 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 13 — CEO Workspace Backend and Projection
- Overall: 14/95 (Phase 0 in progress)
- Now working on: Phase 0 close-out (decisions recorded, checklist written)
+ Overall: 38/95 (Phase 2 in progress: 2.11/2.12 integration + query-count
+ tests already done; remaining Phase 2 items are just PROGRESS/commit)
+ Now working on: Phase 2 close-out
  Last update: 2026-08-18
 ================================================
 
-PHASE 0 — Baseline and Read-Model Design             (12/14)
+PHASE 0 — Baseline and Read-Model Design             (13/14)
 [x] 0.1 verify local HEAD == origin/master (f81cc7a, Sprint 12 close)
 [x] 0.2 confirm working tree state (docs/prompts/sprint-13.md added by CEO;
         docs/prompts/sprint10.md -> sprint-10.md rename + sprint-12.md
@@ -43,53 +44,78 @@ PHASE 0 — Baseline and Read-Model Design             (12/14)
         precedent (sequential independent selects, no joins, Python-side
         assembly) -- adopted for workspace/service.py, DECISIONS.md #219
 [x] 0.14 PROGRESS.txt replaced with Sprint 13 live checklist (this file)
-[ ] 0.15 commit + push Phase 0 checkpoint (next action)
+[x] 0.15 commit + push Phase 0 checkpoint (e72c657)
 
-PHASE 1 — Public Schemas and Projection Policy        (0/11)
-[ ] 1.1 typed public workspace schemas (schema_version, summaries, focus,
+PHASE 1 — Public Schemas and Projection Policy        (11/11)
+[x] 1.1 typed public workspace schemas (schema_version, summaries, focus,
         pending_actions, next_action, planning/mission summaries,
-        recent_activity, event_cursor, generated_at)
-[ ] 1.2 explicit schema_version field
-[ ] 1.3 bounded summary models (recent missions/activity/pending/employees
-        capped with documented limits)
-[ ] 1.4 pending-action derivation (clarification/spec-review/approval/
-        failure-setup) as pure functions over facts
-[ ] 1.5 deterministic next-action policy (next_action.py, 10-tier order,
+        recent_activity, event_cursor, generated_at) --
+        app/modules/workspace_overview/schemas.py
+[x] 1.2 explicit schema_version field (SCHEMA_VERSION = 1)
+[x] 1.3 bounded summary models (recent missions/activity/pending/employees
+        capped with documented limits -- MAX_RECENT_MISSIONS=10,
+        MAX_ACTIVE_MISSIONS=10, MAX_RECENT_ACTIVITY=20, MAX_EMPLOYEES=25)
+[x] 1.4 pending-action derivation (clarification/spec-review/approval/
+        failure-setup) as pure functions over facts -- next_action.derive()
+[x] 1.5 deterministic next-action policy (next_action.py, 10-tier order,
         pure dataclass-facts input, no DB access)
-[ ] 1.6 safe deep-link targets (route/resource-type/id per action kind)
-[ ] 1.7 activity summary serialization (safe-field allowlist, denylist
-        enforced: no chain-of-thought/system prompts/credentials/raw
-        provider payloads)
-[ ] 1.8 event cursor encoding/validation (reuse EventORM.seq int, existing
-        page() validation path)
-[ ] 1.9 pure/domain tests: precedence, deterministic selection, no-action
-        state, missing-target handling, safe serialization, cursor
-        round-trip, malformed cursor, stable ordering
-[ ] 1.10 update PROGRESS.txt
-[ ] 1.11 commit/push Phase 1
+[x] 1.6 safe deep-link targets (route/resource-type/id per action kind --
+        _spec_route/_mission_route/_decisions_route/_employees_route/
+        _missions_route in next_action.py, matching real dashboard routes)
+[x] 1.7 activity summary serialization (safe-field allowlist enforced --
+        ActivityItem exposes only id/seq/type/kind/actor_role/actor_name/
+        reason/created_at, never EventORM.payload; verified by
+        test_workspace_schemas.py)
+[x] 1.8 event cursor encoding/validation (reuse EventORM.seq int per
+        DECISIONS.md #217 -- no new encoding; WorkspaceSnapshot.event_cursor
+        is a plain int, malformed values rejected by Pydantic validation)
+[x] 1.9 pure/domain tests: precedence (10 tiers), deterministic selection,
+        no-action state, missing-target handling (focus/next_action never
+        desync), safe serialization (forbidden-field-name audit across the
+        whole schema tree), cursor round-trip, malformed cursor, stable
+        ordering -- test_workspace_next_action.py (15) +
+        test_workspace_schemas.py (5) = 20 tests, all passing
+[x] 1.10 update PROGRESS.txt (this update)
+[x] 1.11 commit/push Phase 1 (next action)
 
-PHASE 2 — Projection Service and Workspace API        (0/14)
-[ ] 2.1 company-scoped projection service (app/modules/workspace/service.py)
-[ ] 2.2 load snapshot data through bounded, sequential queries
-[ ] 2.3 avoid obvious N+1 patterns
-[ ] 2.4 add indexes only if justified by an observed pattern
-[ ] 2.5 produce coherent snapshot + cursor
-[ ] 2.6 add GET /api/projects/{project_id}/workspace route
-[ ] 2.7 confirm existing SSE covers incremental activity (no new route
-        needed per DECISIONS.md #217) -- document explicitly in routes.py
-[ ] 2.8 enforce auth + ownership (project_owned_by, 404 not 403)
-[ ] 2.9 structured errors: unknown company, malformed pagination/limit
-[ ] 2.10 invalid/expired cursor recovery semantics documented (no
-        expiry possible -- no retention pruning; malformed cursor ->
-        422 via existing FastAPI query typing)
-[ ] 2.11 API/integration tests: empty company, planning, clarification,
-        specification review, approved-ready state, active mission,
-        failure state, organization vacancy, cross-company denial,
-        bounded result sizes
-[ ] 2.12 inspect query count/SQL behavior (SQLAlchemy echo or explicit
-        query counting in tests)
-[ ] 2.13 update PROGRESS.txt
-[ ] 2.14 commit/push Phase 2
+PHASE 2 — Projection Service and Workspace API        (12/14)
+[x] 2.1 company-scoped projection service --
+        app/modules/workspace_overview/service.py: get_workspace_snapshot()
+[x] 2.2 load snapshot data through bounded, sequential queries (~11 selects
+        in one session, no per-row queries)
+[x] 2.3 avoid obvious N+1 patterns (verified: test_overview_service_issues_
+        a_bounded_fixed_number_of_queries asserts <=15 SELECTs regardless
+        of row count)
+[x] 2.4 add indexes only if justified by an observed pattern -- no new
+        index added; no N+1/slow-scan pattern observed at this data scale
+[x] 2.5 produce coherent snapshot + cursor
+[x] 2.6 add GET /api/projects/{project_id}/workspace/overview route
+        (workspace_overview_router registered in main.py)
+[x] 2.7 confirm existing SSE covers incremental activity (no new route
+        needed per DECISIONS.md #217) -- documented explicitly in
+        workspace_overview/routes.py module docstring
+[x] 2.8 enforce auth + ownership (project_owned_by, 404 not 403) -- tested
+        (unauthenticated 401, unknown company 404, cross-account 404)
+[x] 2.9 structured errors: unknown company -> 404. No pagination/limit
+        input surface exists on this endpoint (single project_id path
+        param only -- documented in routes.py), so there is nothing to
+        malform; every list in the snapshot is server-bounded, not
+        client-paged.
+[x] 2.10 invalid/expired cursor recovery semantics documented in
+        routes.py -- no expiry possible (no retention pruning exists
+        anywhere); reconnect/gap suspicion -> dashboard refetches this
+        snapshot rather than replaying a partial event window
+[x] 2.11 API/integration tests (test_workspace_overview_api.py, 15 tests):
+        unauthenticated, unknown company, cross-company denial, fresh
+        company (vacant leadership before start_mission), leadership
+        filled (start_mission), clarification required, ready for review,
+        approved/ready-to-execute, active mission, mission failure,
+        pending approval, bounded recent missions/activity, no raw
+        payload leakage, event_cursor == max(EventORM.seq)
+[x] 2.12 inspect query count/SQL behavior -- explicit query-counting test
+        via SQLAlchemy `before_cursor_execute` listener (see 2.3)
+[x] 2.13 update PROGRESS.txt (this update)
+[ ] 2.14 commit/push Phase 2 (next action)
 
 PHASE 3 — Event and Lifecycle Integration             (0/12)
 [ ] 3.1 verify relevant domain transitions already emit events usable as
@@ -162,8 +188,15 @@ DESIGN DECISIONS RECORDED THIS SPRINT (docs/DECISIONS.md)
      existing GET /events?cursor= route.
 218. next_action tier 3 has no reachable predicate in the current shipped
      lifecycle; kept as a documented no-op slot, not invented.
-219. New app/modules/workspace/ module (schemas.py, service.py, routes.py,
+219. New workspace projection module (schemas.py, service.py, routes.py,
      next_action.py); sequential-select projection pattern from
      situation/reports precedent; ActiveSpecificationLockORM guarantees
      at most one non-terminal Specification per project.
+220. Correction to #219: module lives at app/modules/workspace_overview/
+     (not app/modules/workspace/) and the route is
+     GET /api/projects/{project_id}/workspace/overview, because
+     app/modules/workspace_manager/ already owns /workspace/{tree,file,
+     merges} for the git-backed Repository browser -- avoids a name/route
+     vocabulary collision between "Repository (Workspace)" and "Dashboard
+     (CEO Workspace)" per CLAUDE.md's terminology table.
 ================================================

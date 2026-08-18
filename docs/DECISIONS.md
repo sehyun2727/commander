@@ -2922,3 +2922,25 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     among several concurrently-active ones -- it queries `SpecificationORM`
     directly by non-terminal status and there is provably at most one
     match.
+
+220. **Correction to #219: the new module is `app/modules/workspace_overview/`,
+    not `app/modules/workspace/`, and its route is
+    `GET /api/projects/{project_id}/workspace/overview`, not the bare
+    `.../workspace`.** `app/modules/workspace_manager/` already exists and
+    already owns the URL prefix `/api/projects/{project_id}/workspace/*`
+    (`tree`, `file`, `merges`) for the git-backed company codebase -- the
+    product term "Workspace" is already bound to "Repository" in CLAUDE.md
+    §3's terminology table. Sprint 13's "CEO Workspace" is the *other*
+    existing term in that same table ("Dashboard" -> "CEO Workspace") --
+    a different concept that happens to share an English word. The brief's
+    §4.2 suggested path is explicitly adaptable ("or the repository's
+    canonical company equivalent"), so rather than overload one URL
+    segment for two distinct product nouns, the new snapshot nests under
+    the same `/workspace` prefix as a new leaf (`/overview`), consistent
+    with the existing `workspace_manager` sibling routes, while the Python
+    module itself gets a distinct name so nothing in `main.py`'s imports
+    or `deps.py` has to disambiguate two same-named `router`/`service`
+    modules. No route collision existed at the FastAPI level (`/workspace`
+    bare and `/workspace/tree` are different paths), but the naming
+    collision at the module/vocabulary level was real and worth avoiding
+    before any code was written.
