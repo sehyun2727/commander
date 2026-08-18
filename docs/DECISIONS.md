@@ -3079,3 +3079,87 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     this pass. Browser/screen-reader behavior itself is UNVERIFIED (no
     browser automation tool in this environment, #222); this is a
     DOM/ARIA-structure-level fix, not an observed assistive-tech pass.
+
+## Sprint 15 — Safe CEO Workspace Widget System
+
+228. **Phase 0 architecture decisions**, recorded before Phase 1 implementation
+    per sprint-15.md §10 Phase 0:
+
+    - **Persistence structure: one JSON column, not normalized rows.** A new
+      `workspace_preferences` table holds one row per (user_id, project_id)
+      with a single `widgets: JSON` column (a list of
+      `{widget_key, visible, order, span}` dicts), not a child table with one
+      row per widget entry. The whole preference set is always read and
+      written together (there is no use case for querying "this CEO's
+      preference for one widget" in isolation), so a child table would add
+      join/transaction complexity — including a second place concurrency
+      could go wrong — for no real benefit. This mirrors the codebase's
+      existing convention for grouped structured data (`SpecificationVersionORM.
+      goals/requirements/risks` are JSON lists of dicts on one row, not
+      normalized tables; `AgentORM.profile` is a JSON dict). Validated shape
+      lives in `schemas.py` (Pydantic), not enforced by the DB schema itself
+      — the same division of labor `AgentORM.profile` already has.
+    - **Concurrency strategy: a plain integer `revision` column, not ETag
+      headers or `updated_at` preconditions.** Every successful `PUT` bumps
+      `revision` by 1; the client must echo the `revision` it last read as
+      `expected_revision` in the update body, and a mismatch is a structured
+      `409` (`{"error": "stale_revision", "current_revision": N}`), never a
+      silent overwrite. Kept as a body field rather than an HTTP `ETag`/
+      `If-Match` header because no other route in this codebase uses HTTP
+      conditional-request headers — introducing them here for one endpoint
+      would be a new, one-off convention. `updated_at`-based preconditions
+      were rejected because timestamp equality is a weaker/coarser signal
+      than a monotonically-bumped integer (clock resolution, multiple writes
+      within the same tick).
+    - **Registry: a new `app/modules/workspace_widgets/registry.py` module**,
+      same shape as `skill_templates/registry.py` (Sprint 11) — a tuple of
+      frozen `WidgetDefinition` dataclasses plus a `WIDGETS_BY_KEY` dict,
+      immutable, server-owned, zero per-project state, all companies see the
+      same catalog. Each definition carries `key, title, description,
+      category, required, default_visible, default_order, default_span
+      ("full"|"half"), supported_contexts`. No plugin/dynamic-import
+      capability exists anywhere in this design — the frontend's component
+      map is a hardcoded `Record<WidgetKey, ComponentType>` allowlist, never
+      a string-keyed dynamic `import()`.
+    - **Widget catalog (8 keys) maps 1:1 onto Sprint 14's already-shipped
+      `components/workspace/*`**, chosen after inspecting `page.tsx`'s
+      existing composition rather than inventing a new grouping:
+      `primary_next_action` (PrimaryActionPanel, required),
+      `connection_status` (ConnectionStatusBar, required), `current_focus`
+      (CurrentFocusCard), `pending_attention` (PendingAttentionList),
+      `planning_summary` (PlanningSummaryCard), `missions_summary`
+      (MissionSummaryCard), `organization_summary` (OrganizationSummaryCard),
+      `recent_activity` (RecentActivityList). Required set is exactly the
+      two the brief names as minimum-useful-Workspace (§4.3): the primary
+      action surface and the connection/freshness indicator. Both are
+      ordinary entries in the same one canonical order (not specially
+      pinned outside the list) — Sprint 14's header-adjacent placement of
+      `ConnectionStatusBar` was a Phase-14 layout choice, not an
+      architectural constraint, and folding it into the same registry-driven
+      order keeps the composition logic uniform (one rendering loop, one
+      wrapper/error-boundary, no widget-key branch in the engine — Rule
+      #16's spirit applied to this new surface even though it isn't a
+      "Role").
+    - **Edit/save behavior: explicit Edit mode with Save/Cancel, not
+      autosave.** Matches the one existing precedent for a settings-shaped
+      form in this codebase (`SettingsPage`'s "Save Changes" button +
+      pending/"Saved." states). Explicit save avoids autosave's known rough
+      edges called out in the brief (retry storms on repeated `409`s,
+      ambiguous "is it saved yet" state during rapid edits) and keeps the
+      revision-conflict UX simple: conflict can only surface at one
+      well-defined moment (clicking Save), not on every keystroke.
+    - **Responsive ordering: one canonical order for both breakpoints, no
+      independent per-breakpoint layout.** Desktop renders visible widgets
+      in order, packing `span="half"` entries two-per-row and giving
+      `span="full"` entries their own row, walking the order top to bottom
+      (no reflow that would let a later widget jump ahead of an earlier
+      one to fill a gap); mobile renders the same order as a single column,
+      every widget full width. This is the brief's explicitly recommended
+      simpler model (§4.9) over a free x/y grid, and requires no new
+      dependency — confirmed via `package.json` that no drag-and-drop/
+      sortable library exists yet, so reordering ships as accessible move-
+      up/move-down buttons, not new-dependency drag-and-drop.
+    - **Auth/ownership**: preference routes reuse `get_current_user` (session
+      cookie only, never a client-supplied user id) and `project_owned_by`
+      (Rule #15, 404 not 403) exactly as `workspace_overview/routes.py` and
+      `skill_templates/routes.py` already do — no new auth primitive.

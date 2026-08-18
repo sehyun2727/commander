@@ -1,240 +1,71 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 14 — CEO Workspace UI Shell
- Overall: Phase 0-5 done. Sprint 14 complete.
- Now working on: done -- see Sprint 15 handoff at end of Phase 5
+ Sprint: 15 — Safe CEO Workspace Widget System
+ Overall: Phase 0 done, starting Phase 1.
+ Now working on: Phase 1 — Registry, Persistence, and Validation
  Last update: 2026-08-18
 ================================================
 
-PHASE 0 — Baseline and UX Audit                       (12/12)
-[x] 0.1 verify local HEAD == origin/master (88196f2, Sprint 13 close);
-        working tree clean except untracked docs/prompts/sprint-14.md
-[x] 0.2 baseline backend suite: 336 passed / 4 skipped (matches Sprint 13
-        close, no regressions)
+PHASE 0 — Baseline and Architecture Decision           (9/9)
+[x] 0.1 verify local HEAD == origin/master (45bcf11, Sprint 14 close);
+        working tree clean except untracked docs/prompts/sprint-15.md;
+        git fetch showed no divergence
+[x] 0.2 baseline backend suite via apps/api/.venv (system `python` lacked
+        asyncpg -- ModuleNotFoundError against app.core.db at collection
+        time; the project venv has it): 336 passed / 4 skipped, matches
+        the Sprint 14 close baseline exactly, zero regressions
 [x] 0.3 dashboard typecheck (tsc --noEmit) and production build both clean
-        on the Sprint 13 baseline, before any Sprint 14 edits
-[x] 0.4 read full sprint-14.md brief (767 lines) in full before starting
-[x] 0.5 confirmed no browser-automation tool exists in this environment
-        (ToolSearch, re-checked) -- browser/click-through verification will
-        be recorded UNVERIFIED per §4.10, same finding as Sprint 13 (#222)
-[x] 0.6 audited current shell/routes/components: app/company/[id]/layout.tsx
-        (fixed w-60 Sidebar, zero responsive handling -- primary gap),
-        app/company/[id]/page.tsx (Headquarters -- DecisionCard,
-        SituationReport, StatCard, TimelineFeed), overview/page.tsx (Sprint
-        13 proof page), RealtimeProvider.tsx (found company-switch state
-        bug, see DECISIONS.md #224), useEventStream.ts (3-state
-        ConnectionStatus, no stale/offline distinction, see #225),
-        Sidebar.tsx, AccountBadge.tsx, StatusPill/StatusWord.tsx,
-        AgentAvatar.tsx, DecisionCard.tsx, MissionCard.tsx,
-        SpecificationCard.tsx, SpecificationStatusBadge.tsx,
-        TimelineFeed.tsx, lib/auth-context.tsx, lib/utils.ts, lib/hooks.ts
-        (full), lib/types.ts (WorkspaceSnapshot family, L279-405),
-        tailwind.config.ts (no custom breakpoints, fixed dark theme), no
-        frontend test framework exists (confirmed, none added)
-[x] 0.7 identified /company/[id]/workspace as a PRE-EXISTING, unrelated
-        route (git-backed Repository browser, workspace_manager module) --
-        not to be touched; confirmed via DECISIONS.md #220 this collision
-        was already anticipated at the API level
-[x] 0.8 mapped every next_action.kind (next_action.py, 10 reachable + 1
-        reserved-unreachable tier) to its real route: all already resolve
-        to existing pages (specifications/[id], missions/[id], decisions,
-        employees, missions) via the module's own _spec_route/
-        _mission_route/_decisions_route/_employees_route/_missions_route
-        builders -- no unmapped/dead target found
-[x] 0.9 pending_actions item schemas carry no `route` field (only IDs) --
-        frontend must build their deep links itself from fixed templates
-        mirroring next_action.py's route builders; decided display order
-        mirrors next_action.py's own tier comment (DECISIONS.md #226)
-[x] 0.10 desktop/mobile information architecture decided: single DOM tree,
-        two composition blocks gated by `hidden lg:grid` / `lg:hidden`
-        (mobile = linear stack per brief §5, desktop = grouped 2-col rows)
-        rather than fighting CSS `order` across a shared grid
-[x] 0.11 query/subscription lifecycle: reuse useWorkspaceOverview (30s
-        poll) + invalidateForEvent's existing workspaceOverview(companyId)
-        entry as-is; add RealtimeProvider invalidation on
-        reconnecting/stale -> open transition (§4.7); company switch fixed
-        via RealtimeProvider key={companyId} remount (§4.8, #224)
-[x] 0.12 recorded DECISIONS.md #223-226 (landing-route replacement instead
-        of redirect-first staging, RealtimeProvider remount fix,
-        ConnectionStatus stale/heartbeat tracking, pending-action route
-        construction); this Phase 0 checkpoint commit
+        on the Sprint 14 baseline (all 19 routes compile), before any
+        Sprint 15 edits
+[x] 0.4 read full sprint-15.md brief (838 lines) in full before starting
+[x] 0.5 re-read Sprint 14's PROGRESS.txt handoff/low-confidence section:
+        Widget system explicitly deferred to this sprint; browser-rendered
+        interaction remains UNVERIFIED (no browser automation tool, #222) --
+        re-confirmed via ToolSearch, same finding still holds
+[x] 0.6 audited auth/ownership model: `get_current_user` (deps.py, session
+        cookie only, never a client-supplied id) + `project_owned_by`
+        (core/ownership.py, Rule #15 -- 404 not 403); `workspace_overview/
+        routes.py` and `skill_templates/routes.py` both already compose
+        these two exactly, no new primitive needed
+[x] 0.7 audited existing settings/preferences patterns: `SettingORM` is a
+        global KV store (not per-user/per-project, wrong shape for this);
+        `SettingsPage.tsx` establishes the one existing explicit-save
+        mutation-UX precedent (Save button, isPending/"Saved." states,
+        window.confirm for destructive actions) -- reused for widget edit
+        mode instead of inventing an autosave pattern; `skill_templates/
+        registry.py` is the direct template for the new widget registry
+        (frozen dataclass tuple + BY_KEY dict, zero per-project state)
+[x] 0.8 audited frontend deps (package.json): no drag-and-drop/sortable
+        library present -- confirms accessible move-up/move-down buttons
+        over introducing a new DnD dependency (brief §4.9/§7.6)
+[x] 0.9 architecture decisions recorded in docs/DECISIONS.md #228:
+        persistence = one JSON column per (user, project) row, not
+        normalized rows; concurrency = integer `revision` body field, not
+        ETag/updated_at; registry = new `workspace_widgets` module mirroring
+        `skill_templates`; 8-widget catalog mapped 1:1 onto Sprint 14's
+        existing components/workspace/* (required: primary_next_action,
+        connection_status); edit/save = explicit Edit mode + Save/Cancel,
+        not autosave; responsive = one canonical order, half/full span
+        packing, no free x/y grid
 
-PHASE 1 — Responsive Shell and Navigation             (4/4)
-[x] 1.1 Sidebar.tsx: mobile drawer (fixed+translate, backdrop, close-on-nav)
-        + desktop static, rename root nav label "Headquarters" -> "CEO
-        Workspace", drop "Overview (Preview)" entry
-[x] 1.2 new MobileHeader.tsx: compact header, hamburger, AccountBadge
-[x] 1.3 layout.tsx: wire mobile header + drawer state, RealtimeProvider
-        key={companyId}, active-route indication preserved
-[x] 1.4 typecheck/build checkpoint (clean, see Phase 2's combined run)
+PHASE 1 — Registry, Persistence, and Validation         (0/14)
+[ ] 1.1 canonical registry (app/modules/workspace_widgets/registry.py)
+[ ] 1.2 typed public schemas (schemas.py)
+[ ] 1.3 preference persistence ORM model + Alembic migration
+[ ] 1.4 default generation + normalization service
+[ ] 1.5 validation (known keys, uniqueness, required, visibility, order,
+        span, bounds)
+[ ] 1.6 optimistic-concurrency update path
+[ ] 1.7 tests: registry immutability / default layout
+[ ] 1.8 tests: malformed/unknown/duplicate entries normalize safely
+[ ] 1.9 tests: required-widget restoration
+[ ] 1.10 tests: new/retired-widget normalization
+[ ] 1.11 tests: stale-revision conflict
+[ ] 1.12 tests: user/company uniqueness + concurrent first-creation
+[ ] 1.13 migration verification (upgrade/downgrade on a scratch DB)
+[ ] 1.14 commit/push Phase 1 checkpoint
 
-PHASE 2 — Core Workspace Sections                     (7/7)
-[x] 2.1 lib/utils.ts: next-action kind tone map, safe-route allowlist,
-        pending-action route builders, connection-status label helpers
-[x] 2.2 useEventStream.ts: stale ConnectionStatus + lastMessageAt
-[x] 2.3 RealtimeProvider.tsx: expose lastMessageAt, reconnect-triggered
-        workspace invalidation
-[x] 2.4 components/workspace/*: PrimaryActionPanel, CurrentFocusCard,
-        PendingAttentionList, PlanningSummaryCard, MissionSummaryCard,
-        OrganizationSummaryCard, RecentActivityList, ConnectionStatusBar
-[x] 2.5 app/company/[id]/page.tsx: real Workspace composition
-[x] 2.6 app/company/[id]/overview/page.tsx: redirect() to landing route
-[x] 2.7 typecheck/build checkpoint: `tsc --noEmit` clean, `next build`
-        clean (all routes compile, including untouched
-        /company/[id]/workspace repo-browser route unaffected)
-
-PHASE 3 — Live Updates and State Integrity            (3/3)
-[x] 3.1 SSE-driven refetch + 30s poll fallback: live-verified SSE frame
-        delivery (commander-event/heartbeat) against a running API+DB;
-        confirmed by code that every persisted event still runs through
-        the pre-existing invalidateForEvent(qc, companyId, ...) which
-        includes keys.workspaceOverview(companyId) (Sprint 13, reused
-        as-is), plus new reconnect/stale->open transition triggers a
-        forced invalidateQueries on the same key (RealtimeProvider.tsx
-        L88-95) so a connection that may have missed events is never
-        silently stale; useWorkspaceOverview's 30s poll (lib/hooks.ts,
-        pre-existing) is an independent fallback path, unchanged. Full
-        client-side "UI actually updates on screen" behavior is
-        UNVERIFIED (no browser automation tool in this environment,
-        #222) -- this is a code-level + wire-level verification, not a
-        rendered-DOM observation.
-[x] 3.2 company-switch stale-flash mitigation: RealtimeProvider is now
-        mounted with key={companyId} in layout.tsx, so React fully
-        unmounts/remounts the SSE connection, event buffer, and
-        streaming-reply state on every company switch instead of
-        reusing stale state (DECISIONS.md #224). Visual "no flash"
-        confirmation itself is UNVERIFIED (no browser automation) --
-        the remount mechanism is the mitigation on record, not an
-        observed screenshot.
-[x] 3.3 loading/empty/error states per §6, live-checked against a real
-        API+DB (not just reading component code):
-        - error: GET /api/projects/{unknown-uuid}/workspace/overview ->
-          404 {"detail":"Company not found"} (Rule #15 -- not 403);
-          page.tsx's isError branch renders ErrorState on any non-2xx,
-          confirmed by reading the query's error path (Sprint 13 hook)
-        - empty: created a brand-new company via POST /api/projects
-          (founding roster only, zero missions/specs/activity beyond
-          founding events, CTO vacant) and fetched its live
-          /workspace/overview: missions.active=[], planning.active=
-          false, pending_actions all null, focus={role,cto,vacant},
-          next_action=setup_leadership/"Hire a CTO". Cross-checked
-          every affected component's empty-state branch: MissionSummary
-          Card ("No active missions."), PlanningSummaryCard ("No active
-          planning."), PendingAttentionList ("Nothing pending."),
-          CurrentFocusCard/OrganizationSummaryCard (vacant CTO shown in
-          amber, "View ->" routes to /employees), PrimaryActionPanel
-          (known kind + safe route -> real CTA link, not the generic
-          fallback). curl'd the page shell itself (200, no server
-          exception) and confirmed dashboard dev log shows a clean
-          compile/200 for this company id with no runtime errors.
-        - loading: WorkspaceSkeleton (pulse blocks, no premature empty-
-          state flash) verified by reading page.tsx's isLoading branch;
-          not independently exercisable without throttling network in a
-          real browser (UNVERIFIED per #222, same reasoning as 3.1/3.2)
-
-PHASE 4 — Responsive, Accessibility, Polish           (2/2)
-[x] 4.1 mobile/desktop pass, keyboard/aria audit -- code-level audit of
-        the shell (only place with real interactive/focus complexity;
-        the workspace cards are read-mostly links, already keyboard-
-        native): mobile drawer given role="dialog" aria-modal, aria-
-        label; Escape key now closes it (layout.tsx); body scroll
-        locked while it's open; focus moves to its close button on
-        open; nav landmark given aria-label="Primary"; active link
-        already had aria-current="page". Fixed a real bug found during
-        this pass: the closed mobile drawer was only translated
-        off-screen (-translate-x-full), so its nav links stayed in the
-        tab order and screen-reader tree even while invisible --
-        switched to invisible/visible (Tailwind, mirrors the lg:hidden
-        pattern already used elsewhere in this codebase) so it's
-        properly removed from both when closed on mobile, while
-        lg:visible keeps the desktop static sidebar unaffected.
-        Re-ran tsc --noEmit and next build clean after these edits;
-        live-reload dev server hit a transient webpack HMR cache error
-        (__webpack_modules__[moduleId] is not a function) unrelated to
-        the change itself -- a full dev-server restart (rm -rf .next)
-        confirmed clean GET 200s for both the landing route and
-        /overview afterward, and a fresh SSE stream still delivered
-        commander-event frames correctly.
-[x] 4.2 UNVERIFIED browser interaction note (brief §4.10): no browser-
-        automation tool exists in this environment (re-confirmed).
-        Actual rendered focus order, visible drawer animation, tap-
-        target sizing, and touch-driven backdrop dismissal were never
-        observed in a real browser this sprint -- only inferred from
-        DOM/ARIA structure, Tailwind class logic, and curl/API/SSE
-        checks. Do not treat 4.1 as a visual or click-through PASS.
-
-PHASE 5 — Regression, Audit, Documentation            (3/3)
-[x] 5.1 full backend + frontend test/typecheck/build regression:
-        backend `pytest -q`: 336 passed, 4 skipped (306.77s) -- identical
-        to the Sprint 13 close baseline, zero regressions, zero new
-        tests (frontend-only sprint, no backend touched -- confirmed via
-        `git diff --stat` against the pre-sprint HEAD showing zero
-        apps/api/ changes and zero alembic/versions/ changes, so no
-        migration/fresh-bootstrap check was needed this sprint); no
-        frontend test framework exists (unchanged from Phase 0); `tsc
-        --noEmit` clean; `next build` clean (all 19 routes compile,
-        including the untouched /company/[id]/workspace repo-browser
-        route); mock E2E already running with zero provider keys the
-        whole sprint (COMMANDER_PROVIDER=mock, every live company
-        response shows "provider":"mock") -- live-observed a real
-        PM-assign -> Reviewer-audit -> pending_approval cycle run end to
-        end over SSE during verification, entirely on the mock provider.
-        Additional live Workspace-state coverage beyond Phase 3: hit
-        Acme AI's live /workspace/overview mid-cycle and got
-        next_action.kind=review_approval (route=/company/{id}/decisions,
-        matches pendingApprovalRoute exactly), pending_actions.approval
-        populated, missions.active=["Add search bar" @ pending_approval],
-        focus={task, pending_approval} -- cross-checked against
-        PrimaryActionPanel/PendingAttentionList/CurrentFocusCard/
-        MissionSummaryCard's handling of each field, all correct.
-        Planning/clarification/specification-review/failure states were
-        not independently forced this sprint (would require deep
-        backend state manipulation out of scope for a frontend sprint)
-        -- coverage for those rests on Phase 3's empty-state check plus
-        static code audit of each component's branch for that field,
-        not a second live-observed state transition.
-[x] 5.2 audits: next-action targets already fully mapped (Phase 0.8);
-        frontend never recomputes precedence -- PrimaryActionPanel
-        renders next_action verbatim, PendingAttentionList's order is a
-        fixed display constant mirroring next_action.py's own tier
-        comments, not a recomputation (DECISIONS.md #226); no hidden
-        reasoning/raw payloads/secrets rendered anywhere in
-        components/workspace/* (RecentActivityList only ever reads
-        actor_name/kind/reason/created_at, never event.payload); all
-        list fields bounded client-side to match/undercut the server's
-        own bounds (RecentActivityList slice(0,10), MissionSummaryCard
-        slice(0,5), PendingAttentionList inherently <=4 fixed fields);
-        responsive overflow -- truncate used throughout on
-        names/titles/reasons, single grid-cols-1 stack on mobile;
-        company isolation -- unknown/cross-account company id returns
-        404 {"detail":"Company not found"}, not 403 (Rule #15, live-
-        verified this phase); full diff vs pre-sprint14 HEAD (88196f2)
-        touches only apps/dashboard/, docs/, PROGRESS.txt -- zero
-        widgets/drag-and-drop/Agent-Harness/self-correction/org-memory/
-        new-backend-domain scope leakage (§12 Out of Scope respected).
-        Docs synced: CLAUDE.md (roadmap row 14 -> checked), README.md
-        (Headquarters -> CEO Workspace description + terminology table
-        entry, both stale before this pass), docs/ARCHITECTURE.md §8
-        (replaced the now-inaccurate "Sprint 13 proof page" paragraph
-        with the actual shipped shell description + Widget-mapping
-        table + 4-state ConnectionStatus note), docs/design/UX_SPEC.md
-        (added a "Sprint 14 status" note under §3 clarifying the shell
-        shipped is an interim card layout, not yet the PM-conversation-
-        plus-Widget-Dock target; retired the "Overview (Preview)"
-        bullet to describe the redirect), docs/DECISIONS.md #227
-        (mobile drawer accessibility fix).
-[x] 5.3 final commit + push + remote HEAD confirmation -- see commits
-        below; pushed to origin/master; remote HEAD verified equal to
-        local HEAD after push.
-
-Sprint 15 boundaries (recorded, not implemented): Widget system/registry,
-drag-and-drop layout, saved personal layouts, PM-conversation-as-primary-
-surface -- all explicitly deferred per sprint-14.md §12 and restated in
-UX_SPEC.md's new §3 status note. Low-confidence areas for Sprint 15 to be
-aware of: planning/clarification/specification-review/failure Workspace
-states were verified by static code audit this sprint, not by a second
-live state transition (only empty/setup and active-mission/approval were
-directly observed); all browser-rendered interaction (focus order, drawer
-animation, tap targets, visual responsive breakpoints) remains UNVERIFIED
-in this sprint's environment (no browser automation tool) and should get
-a real click-through pass whenever one becomes available.
+PHASE 2 — Preferences API and Isolation                 (0/14)
+PHASE 3 — Registry-Driven Workspace and Edit Mode        (0/19)
+PHASE 4 — Failure Isolation, Responsive, and Accessibility (0/21)
+PHASE 5 — Regression, Security Audit, and Documentation  (0/24)
