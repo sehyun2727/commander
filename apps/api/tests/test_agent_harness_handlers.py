@@ -5,8 +5,10 @@ Exercises handlers.py against the real LocalGitWorkspaceManager and
 FakeSandbox (see conftest.Harness) rather than hand-rolled fakes, so path
 confinement and diff/write behavior are the same code the pipeline itself
 uses. RoleSpec/SkillTemplate are widened via dataclasses.replace() for
-dispatch_tool_call's success-path tests only, since ENGINEER.tools /
-GENERALIST.capabilities stay empty until Phase 3 flips them.
+dispatch_tool_call's success-path tests. Since Phase 3 grants
+ENGINEER.tools/GENERALIST.capabilities for real, the denial test uses an
+explicitly empty role (UNGRANTED_ROLE) rather than relying on the stock
+template being inert.
 """
 
 from __future__ import annotations
@@ -52,6 +54,7 @@ WORKABLE_ROLE = dataclasses.replace(
     ENGINEER, tools=("list_repository", "read_file", "search_repository", "inspect_git", "apply_patch", "run_validation")
 )
 WORKABLE_TEMPLATE = dataclasses.replace(GENERALIST, capabilities=("repository_tools",))
+UNGRANTED_ROLE = dataclasses.replace(ENGINEER, tools=())
 
 
 async def _make_project(harness):
@@ -80,7 +83,7 @@ def _context(harness, project, branch_name, *, role=ENGINEER, skill_template=GEN
         project_id=project.id,
         task_id="task-1",
         agent_id="agent-1",
-        repo_root=harness.workspace_manager._repo_dir(project.id),
+        repo_root=harness.workspace_manager.repo_root(project.id),
         branch_name=branch_name,
         role=role,
         skill_template=skill_template,
@@ -287,8 +290,7 @@ async def test_dispatch_tool_call_records_audit_row_on_success(harness):
 async def test_dispatch_tool_call_records_audit_row_on_denial(harness):
     project = await _make_project(harness)
     branch_name = await _seed_workspace(harness, project.id)
-    # ENGINEER.tools is still empty until Phase 3 -- every call denies today.
-    context = _context(harness, project, branch_name)
+    context = _context(harness, project, branch_name, role=UNGRANTED_ROLE)
 
     with pytest.raises(ToolDeniedError):
         await dispatch_tool_call(

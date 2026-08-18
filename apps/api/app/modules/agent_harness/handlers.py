@@ -116,9 +116,18 @@ async def apply_patch(context: ToolRunContext, workspace_manager: WorkspaceManag
         skipped_paths = ", ".join(path for path, _ in result.skipped)
         raise ToolPathViolationError("apply_patch", skipped_paths)
     if result.written:
-        await workspace_manager.commit(
-            context.project_id, context.branch_name, f"apply_patch: {len(result.written)} file(s)"
-        )
+        try:
+            await workspace_manager.commit(
+                context.project_id, context.branch_name, f"apply_patch: {len(result.written)} file(s)"
+            )
+        except ValueError:
+            # `write_files` reports a path as written whenever it wrote
+            # bytes to disk, even if the content is byte-identical to what
+            # was already committed on this branch (e.g. a retry attempt
+            # that re-submits the same file) -- `commit()` then has
+            # nothing staged. That's a no-op patch, not a real failure:
+            # the Employee's requested content is already in place.
+            pass
     return f"wrote {len(result.written)} file(s): {', '.join(result.written)}"
 
 

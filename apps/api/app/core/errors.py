@@ -162,3 +162,16 @@ class PatchConflictError(CommanderError):
     def __init__(self, path: str) -> None:
         self.path = path
         super().__init__(f"Patch conflict at {path!r}: file content no longer matches the expected base")
+
+
+class ToolLoopExhaustedError(CommanderError):
+    """Sprint 16 Agent Harness (DECISIONS.md #235): a tool loop could not
+    reach a completion -- too many consecutive denied or malformed/rejected
+    tool calls. Rule #13: never retry forever. `workflow_engine` catches
+    this the same way it catches any other stage failure (fails the
+    Mission with a visible reason); `BudgetExceededError` remains the
+    separate path for exhausting the call-count/wall-time budget itself."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(f"Tool loop could not complete: {reason}")

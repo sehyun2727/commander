@@ -40,6 +40,9 @@ class LocalGitWorkspaceManager(WorkspaceManager):
     def _repo_dir(self, project_id: str) -> Path:
         return (self._root / project_id).resolve()
 
+    def repo_root(self, project_id: str) -> Path:
+        return self._repo_dir(project_id)
+
     async def ensure_initialized(self, project_id: str) -> bool:
         repo_dir = self._repo_dir(project_id)
         if (repo_dir / ".git").is_dir():
@@ -148,6 +151,45 @@ class LocalGitWorkspaceManager(WorkspaceManager):
         if len(text) > max_chars:
             return text[:max_chars], True
         return text, False
+
+    async def diff_stats(self, project_id: str, branch_name: str) -> CommitResult:
+        repo_dir = self._repo_dir(project_id)
+        diff_range = f"main...{branch_name}"
+
+        name_status = await git(repo_dir, "diff", diff_range, "--name-status")
+        files_added = files_modified = files_deleted = 0
+        for line in name_status.stdout.splitlines():
+            if not line.strip():
+                continue
+            status = line.split("\t", 1)[0][:1]
+            if status == "A":
+                files_added += 1
+            elif status == "D":
+                files_deleted += 1
+            else:
+                files_modified += 1
+
+        numstat = await git(repo_dir, "diff", diff_range, "--numstat")
+        additions = deletions = 0
+        for line in numstat.stdout.splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+            added, removed = parts[0], parts[1]
+            additions += int(added) if added.isdigit() else 0
+            deletions += int(removed) if removed.isdigit() else 0
+
+        sha = await git(repo_dir, "rev-parse", branch_name)
+        return CommitResult(
+            commit_sha=sha.stdout.strip(),
+            files_added=files_added,
+            files_modified=files_modified,
+            files_deleted=files_deleted,
+            additions=additions,
+            deletions=deletions,
+        )
 
     async def merge(self, project_id: str, branch_name: str) -> str:
         repo_dir = self._repo_dir(project_id)

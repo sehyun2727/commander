@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,15 @@ class WorkspaceManager(ABC):
     no EventBus, no knowledge of missions/tasks."""
 
     @abstractmethod
+    def repo_root(self, project_id: str) -> Path:
+        """The confined filesystem root a tool call's paths must resolve
+        within (Sprint 16 Agent Harness `ToolRunContext.repo_root`). Never
+        used for I/O by this port itself -- callers pass it to
+        `agent_harness.guards.guard_path` for confinement checks, the same
+        root every other method here already writes/reads under."""
+        ...
+
+    @abstractmethod
     async def ensure_initialized(self, project_id: str) -> bool:
         """Lazily init the repo on first use (README committed to main).
         Returns True if this call performed the init, False if it already
@@ -96,6 +106,18 @@ class WorkspaceManager(ABC):
     ) -> tuple[str, bool]:
         """Unified diff of branch_name against main. Returns
         (diff_text, was_truncated)."""
+        ...
+
+    @abstractmethod
+    async def diff_stats(self, project_id: str, branch_name: str) -> CommitResult:
+        """Aggregate branch-vs-main stats (files added/modified/deleted,
+        additions/deletions) plus the branch's current HEAD sha. Sprint 16
+        §4.14/DECISIONS.md #234: an Agent Harness tool loop can call
+        `apply_patch` more than once per attempt, each committing
+        immediately, so a single `commit()`'s `CommitResult` no longer
+        represents the whole attempt -- callers that need one summary
+        figure for a multi-commit attempt use this instead of trusting the
+        last `commit()` call."""
         ...
 
     @abstractmethod

@@ -3479,3 +3479,206 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       regardless of how many git commits it produces underneath —
       audit persistence (`audit.record_tool_call`) and git commit
       granularity are intentionally decoupled.
+
+235. **Phase 3: bounded orchestrator loop, provider tool-use plumbing,
+     `diff_stats()`, and flipping `ENGINEER.tools`/`SkillTemplate
+     .capabilities` from inert to real permission-granting data.**
+    - **New `agent_harness/orchestrator.py` is deliberately narrow** —
+      `run_tool_loop()` is the single bounded provider/tool loop for
+      `harness == "tool_loop"` Roles, called once per produce stage by
+      `workflow_engine.engine` (Phase 4 wiring). It is not a generic
+      shell wrapper, not a `WorkflowEngine` replacement, not a provider
+      adapter, and not a self-correction engine (§4.14) — it owns
+      exactly: building `tools=[...]` schemas from the immutable Phase 1
+      registry, driving `gateway.complete()` in a loop, dispatching each
+      `tool_use` block through Phase 2's `dispatch_tool_call` (schema-
+      validate → authorize → run → bound → audit, unchanged), and
+      appending Anthropic-shaped `tool_result` blocks back onto the
+      message list. It never touches the workspace, sandbox, or DB
+      directly — `dispatch_tool_call` already does, and this module only
+      ever gets a `str` back from it.
+    - **`ToolCallData` (a small frozen dataclass: `call_id`, `tool_name`,
+      `arguments`) replaces #233's originally-planned
+      `tuple[dict, ...]` for `CompletionResult.tool_calls`.** A typed
+      dataclass caught a field-name typo at write time that a raw dict
+      would not have; the shape is otherwise exactly what #233 called
+      for and remains purely additive on `CompletionResult`.
+    - **Idempotency: a repeated `call_id` is never re-dispatched.**
+      `run_tool_loop` tracks `seen_call_ids` and answers a duplicate with
+      a benign, non-error `tool_result` ("duplicate call_id; already
+      handled, ignored") instead of re-running it or silently dropping
+      it — `apply_patch` is mutating, so re-executing a replayed/
+      duplicated provider turn could double a write, but every
+      `tool_use` block the provider sent still needs exactly one reply.
+    - **Bounded retry (Rule #13) uses two independent, resettable streak
+      counters, not one shared counter.** `denied_streak` (bound 2) tracks
+      `ToolDeniedError` — a permission fact that will not change mid-loop,
+      so a short bound is enough to stop a model that keeps asking for
+      something it can never have. `malformed_streak` (bound 3) tracks
+      `ToolCallMalformedError`/`ToolPathViolationError`/
+      `PatchConflictError` — more likely a one-off the model can self-
+      correct from, so it gets one extra attempt. Either success resets
+      both counters to zero; exceeding either bound raises a new
+      `ToolLoopExhaustedError` (`core/errors.py`), caught by
+      `workflow_engine` the same way any other stage failure is (Mission
+      fails with a visible reason) — distinct from `BudgetExceededError`,
+      which remains the separate path for exhausting the call-count/
+      wall-time budget itself.
+    - **No new cancellation-checking code was added.** Commander's only
+      cancellation mechanism is cooperative `asyncio` cancellation
+      (`cancel_task` → `running.cancel()` → `CancelledError` raised at
+      the next `await`), the same model `_run_role` already relies on.
+      Since `asyncio.CancelledError` is a `BaseException`, not an
+      `Exception`, it is never caught by the orchestrator's
+      `except (ToolDeniedError, ...)`/`except _RETRIABLE_TOOL_ERRORS`
+      clauses — it propagates out of whichever `await` was in flight
+      (typically `gateway.complete()` or `dispatch_tool_call()`),
+      satisfying "cancellation checks before/during/after execution"
+      without a second bespoke check.
+    - **`WorkspaceManager.diff_stats(project_id, branch_name) ->
+      CommitResult` implements #234's deferred consequence.** It
+      aggregates `git diff main...branch_name --name-status`/`--numstat`
+      over the whole branch-vs-base range (mirroring `commit()`'s own
+      stat-parsing) plus `git rev-parse branch_name` for the sha, and
+      returns the exact same `CommitResult` shape the one-shot path
+      already produces — chosen over a new stats type because the
+      dashboard's `CodeStats` TS type (confirmed via grep) already
+      expects `commit_sha`/`files_added`/`files_modified`/
+      `files_deleted`/`additions`/`deletions`; reusing the shape means
+      zero TypeScript or handler-signature changes.
+    - **`AnthropicProvider.complete()` now sends `tools` (when the
+      caller passes any) and parses `tool_use`/`text` content blocks
+      into `tool_calls`/`text` on the returned `CompletionResult`,
+      exactly as #233 planned. `stream()` is untouched** — tool-loop
+      turns use non-streaming `complete()` only (#233), so no streamed
+      `tool_use` SSE parsing was built.
+    - **`MockProvider` gains a deterministic 5-turn tool-loop fixture**
+      (`_tool_loop_response`, keyed off `len(messages)` via
+      `turn = (len(messages) - 1) // 2`, not a fixture flag):
+      `list_repository` → `read_file(README.md)` → `apply_patch` →
+      `run_validation(python-syntax)` → a final `**Change Summary:**`
+      completion with no further tool calls. "Denied call" and "budget
+      exhaustion" scenarios are deliberately *not* mock-internal
+      branches — they're meant to emerge from surrounding test fixtures
+      (permission/budget inputs) varying around this same fixed
+      sequence, keeping the mock's own logic simple and honest about
+      what it fabricates (Rule #6). `_fabricate_usage`'s word-count
+      helper was widened (`_content_word_count`) to accept both legacy
+      `str` message content and the new Anthropic-shaped content-block-
+      array content tool-loop turns use.
+    - **`RoleSpec.harness` gains `"tool_loop"` (only `ENGINEER` uses it,
+      per #233) and `ENGINEER.tools` is populated with the six Phase 0
+      tool names; all three `SkillTemplate.capabilities`
+      (`GENERALIST`/`RESEARCH_FOCUSED`/`SPEED_FOCUSED`) gain
+      `"repository_tools"`, per #233's uniform-grant decision.** Before
+      this entry, both were inert presentation-only data; from this
+      entry on, `"repository_tools"` is one term of the fail-closed
+      permission intersection (`permissions.resolve_permitted_tools`)
+      alongside `RoleSpec.tools`, harness_enabled, stage_kind, and
+      workspace_ready. `RoleSpec.tools` remains the Role-level whitelist
+      a skill template can never expand.
+    - **A new `TEMPLATE.tool_loop_contracts` dict (keyed by `role.key`,
+      mirroring `PLANNING_CONTRACTS`'s existing shape) supplies the
+      Engineer's tool-loop-specific system-prompt contract, reusing
+      `prompt_builder.build(..., contract_override=...)`** (the same
+      substitution mechanism Sprint 12's planning turns already use)
+      instead of adding a second prompt-building code path. This keeps
+      Rule #16 intact — the engine branches on `role_spec.harness`
+      (Role-owned data), never on a hardcoded role name.
+    - **Regression found and fixed before this entry was written:**
+      flipping `ENGINEER.tools`/`SkillTemplate.capabilities` from empty
+      to populated broke two Phase 1/2 tests
+      (`test_agent_harness_handlers.py::test_dispatch_tool_call_records
+      _audit_row_on_denial` and `test_agent_harness_permissions.py
+      ::test_missing_capability_denies_everything`) that had proven
+      fail-closed behavior by relying on the *stock* `ENGINEER`/
+      `GENERALIST` being inert rather than constructing an explicitly
+      empty role/template. Both now use a dedicated
+      `UNGRANTED_ROLE`/`EMPTY_TEMPLATE` built via
+      `dataclasses.replace`/`SkillTemplate(...)` with `tools=()`/
+      `capabilities=()`, so the tests still prove fail-closed denial and
+      no longer depend on stock template data staying inert forever.
+      Full suite confirmed green after the fix (445 passed, 6 skipped).
+
+236. **Phase 3 continued: `workflow_engine.engine` wired to
+     `run_tool_loop`, plus two bugs `#235`'s regression pass had not yet
+     surfaced.**
+    - **`_run_pipeline`'s produce stage now branches on
+      `role_spec.harness == "tool_loop" and task.deliverable_type ==
+      "code"`** (Rule #16: `RoleSpec`-owned data plus workflow-stage
+      shape, never a hardcoded role name) — `_run_engineer_tool_loop`
+      (new, mirrors `_run_role`'s state transitions/pacing) builds a
+      `ToolRunContext`/`HarnessBudget` from server-trusted data,
+      resolves `permitted_tools` via `resolve_permitted_tools`, and
+      calls `run_tool_loop`; `_land_tool_loop_changes` (new, mirrors
+      `_land_code_changes`) then reads the branch diff and uses
+      `diff_stats()` (#235) rather than a single `commit()`'s
+      `CommitResult`, since `apply_patch` may have committed more than
+      once during the loop. The one-shot path (`_run_role` +
+      `_land_code_changes`) is untouched and remains the branch taken by
+      every non-`tool_loop` Role. Post-processing (`context`/
+      `code_stats`/`_run_checks`) was unified across both branches
+      rather than duplicated — `_run_checks` still runs unconditionally
+      after landing either path's changes, preserving the Reviewer's
+      evidence guarantee as defense-in-depth even though the Engineer's
+      own `run_validation` tool call already ran inside the loop.
+    - **`WorkspaceManager` gained a new abstract `repo_root(project_id)
+      -> Path` method** (implemented in `LocalGitWorkspaceManager` as a
+      one-line wrapper around the existing private `_repo_dir`).
+      `ToolRunContext.repo_root` needed a confined filesystem root and
+      the engine must not reach into another module's private method
+      (Rule #1) — the port gained a proper public accessor instead.
+    - **Bug found by the full-suite regression run, not by any targeted
+      test: `apply_patch`'s `workspace_manager.commit()` call raised
+      `ValueError("commit() called with nothing staged")` and crashed
+      the whole pipeline stage whenever a patch rewrote byte-identical
+      content.** `LocalGitWorkspaceManager.write_files()` reports a path
+      as "written" whenever it wrote bytes to disk, regardless of
+      whether the content actually changed versus what's already
+      committed on that branch — a rework/retry attempt that resubmits
+      the same file has nothing staged by the time `commit()` runs.
+      Fixed by treating that specific `ValueError` as a benign no-op
+      (`apply_patch` still reports the file as "written" — the
+      Employee's requested content is already in place, which is the
+      correct outcome). Nothing else in `local_git.py` raises
+      `ValueError`, so the narrow `except ValueError` cannot mask an
+      unrelated failure.
+    - **That fix immediately broke
+      `test_code_missions.py::test_requesting_changes_recommits_to_the_
+      same_branch`, which asserts a rework produces a new commit sha.**
+      Root cause was in the mock, not the fix: `_tool_loop_response`
+      (#235) is a pure `len(messages)`-keyed turn counter with no
+      awareness of attempt number or CEO feedback, so a rework attempt
+      re-applied the exact same `index.html`/`style.css` content as
+      attempt 1 — a real behavioral gap versus the one-shot mock, whose
+      `_code_deliverable_text(title, description, context)` already
+      varied output because `context` differs between attempts. Fixed
+      by adding `_is_rework()`, which checks whether the initial user
+      message contains `"CEO feedback to address"` (the marker
+      `_run_engineer_tool_loop` embeds whenever `ceo_comment` is set)
+      and, if so, writes a small variation into `index.html`. This is a
+      test-fixture correction, not a product behavior change — a real
+      provider naturally produces different content when given
+      feedback; only the deterministic mock needed to be taught to do
+      the same.
+    - **New `tests/test_agent_harness_orchestrator.py`** exercises
+      `run_tool_loop` directly against a scripted `FakeGateway`
+      (never a real provider), independent of any specific provider's
+      response shape: deterministic read→patch→validate→complete,
+      denied-tool-path streak exhaustion (`ToolLoopExhaustedError`),
+      streak reset on an intervening success, malformed-argument streak
+      exhaustion, duplicate `call_id` never re-dispatched (with a
+      mutating `apply_patch` as the duplicate, proving no double-write),
+      tool-call and wall-time budget exhaustion (`BudgetExceededError`,
+      asserting the exact iteration the provider is never called past),
+      and `asyncio.CancelledError` propagating uncaught. Full-engine
+      integration coverage for the equivalent scenarios (deterministic
+      mock flow, reviewer diff/evidence, mission cancellation cleanup,
+      zero provider keys, no planning/workspace/widget regressions) was
+      not duplicated here — it already exists for free in
+      `test_code_missions.py`/`test_approval_flow.py`/
+      `test_reliability.py`, since `TEMPLATE.deliverable_type` defaults
+      to `"code"` and `ENGINEER.harness == "tool_loop"` (#235), so every
+      one of those pre-existing tests now runs the tool-loop path by
+      default. Full suite confirmed green after both fixes and the new
+      test file (453 passed, 6 skipped).

@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 16 — Secure Agent Harness
- Overall: Phase 0-2 complete.
- Now working on: Phase 3 -- harness orchestrator and AgentRuntime integration
+ Overall: Phase 0-3 complete.
+ Now working on: Phase 4 -- mission integration and safe observability
  Last update: 2026-08-18
 ================================================
 
@@ -190,7 +190,58 @@ PHASE 2 — Safe Tool Handlers and Audit Persistence
          checkpoint
 
 PHASE 3 — Harness and AgentRuntime Integration
-[ ] not started
+[x] 3.1 built app/modules/agent_harness/orchestrator.py: run_tool_loop,
+        the single bounded provider/tool loop for harness == "tool_loop"
+        Roles -- tool_schemas_for(), two independent resettable streak
+        counters (denied_streak bound 2, malformed_streak bound 3) each
+        raising ToolLoopExhaustedError on exhaustion, seen_call_ids
+        idempotency (duplicate call_id answered, never re-dispatched),
+        context.budget.check() before every iteration and every call,
+        asyncio.CancelledError never caught (propagates per Sprint 9's
+        cooperative cancellation model)
+[x] 3.2 extended core/interfaces/provider_gateway.py: ToolCallData,
+        CompletionResult.tool_calls/stop_reason (additive, every
+        pre-Sprint-16 caller unaffected); AnthropicProvider sends
+        tools/parses tool_use blocks; MockProvider gained a
+        deterministic 5-turn tool-loop fixture
+        (list_repository -> read_file -> apply_patch -> run_validation
+        -> completion)
+[x] 3.3 added WorkspaceManager.diff_stats() (#234's deferred multi-commit
+        stats aggregation) and WorkspaceManager.repo_root() (public
+        accessor for ToolRunContext.repo_root -- engine must not reach
+        into LocalGitWorkspaceManager's private _repo_dir, Rule #1)
+[x] 3.4 flipped RoleSpec.harness ("tool_loop" on ENGINEER only),
+        ENGINEER.tools, and all three SkillTemplate.capabilities from
+        inert placeholder data to real permission-granting data; added
+        TEMPLATE.tool_loop_contracts (mirrors PLANNING_CONTRACTS' shape)
+[x] 3.5 wired workflow_engine.engine._run_pipeline's produce stage to
+        branch on role_spec.harness == "tool_loop" and
+        task.deliverable_type == "code" (Rule #16 -- Role-owned data +
+        workflow-stage shape, never a hardcoded role name); new
+        _run_engineer_tool_loop (mirrors _run_role) and
+        _land_tool_loop_changes (mirrors _land_code_changes, uses
+        diff_stats() since apply_patch commits per-call); one-shot path
+        untouched
+[x] 3.6 regression pass surfaced and fixed two real bugs: (a)
+        ENGINEER.tools/SkillTemplate.capabilities flip broke two
+        Phase 1/2 tests that relied on stock templates staying inert --
+        fixed with explicit UNGRANTED_ROLE/EMPTY_TEMPLATE fixtures;
+        (b) apply_patch's commit() raised ValueError on a byte-identical
+        rewrite (write_files reports "written" regardless of content
+        change), crashing the pipeline stage -- fixed by treating that
+        specific ValueError as a benign no-op; the mock's tool-loop
+        fixture also needed to vary rework content (CEO-feedback-aware),
+        mirroring the one-shot mock's existing context-aware behavior
+[x] 3.7 new tests/test_agent_harness_orchestrator.py (8 tests): scripted
+        FakeGateway against the real Harness fixture -- deterministic
+        read/patch/validate/complete, denied-path streak exhaustion,
+        streak reset on intervening success, malformed-argument streak
+        exhaustion, duplicate call_id never re-dispatched, tool-call and
+        wall-time budget exhaustion, uncaught cancellation
+[x] 3.8 docs/DECISIONS.md #235 (orchestrator/provider/template design)
+        and #236 (engine wiring + the two bugs) recorded
+[x] 3.9 full suite green: 453 passed, 6 skipped in 343.17s
+[ ] 3.10 commit/push Phase 3 checkpoint
 
 PHASE 4 — Mission Integration and Safe Observability
 [ ] not started

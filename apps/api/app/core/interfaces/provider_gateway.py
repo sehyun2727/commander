@@ -14,12 +14,30 @@ from typing import Any, AsyncIterator
 
 
 @dataclass(frozen=True)
+class ToolCallData:
+    """One `tool_use` content block, exactly as the provider returned it --
+    still untrusted at this layer (Sprint 16 §4.8, DECISIONS.md #235).
+    `agent_harness.schemas.ToolCallRequest` is where this actually gets
+    schema-validated before anything acts on it."""
+
+    call_id: str
+    tool_name: str
+    arguments: dict
+
+
+@dataclass(frozen=True)
 class CompletionResult:
     text: str
     model: str
     provider: str
     input_tokens: int = 0
     output_tokens: int = 0
+    # Sprint 16 §7: additive fields for tool-loop turns. Every existing
+    # caller ignores both and keeps working exactly as before -- an
+    # `end_turn` stop_reason with no tool_calls is indistinguishable from
+    # the pre-Sprint-16 CompletionResult shape.
+    tool_calls: tuple[ToolCallData, ...] = ()
+    stop_reason: str = "end_turn"
 
 
 class ProviderGateway(ABC):

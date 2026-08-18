@@ -7,7 +7,7 @@ import pytest
 from app.core.errors import ToolDeniedError
 from app.modules.agent_harness.permissions import authorize_tool_call, resolve_permitted_tools
 from app.modules.agent_harness.registry import TOOLS_BY_KEY
-from app.modules.skill_templates.registry import GENERALIST, SkillTemplate
+from app.modules.skill_templates.registry import SkillTemplate
 from app.templates.software_company import ENGINEER, RoleSpec
 
 ALL_TOOL_KEYS = tuple(TOOLS_BY_KEY)
@@ -16,6 +16,15 @@ GRANTED_TEMPLATE = SkillTemplate(
     title="Granted",
     description="test-only template with repository_tools",
     capabilities=("repository_tools",),
+)
+# Phase 3 grants every stock SkillTemplate "repository_tools" for real, so
+# the missing-capability test needs an explicitly empty template rather
+# than relying on GENERALIST being inert.
+EMPTY_TEMPLATE = SkillTemplate(
+    key="empty_test_template",
+    title="Empty",
+    description="test-only template with no capabilities",
+    capabilities=(),
 )
 
 
@@ -51,7 +60,7 @@ def test_missing_capability_denies_everything():
     role = _role_with_tools(ALL_TOOL_KEYS)
     permitted = resolve_permitted_tools(
         role=role,
-        skill_template=GENERALIST,  # capabilities=()
+        skill_template=EMPTY_TEMPLATE,
         stage_kind="produce",
         harness_enabled=True,
         workspace_ready=True,

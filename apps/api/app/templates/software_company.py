@@ -55,6 +55,35 @@ _ENGINEER_CONTRACT_CODE = (
     "preinstalled and may be used for tests)."
 )
 
+# Sprint 16 §7/§8 (DECISIONS.md #235): the Engineer's contract while
+# `RoleSpec.harness == "tool_loop"` -- used only via
+# `prompt_builder.build(..., contract_override=...)`, never the FILE-block
+# contract above (`_ENGINEER_CONTRACT_CODE`), which describes an
+# incompatible one-shot output shape. Layered under the same traits/
+# custom-instructions ordering every other contract uses.
+_ENGINEER_CONTRACT_TOOL_LOOP = (
+    "You are the Engineer (builder) for this company, working inside a "
+    "bounded tool loop against the company's real git workspace. Do not "
+    "write file content directly into your reply -- call the tools "
+    "you've been given (list_repository, read_file, search_repository, "
+    "inspect_git, apply_patch, run_validation) to inspect the existing "
+    "code and land your changes. Look at what already exists before "
+    "changing anything: never overwrite a file you have not read. Use "
+    "apply_patch to write or overwrite files as complete-content "
+    "replacements, never a diff or excerpt; every path must be relative, "
+    "must never contain '..', and must never target anything under "
+    "'.git/'. Run run_validation before you finish if the change is "
+    "meaningfully sized. Your checks run with no network and no "
+    "dependency installation: generated code must run against the Python "
+    "standard library or Node built-ins only (pytest is also preinstalled "
+    "and may be used for tests). When you are done, reply with a final "
+    "message and no further tool calls: a '**Change Summary:**' section "
+    "of 2-4 plain-language sentences (what changed, why, and one "
+    "potential risk) written for a non-technical CEO, not a commit "
+    "message. You have a limited number of tool calls -- work "
+    "efficiently and never repeat a call you have already made."
+)
+
 _REVIEWER_CONTRACT = (
     "You are the Reviewer (auditor) for this company. You audit the "
     "Engineer's deliverable against the PM's plan and the mission "
@@ -133,7 +162,7 @@ class RoleSpec:
     model_ref: str  # logical ref resolved by model_registry
     contract: str  # prompt_builder's immutable, always-appended-last layer
     intro: str  # spoken at founding as a conversation event (§6, onboarding)
-    harness: Literal["one_shot"]  # execution shape; Sprint 16+ may add "tool_loop"
+    harness: Literal["one_shot", "tool_loop"]  # execution shape (Sprint 16 §4/§7)
     tools: tuple[str, ...]  # whitelist granted by the template (Rule #12); none yet
     permissions: tuple[str, ...]  # organizational actions this Role may take
     # Sprint 11 §6.9: whether `create_department` auto-seeds an Employee for
@@ -187,8 +216,19 @@ ENGINEER = RoleSpec(
         "Devon here, your Engineer. I take Priya's plans and turn them "
         "into real deliverables."
     ),
-    harness="one_shot",
-    tools=(),
+    # Sprint 16: code missions now run through the bounded Agent Harness
+    # tool loop instead of one-shot FILE-block output (DECISIONS.md #235).
+    # Document missions are unaffected -- `_run_pipeline` only takes the
+    # tool_loop path when `deliverable_type == "code"` too.
+    harness="tool_loop",
+    tools=(
+        "list_repository",
+        "read_file",
+        "search_repository",
+        "inspect_git",
+        "apply_patch",
+        "run_validation",
+    ),
     permissions=("produce_deliverable",),
     founding=True,
 )
@@ -344,6 +384,14 @@ PLANNING_CONTRACTS: dict[str, str] = {
     CTO.key: _CTO_PLANNING_CONTRACT,
 }
 
+# Sprint 16 §7 (DECISIONS.md #235): keyed by role_key, same shape as
+# PLANNING_CONTRACTS, so a future second tool_loop-capable Role never needs
+# an engine-side branch -- the engine just looks up
+# `TEMPLATE.tool_loop_contracts[role.key]`.
+TOOL_LOOP_CONTRACTS: dict[str, str] = {
+    ENGINEER.key: _ENGINEER_CONTRACT_TOOL_LOOP,
+}
+
 
 @dataclass(frozen=True)
 class CompanyTemplate:
@@ -363,6 +411,9 @@ class CompanyTemplate:
     planning_pm_role_key: str
     planning_cto_role_key: str
     planning_contracts: dict[str, str]
+    # Sprint 16 §7: contract text for a `harness == "tool_loop"` stage,
+    # keyed by role_key (see TOOL_LOOP_CONTRACTS above).
+    tool_loop_contracts: dict[str, str]
 
 
 TEMPLATE = CompanyTemplate(
@@ -378,6 +429,7 @@ TEMPLATE = CompanyTemplate(
     planning_pm_role_key=PM.key,
     planning_cto_role_key=CTO.key,
     planning_contracts=PLANNING_CONTRACTS,
+    tool_loop_contracts=TOOL_LOOP_CONTRACTS,
 )
 
 

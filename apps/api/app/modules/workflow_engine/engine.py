@@ -39,11 +39,17 @@ from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.secrets import SecretsProvider
 from ...core.config import settings
 from ...templates import TEMPLATE, StageSpec, first_stage_index
+from ...templates.software_company import RoleSpec
 from .. import prompt_builder
+from ..agent_harness.budget import HarnessBudget
+from ..agent_harness.context import ToolRunContext
+from ..agent_harness.orchestrator import run_tool_loop
+from ..agent_harness.permissions import resolve_permitted_tools
 from ..costs import record_usage, usage_for_task
 from ..model_registry import RECOMMENDED_PROVIDER
 from ..provider_gateway import build_gateway
 from ..sandbox import detect_checks, get_execution_enabled
+from ..skill_templates.registry import GENERALIST, SKILL_TEMPLATES_BY_KEY
 from . import parsing
 from .employee_resolution import resolve_employee_for_role
 
@@ -434,6 +440,112 @@ class CommanderWorkflowEngine(WorkflowEngine):
             await self._release_agent_to_idle(agent.id, "Mission failed")
             raise
 
+    async def _run_engineer_tool_loop(
+        self,
+        agent: AgentORM,
+        task: TaskSnapshot,
+        gateway: ProviderGateway,
+        model_ref: str,
+        role_spec: RoleSpec,
+        context: str,
+        ceo_comment: str | None,
+    ) -> tuple[str, dict[str, int]]:
+        """Tool-loop counterpart to `_run_role`, for `role_spec.harness ==
+        "tool_loop"` Engineers on a code mission (Sprint 16 §7,
+        DECISIONS.md #235). Same Employee state-cycle and cancel/failure
+        release guarantee as `_run_role` -- the only difference is what
+        happens between WORKING and WAITING_REVIEW: a bounded
+        provider/tool loop (`agent_harness.orchestrator.run_tool_loop`)
+        instead of one streamed reply.
+
+        Unlike the one-shot path (which lands its FILE-block output on the
+        branch only after the Employee finishes), the workspace/branch
+        must exist *before* the loop starts here -- every tool call
+        resolves against a committed branch ref (Rule #234)."""
+        project_id = task.project_id
+        branch_name = task.branch_name or self._branch_name_for(task.id)
+        try:
+            await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
+            await _pause()
+            await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing the mission brief")
+            await _pause()
+
+            was_initialized = await self._workspace_manager.ensure_initialized(project_id)
+            if was_initialized:
+                await self._event_bus.publish(
+                    build_event(
+                        type=EventType.WORKSPACE_INITIALIZED,
+                        project_id=project_id,
+                        actor=SYSTEM_ACTOR,
+                        payload={},
+                        reason="First code mission for this company; workspace repo created",
+                    )
+                )
+            await self._workspace_manager.create_branch(project_id, branch_name)
+
+            await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing output")
+
+            profile = AgentProfile.model_validate(agent.profile)
+            skill_template = SKILL_TEMPLATES_BY_KEY.get(profile.skill_template_key, GENERALIST)
+            harness_enabled = settings.commander_harness_enabled
+            permitted_tools = resolve_permitted_tools(
+                role=role_spec,
+                skill_template=skill_template,
+                stage_kind="produce",
+                harness_enabled=harness_enabled,
+                workspace_ready=True,
+            )
+            tool_context = ToolRunContext(
+                project_id=project_id,
+                task_id=task.id,
+                agent_id=agent.id,
+                repo_root=self._workspace_manager.repo_root(project_id),
+                branch_name=branch_name,
+                role=role_spec,
+                skill_template=skill_template,
+                stage_kind="produce",
+                harness_enabled=harness_enabled,
+                workspace_ready=True,
+                budget=HarnessBudget(stage=role_spec.key),
+            )
+
+            extra = f"\n\nCEO feedback to address: {ceo_comment}" if ceo_comment else ""
+            plan_block = f"\n\nPlan from the PM:\n{context}" if context else ""
+            initial_user_message = f"Mission: {task.title}\n{task.description}{plan_block}{extra}"
+            system = prompt_builder.build(
+                profile,
+                agent.role_key,
+                task.deliverable_type,
+                contract_override=TEMPLATE.tool_loop_contracts.get(role_spec.key),
+            )
+
+            result = await run_tool_loop(
+                context=tool_context,
+                gateway=gateway,
+                workspace_manager=self._workspace_manager,
+                sandbox_runner=self._sandbox_runner,
+                session_factory=self._session_factory,
+                model_ref=model_ref,
+                system=system,
+                initial_user_message=initial_user_message,
+                permitted_tools=permitted_tools,
+                agent_override=_agent_model_override(agent),
+            )
+            await self._say(project_id, agent, task.id, result.final_text)
+
+            await _pause()
+            await self._agent_runtime.transition(agent.id, AgentState.WAITING_REVIEW, "Output ready for handoff")
+            await _pause()
+            await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Handed off successfully")
+            await self._agent_runtime.transition(agent.id, AgentState.IDLE, "Back to the bench")
+            return result.final_text, result.usage
+        except asyncio.CancelledError:
+            await self._release_agent_to_idle(agent.id, "Mission cancelled")
+            raise
+        except Exception:
+            await self._release_agent_to_idle(agent.id, "Mission failed")
+            raise
+
     async def _release_agent_to_idle(self, agent_id: str, reason: str) -> None:
         """Force an Employee back onto the bench no matter which state a
         cancelled/failed mission left it in. AGENT_TRANSITIONS has no
@@ -542,6 +654,57 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 actor=Actor(role="employee", id=engineer_agent.id, name=engineer_agent.name),
                 payload={"branch_name": branch_name, **stats},
                 reason=f"Engineer committed changes to '{branch_name}'",
+            )
+        )
+        return change_summary, {**stats, "diff_text": diff_text}
+
+    async def _land_tool_loop_changes(
+        self, task: TaskSnapshot, engineer_agent: AgentORM, branch_name: str, deliverable: str
+    ) -> tuple[str, dict | None]:
+        """Counterpart to `_land_code_changes` for `harness == "tool_loop"`
+        Engineers (Sprint 16 DECISIONS.md #235). `apply_patch` tool calls
+        already wrote and committed files live during the loop
+        (DECISIONS.md #234), so there is nothing left to parse/write/
+        commit here -- this only computes the whole attempt's aggregate
+        stats via `diff_stats()` (a multi-`apply_patch` attempt has no
+        single `CommitResult`, #234) and persists/publishes exactly like
+        `_land_code_changes` does. Returns stats=None if the branch has no
+        diff against main at all (the Engineer only talked, never called
+        `apply_patch`) -- the caller then treats this like a document
+        mission, same as `_land_code_changes` returning stats=None for
+        zero valid FILE blocks."""
+        project_id = task.project_id
+        diff_text, truncated = await self._workspace_manager.diff(project_id, branch_name)
+        if not diff_text.strip():
+            return deliverable, None
+        if truncated:
+            diff_text += "\n\n[diff truncated -- showing the first portion only]"
+
+        commit_result = await self._workspace_manager.diff_stats(project_id, branch_name)
+        change_summary = parsing.parse_change_summary(deliverable) or "No summary provided."
+        stats = {
+            "commit_sha": commit_result.commit_sha,
+            "files_added": commit_result.files_added,
+            "files_modified": commit_result.files_modified,
+            "files_deleted": commit_result.files_deleted,
+            "additions": commit_result.additions,
+            "deletions": commit_result.deletions,
+            "summary": change_summary,
+        }
+
+        async with self._session_factory() as session:
+            row = await session.get(TaskORM, task.id)
+            row.branch_name = branch_name
+            row.code_stats = stats
+            await session.commit()
+
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.CODE_CHANGED,
+                project_id=project_id,
+                actor=Actor(role="employee", id=engineer_agent.id, name=engineer_agent.name),
+                payload={"branch_name": branch_name, **stats},
+                reason=f"Engineer committed changes to '{branch_name}' via the Agent Harness tool loop",
             )
         )
         return change_summary, {**stats, "diff_text": diff_text}
@@ -685,31 +848,53 @@ class CommanderWorkflowEngine(WorkflowEngine):
                             reason=f"{role_title} began building the deliverable",
                         )
                     )
-                    deliverable, usage = await self._run_role(
-                        agent, task, gateway, model_ref, context, ceo_comment
-                    )
-                    await self._record_usage(project_id, task_id, agent, gateway, model_ref, usage)
-                    ceo_comment = None  # only the resumed stage gets the CEO's feedback
+
+                    # Sprint 16 §7 (DECISIONS.md #235): a "tool_loop" harness
+                    # Role on a code mission runs the bounded Agent Harness
+                    # tool loop instead of one-shot FILE-block output; every
+                    # other case (document missions, any "one_shot" Role) is
+                    # untouched. Branches on `role_spec.harness` (Role-owned
+                    # data), never a hardcoded role name (Rule #16).
+                    if role_spec.harness == "tool_loop" and task.deliverable_type == "code":
+                        deliverable, usage = await self._run_engineer_tool_loop(
+                            agent, task, gateway, model_ref, role_spec, context, ceo_comment
+                        )
+                        await self._record_usage(project_id, task_id, agent, gateway, model_ref, usage)
+                        ceo_comment = None
+
+                        branch_name = task.branch_name or self._branch_name_for(task.id)
+                        task = dataclasses.replace(task, branch_name=branch_name)
+                        change_summary, code_stats = await self._land_tool_loop_changes(
+                            task, agent, branch_name, deliverable
+                        )
+                    else:
+                        deliverable, usage = await self._run_role(
+                            agent, task, gateway, model_ref, context, ceo_comment
+                        )
+                        await self._record_usage(project_id, task_id, agent, gateway, model_ref, usage)
+                        ceo_comment = None  # only the resumed stage gets the CEO's feedback
+
+                        change_summary, code_stats = "", None
+                        if stage.lands_code and task.deliverable_type == "code":
+                            change_summary, code_stats = await self._land_code_changes(
+                                task, agent, deliverable
+                            )
+                            if code_stats is not None:
+                                branch_name = task.branch_name or self._branch_name_for(task.id)
+                                task = dataclasses.replace(task, branch_name=branch_name)
 
                     context = deliverable
-                    if stage.lands_code and task.deliverable_type == "code":
-                        change_summary, code_stats = await self._land_code_changes(
-                            task, agent, deliverable
-                        )
-                        if code_stats is not None:
-                            context = f"{change_summary}\n\n{code_stats['diff_text']}"
-                            code_stats = {k: v for k, v in code_stats.items() if k != "diff_text"}
-
-                            branch_name = task.branch_name or self._branch_name_for(task.id)
-                            task = dataclasses.replace(task, branch_name=branch_name)
-                            if stage.runs_checks:
-                                check_summary, check_results = await self._run_checks(task, branch_name)
-                                if check_results is not None:
-                                    context = f"{context}\n\n{check_summary}"
-                                    async with self._session_factory() as session:
-                                        row = await session.get(TaskORM, task_id)
-                                        row.check_results = check_results
-                                        await session.commit()
+                    if code_stats is not None:
+                        context = f"{change_summary}\n\n{code_stats['diff_text']}"
+                        code_stats = {k: v for k, v in code_stats.items() if k != "diff_text"}
+                        if stage.runs_checks:
+                            check_summary, check_results = await self._run_checks(task, task.branch_name)
+                            if check_results is not None:
+                                context = f"{context}\n\n{check_summary}"
+                                async with self._session_factory() as session:
+                                    row = await session.get(TaskORM, task_id)
+                                    row.check_results = check_results
+                                    await session.commit()
 
                 elif stage.kind == "review":
                     await self._event_bus.publish(

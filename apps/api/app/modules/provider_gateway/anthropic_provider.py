@@ -13,7 +13,7 @@ from typing import Any, AsyncIterator
 import httpx
 
 from ...core.config import settings
-from ...core.interfaces.provider_gateway import CompletionResult, ProviderGateway
+from ...core.interfaces.provider_gateway import CompletionResult, ProviderGateway, ToolCallData
 from ...core.secrets import SecretsProvider
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
@@ -62,31 +62,49 @@ class AnthropicProvider(ProviderGateway):
     ) -> CompletionResult:
         headers = await self._headers()
         max_tokens = opts.get("max_tokens", 1024)
+        payload: dict[str, Any] = {
+            "model": model_ref,
+            "system": system,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        # Sprint 16 §7: only the Agent Harness's bounded tool loop passes
+        # `tools` -- every other call site is unaffected (no `tools` key,
+        # no `tool_use` blocks can ever appear in the response).
+        tools = opts.get("tools")
+        if tools:
+            payload["tools"] = tools
         async with httpx.AsyncClient(timeout=settings.provider_timeout_seconds) as client:
-            response = await client.post(
-                ANTHROPIC_API_URL,
-                headers=headers,
-                json={
-                    "model": model_ref,
-                    "system": system,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                },
-            )
+            response = await client.post(ANTHROPIC_API_URL, headers=headers, json=payload)
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 raise _legible_error(exc) from None
             data = response.json()
 
-        text = "".join(block.get("text", "") for block in data.get("content", []))
+        text_parts: list[str] = []
+        tool_calls: list[ToolCallData] = []
+        for block in data.get("content", []):
+            block_type = block.get("type")
+            if block_type == "tool_use":
+                tool_calls.append(
+                    ToolCallData(
+                        call_id=block.get("id", ""),
+                        tool_name=block.get("name", ""),
+                        arguments=block.get("input") or {},
+                    )
+                )
+            elif block_type == "text":
+                text_parts.append(block.get("text", ""))
         usage = data.get("usage", {})
         return CompletionResult(
-            text=text,
+            text="".join(text_parts),
             model=model_ref,
             provider="anthropic",
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
+            tool_calls=tuple(tool_calls),
+            stop_reason=data.get("stop_reason") or "end_turn",
         )
 
     async def stream(

@@ -15,7 +15,7 @@ import json
 import random
 from typing import Any, AsyncIterator
 
-from ...core.interfaces.provider_gateway import CompletionResult, ProviderGateway
+from ...core.interfaces.provider_gateway import CompletionResult, ProviderGateway, ToolCallData
 
 _PLAN_OPENERS = [
     "Here's how I'd break this down",
@@ -399,12 +399,98 @@ def _text_for(model_ref: str, system: str, opts: dict[str, Any]) -> str:
     return _audit_text(title, context)
 
 
+def _content_word_count(content: Any) -> int:
+    """Tool-loop messages carry a list of content blocks (text/tool_use/
+    tool_result), not a plain string -- unlike every pre-Sprint-16 message,
+    which is always `{"role": ..., "content": "some string"}`. Handle both
+    shapes rather than assuming `.split()` exists on `content`."""
+    if isinstance(content, str):
+        return len(content.split())
+    if isinstance(content, list):
+        return sum(len(str(block).split()) for block in content)
+    return 0
+
+
 def _fabricate_usage(system: str, messages: list[dict[str, str]], text: str) -> dict[str, int]:
-    prompt_words = len(system.split()) + sum(len(m.get("content", "").split()) for m in messages)
+    prompt_words = len(system.split()) + sum(_content_word_count(m.get("content", "")) for m in messages)
     return {
         "input_tokens": max(1, int(prompt_words * 1.3)),
         "output_tokens": max(1, int(len(text.split()) * 1.3)),
     }
+
+
+# --- Sprint 16: Agent Harness deterministic tool-loop scenarios -----------
+#
+# A harness call is any `gateway.complete(..., tools=[...])` -- the mock
+# never sees role/skill/permission data (it has none), only the shape of
+# the call itself. `messages` grows by exactly two entries per iteration
+# (one assistant tool_use turn, one user tool_result turn), so
+# `len(messages)` alone is a deterministic turn counter -- no fixture flag
+# needed to exercise repository read, patch, validation, and completion in
+# order (§7). "denied call" and "budget exhaustion" are exercised by
+# varying the *permission*/*budget* inputs around this fixed sequence, not
+# by a special branch here (see test_agent_harness_orchestrator.py) --
+# DECISIONS.md #235.
+_MOCK_INDEX_HTML = (
+    "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n"
+    "  <title>Harness Demo</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n"
+    "</head>\n<body>\n  <main class=\"hero\">\n    <h1>Harness Demo</h1>\n"
+    "    <p>Built by the Engineer's tool loop.</p>\n  </main>\n</body>\n</html>\n"
+)
+_MOCK_STYLE_CSS = (
+    "body { font-family: sans-serif; margin: 0; }\n"
+    ".hero { padding: 4rem 2rem; text-align: center; color: #2563eb; }\n"
+    ".hero h1 { font-size: 2rem; margin-bottom: 0.5rem; }\n"
+)
+
+
+def _is_rework(messages: list[dict]) -> bool:
+    """The initial user message embeds `CEO feedback to address: ...`
+    (`workflow_engine._run_engineer_tool_loop`) whenever this attempt is a
+    rework -- used so a rework attempt writes genuinely different content
+    instead of re-applying byte-identical files (which `apply_patch` now
+    treats as a no-op, per DECISIONS.md #235's "apply_patch commit()
+    ValueError" fix)."""
+    first = messages[0].get("content", "") if messages else ""
+    if isinstance(first, list):
+        first = " ".join(str(block) for block in first)
+    return "CEO feedback to address" in str(first)
+
+
+def _tool_loop_response(messages: list[dict]) -> tuple[str, tuple[ToolCallData, ...]]:
+    turn = (len(messages) - 1) // 2
+    call_id = f"mock-call-{turn}"
+    if turn == 0:
+        return "", (ToolCallData(call_id, "list_repository", {"path": ""}),)
+    if turn == 1:
+        return "", (ToolCallData(call_id, "read_file", {"path": "README.md"}),)
+    if turn == 2:
+        index_html = _MOCK_INDEX_HTML
+        if _is_rework(messages):
+            index_html = index_html.replace(
+                "<p>Built by the Engineer's tool loop.</p>",
+                "<p>Built by the Engineer's tool loop.</p>\n    <p>Updated per CEO feedback.</p>",
+            )
+        return "", (
+            ToolCallData(
+                call_id,
+                "apply_patch",
+                {
+                    "files": [
+                        {"path": "index.html", "content": index_html},
+                        {"path": "style.css", "content": _MOCK_STYLE_CSS},
+                    ]
+                },
+            ),
+        )
+    if turn == 3:
+        return "", (ToolCallData(call_id, "run_validation", {"profile": "python-syntax"}),)
+    summary = (
+        "Added a small static landing page (index.html, style.css) via the Agent "
+        "Harness tool loop: listed the repository, read the README for context, "
+        "applied the patch, then ran validation before finishing."
+    )
+    return f"**Change Summary:** {summary}", ()
 
 
 class MockProvider(ProviderGateway):
@@ -415,6 +501,18 @@ class MockProvider(ProviderGateway):
         messages: list[dict[str, str]],
         **opts: Any,
     ) -> CompletionResult:
+        if opts.get("tools"):
+            text, tool_calls = _tool_loop_response(messages)
+            usage = _fabricate_usage(system, messages, text)
+            return CompletionResult(
+                text=text,
+                model=model_ref,
+                provider="mock",
+                input_tokens=usage["input_tokens"],
+                output_tokens=usage["output_tokens"],
+                tool_calls=tool_calls,
+                stop_reason="tool_use" if tool_calls else "end_turn",
+            )
         text = _text_for(model_ref, system, opts)
         usage = _fabricate_usage(system, messages, text)
         return CompletionResult(
