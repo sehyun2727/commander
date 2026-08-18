@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 13 — CEO Workspace Backend and Projection
- Overall: 51/95 (Phase 0-3 complete)
- Now working on: Phase 4 -- Minimal Dashboard Contract Proof
+ Overall: 67/95 (Phase 0-4 complete)
+ Now working on: Phase 5 -- Regression, Audit, and Documentation
  Last update: 2026-08-18
 ================================================
 
@@ -180,25 +180,67 @@ PHASE 3 — Event and Lifecycle Integration             (12/12)
 [x] 3.11 update PROGRESS.txt (this update)
 [x] 3.12 commit/push Phase 3 (next action)
 
-PHASE 4 — Minimal Dashboard Contract Proof            (0/16)
-[ ] 4.1 typed workspace client (lib/api.ts addition)
-[ ] 4.2 snapshot query (lib/hooks.ts addition)
-[ ] 4.3 incremental event/SSE integration (reuse RealtimeProvider)
-[ ] 4.4 reconnect/refetch fallback
-[ ] 4.5 minimal overview/proof surface (additive route, existing layout
-        conventions, not the final Sprint 14 shell)
-[ ] 4.6 show next action + deep link
-[ ] 4.7 show concise pending/organization/mission/planning/activity
-        summaries
-[ ] 4.8 loading/empty/degraded/visible-error states
-[ ] 4.9 keep existing pages/navigation intact
-[ ] 4.10 avoid recreating next-action precedence in frontend code
-[ ] 4.11 run typecheck
-[ ] 4.12 run production build
-[ ] 4.13 browser verification if tooling exists, else mark UNVERIFIED
-[ ] 4.14 (see 4.13)
-[ ] 4.15 update PROGRESS.txt
-[ ] 4.16 commit/push Phase 4
+PHASE 4 — Minimal Dashboard Contract Proof            (16/16)
+[x] 4.1 typed workspace client (lib/api.ts addition) -- api.getWorkspaceOverview,
+        plus full WorkspaceSnapshot type tree in lib/types.ts mirroring
+        schemas.py 1:1 (named to match the backend Pydantic model, distinct
+        from WorkspaceFileEntry/WorkspaceMergeRecord which belong to the
+        unrelated git Repository browser -- DECISIONS.md #220)
+[x] 4.2 snapshot query (lib/hooks.ts addition) -- useWorkspaceOverview,
+        30s refetchInterval fallback (same pattern as useSituation),
+        keys.workspaceOverview added
+[x] 4.3 incremental event/SSE integration (reuse RealtimeProvider) --
+        keys.workspaceOverview added to invalidateForEvent() so any
+        persisted event over the existing SSE connection refetches the
+        snapshot; no new transport (DECISIONS.md #217)
+[x] 4.4 reconnect/refetch fallback -- the 30s poll in 4.2 plus
+        RealtimeProvider's existing EventSource auto-reconnect (browser
+        native retry) cover the case where an SSE gap is missed entirely
+[x] 4.5 minimal overview/proof surface -- new additive route
+        app/company/[id]/overview/page.tsx, explicitly labelled "(Preview)"
+        in its header and Sidebar link so it can't be confused with the
+        final Sprint 14 CEO Workspace shell; does not touch the existing
+        Headquarters page (app/company/[id]/page.tsx)
+[x] 4.6 show next action + deep link -- renders next_action.title/
+        explanation/urgency and a "Go there ->" Link to next_action.route
+        verbatim from the server response
+[x] 4.7 show concise pending/organization/mission/planning/activity
+        summaries -- pending-action count, employee counts, active mission
+        count, planning status, leadership roster, recent_activity feed
+[x] 4.8 loading/empty/degraded/visible-error states -- isLoading text,
+        ErrorState on isError, EmptyState for zero recent_activity
+[x] 4.9 keep existing pages/navigation intact -- purely additive Sidebar
+        entry; no existing route/component modified besides the
+        invalidateForEvent() one-line addition (4.3)
+[x] 4.10 avoid recreating next-action precedence in frontend code -- the
+        page only renders next_action.kind/title/explanation/route as
+        opaque server-provided strings; no urgency/kind switch statement
+        chooses what to show next, only how to color an already-given
+        urgency label
+[x] 4.11 run typecheck -- `npm run typecheck` (tsc --noEmit): clean, no
+        errors
+[x] 4.12 run production build -- `npm run build`: succeeded,
+        /company/[id]/overview listed in the route table (2.88 kB,
+        113 kB First Load JS)
+[x] 4.13 browser verification -- no browser-automation tool is available
+        in this environment (checked via tool search); interactive
+        click-through/visual verification is UNVERIFIED. What WAS verified
+        instead, against real running dev servers (API on :8000 with
+        COMMANDER_PROVIDER=mock, dashboard on :3000, Postgres already up
+        via docker compose -- not the pytest harness): a live curl-driven
+        walkthrough (register -> create company -> GET .../workspace/overview)
+        returned a correct real snapshot (vacant CTO, auto-seeded PM/
+        Reviewer/Engineer, founding activity, next_action=setup_leadership);
+        curl against /company/{id}/overview returned HTTP 200 with no
+        server-side crash/error markers, and correctly showed the
+        RequireAuth client-side gate (expected for an unauthenticated curl
+        request, since Commander auth is a session cookie the SPA checks
+        client-side, not an SSR-blocking check)
+[x] 4.14 (see 4.13) -- UNVERIFIED claim stated honestly, strongest actually-
+        performed check (live curl walkthrough) reported instead of a false
+        browser-verified claim, per CLAUDE.md §7.5/§16.7
+[x] 4.15 update PROGRESS.txt (this update)
+[x] 4.16 commit/push Phase 4 (next action)
 
 PHASE 5 — Regression, Audit, and Documentation        (0/21)
 [ ] 5.1 full backend tests

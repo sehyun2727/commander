@@ -260,3 +260,146 @@ export interface ExecutionSettings {
   reason: string | null;
   execution_enabled: boolean;
 }
+
+// Sprint 13: the CEO Workspace snapshot (app/modules/workspace_overview/
+// schemas.py). Named `WorkspaceSnapshot` to mirror the backend Pydantic
+// model 1:1, same convention as `Specification`/`Approval` above -- distinct
+// from `WorkspaceFileEntry`/`WorkspaceMergeRecord` above, which belong to
+// the unrelated git Repository browser (see CLAUDE.md's Project/Repository
+// terminology table and docs/DECISIONS.md #220 for why the two "Workspace"
+// concepts stay separate).
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  provider: string;
+  archived: boolean;
+  created_at: string;
+}
+
+export interface LeadershipSlot {
+  role_key: string;
+  title: string;
+  occupied: boolean;
+  employee_id: string | null;
+  employee_name: string | null;
+}
+
+export interface EmployeeCounts {
+  total: number;
+  busy: number;
+  idle: number;
+  error: number;
+}
+
+export interface EmployeeSummary {
+  id: string;
+  name: string;
+  role_key: string;
+  state: string;
+  current_task_id: string | null;
+}
+
+export interface OrganizationSummary {
+  leadership: LeadershipSlot[];
+  counts: EmployeeCounts;
+  employees: EmployeeSummary[];
+}
+
+export interface Focus {
+  resource_type: string | null;
+  resource_id: string | null;
+  status: string | null;
+}
+
+export interface PendingClarification {
+  specification_id: string;
+  questions: string[];
+}
+
+export interface PendingSpecificationReview {
+  specification_id: string;
+  version: number;
+}
+
+export interface PendingApprovalItem {
+  approval_id: string;
+  task_id: string;
+  subject: string;
+}
+
+export interface PendingFailure {
+  resource_type: string;
+  resource_id: string;
+  reason: string | null;
+}
+
+export interface PendingActions {
+  clarification: PendingClarification | null;
+  specification_review: PendingSpecificationReview | null;
+  approval: PendingApprovalItem | null;
+  failure: PendingFailure | null;
+}
+
+// `kind` intentionally stays a plain string, not a union -- the precedence
+// policy (which kind wins, and what it means) is server-owned
+// (app/modules/workspace_overview/next_action.py); the frontend must not
+// recreate that policy, only render whatever the server already decided.
+export interface NextAction {
+  kind: string;
+  title: string;
+  explanation: string;
+  target_resource_type: string | null;
+  target_resource_id: string | null;
+  route: string | null;
+  urgency: string;
+  requires_ceo_input: boolean;
+}
+
+export interface PlanningSummary {
+  active: boolean;
+  specification_id: string | null;
+  status: string | null;
+  current_version: number | null;
+  turn_count: number | null;
+  unresolved_questions: number;
+}
+
+export interface MissionSummaryItem {
+  id: string;
+  title: string;
+  state: string;
+  priority: string;
+  specification_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MissionSummary {
+  active: MissionSummaryItem[];
+  recent: MissionSummaryItem[];
+}
+
+export interface ActivityItem {
+  id: string;
+  seq: number;
+  type: string;
+  kind: string;
+  actor_role: string;
+  actor_name: string;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface WorkspaceSnapshot {
+  schema_version: number;
+  generated_at: string;
+  project: ProjectSummary;
+  organization: OrganizationSummary;
+  focus: Focus;
+  pending_actions: PendingActions;
+  next_action: NextAction;
+  planning: PlanningSummary;
+  missions: MissionSummary;
+  recent_activity: ActivityItem[];
+  event_cursor: number;
+}

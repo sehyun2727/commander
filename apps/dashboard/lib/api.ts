@@ -26,6 +26,7 @@ import type {
   WorkspaceFileContent,
   WorkspaceFileEntry,
   WorkspaceMergeRecord,
+  WorkspaceSnapshot,
 } from "./types";
 import type { Agent } from "./types";
 
@@ -242,6 +243,13 @@ export const api = {
     }),
   beginExecution: (specId: string) =>
     request<Task>(`/api/specifications/${specId}/begin-execution`, { method: "POST" }),
+
+  // CEO Workspace snapshot (Sprint 13) -- read-only, no query params beyond
+  // companyId (app/modules/workspace_overview/routes.py has no pagination
+  // surface); incremental updates come from the existing SSE stream, not a
+  // new endpoint (DECISIONS.md #217).
+  getWorkspaceOverview: (companyId: string) =>
+    request<WorkspaceSnapshot>(`/api/projects/${companyId}/workspace/overview`),
 
   // Execution Sandbox
   getCapabilities: () => request<Capability>("/api/system/capabilities"),

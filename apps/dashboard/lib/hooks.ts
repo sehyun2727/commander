@@ -39,6 +39,7 @@ export const keys = {
   specification: (specId: string) => ["specification", specId] as const,
   specificationTurns: (specId: string) => ["specificationTurns", specId] as const,
   specificationVersions: (specId: string) => ["specificationVersions", specId] as const,
+  workspaceOverview: (companyId: string) => ["workspaceOverview", companyId] as const,
 };
 
 export function useCompanies() {
@@ -189,6 +190,17 @@ export function useSituation(companyId: string) {
     queryKey: keys.situation(companyId),
     queryFn: () => api.getSituation(companyId),
     refetchInterval: 60_000,
+  });
+}
+
+// Sprint 13: CEO Workspace snapshot. Polling is a fallback for tabs that
+// somehow miss SSE invalidation (see invalidateForEvent below); the primary
+// freshness path is the same RealtimeProvider every other page already uses.
+export function useWorkspaceOverview(companyId: string) {
+  return useQuery({
+    queryKey: keys.workspaceOverview(companyId),
+    queryFn: () => api.getWorkspaceOverview(companyId),
+    refetchInterval: 30_000,
   });
 }
 
@@ -507,6 +519,7 @@ export function invalidateForEvent(
   qc.invalidateQueries({ queryKey: keys.companyCosts(companyId) });
   qc.invalidateQueries({ queryKey: keys.models(companyId) });
   qc.invalidateQueries({ queryKey: keys.specifications(companyId) });
+  qc.invalidateQueries({ queryKey: keys.workspaceOverview(companyId) });
   if (taskId) {
     qc.invalidateQueries({ queryKey: keys.mission(taskId) });
     qc.invalidateQueries({ queryKey: keys.messages(taskId) });
