@@ -632,6 +632,7 @@ apps/api/
     roles
     employees
     specifications
+    workspace_overview
     memory
     widgets
 
@@ -1143,7 +1144,7 @@ V1.1 is built through explicit sprint briefs.
 | B     |   10 ✅ | Role / Employee separation                            |
 | B     |   11 ✅ | CTO + multi-employee + hiring                         |
 | C     |   12 ✅ | PM↔CTO planning + Project Specification               |
-| D     |     13 | CEO↔PM conversation + PM reports + decision authority |
+| D     |   13 ✅ | CEO Workspace backend projection + next_action policy |
 | D     |     14 | CEO Workspace UI shell                                |
 | D     |     15 | Widget system                                         |
 | E     |     16 | Agent Harness                                         |

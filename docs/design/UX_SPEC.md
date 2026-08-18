@@ -200,7 +200,7 @@ The Specification presented to the CEO is readable in under two minutes: Goal ·
 
 **As built:** the CEO Workspace / PM conversation surface this section assumes doesn't exist yet (Sprints 13–15), so Sprint 12 shipped the Specification lifecycle as its own **Specifications** Sidebar page (Rule #17) rather than inside a Timeline/conversation view — a list (`/company/[id]/specifications`) with a "Start Planning" action that's disabled with inline guidance when no CTO is hired, and a detail page per Specification showing the PM↔CTO turn transcript, clarification Q&A, version history, and the approve/revision/reject/cancel actions. When the PM conversation surface ships, this page's content is the natural candidate to surface *through* that conversation instead of only next to it; that migration is deferred to whichever of Sprints 13–15 implements it, not assumed here.
 
-### 5.2 Decisions reach the CEO only when they matter  *[V1.1 — Sprint 13]*
+### 5.2 Decisions reach the CEO only when they matter  *[V1.1 — not yet scheduled]*
 
 The PM classifies. Minor decisions the PM makes alone; Major ones the PM makes with the CTO; only Critical ones become CEO Decisions. Both lower tiers remain fully visible in the Timeline — the CEO can always see what was decided without them, which is what makes the delegation trustworthy rather than opaque.
 
@@ -302,6 +302,7 @@ These already exist and continue to; most also project a Widget into the dock. O
 - **Reports** — executive memo list + reader; readable in 60 seconds.
 - **Workspace** — the company's real git-backed codebase: file tree, file viewer, merge history. Read-only.
 - **Company Settings** — provider, write-only API key field, per-role model reassignment, execution sandbox toggle, resource limits.
+- **Overview (Preview)** *[Sprint 13 ✅, temporary]* — `/company/[id]/overview`. Renders the `WorkspaceSnapshot` backend contract (`docs/ARCHITECTURE.md` §4.3) verbatim as a plain read-only page, purely so the projection has a real consumer before §3's CEO Workspace shell exists. Not styled to product polish, not a Widget, and will be removed/replaced when Sprint 14 ships §3.
 
 ---
 

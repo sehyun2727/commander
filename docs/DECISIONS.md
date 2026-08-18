@@ -2944,3 +2944,36 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     bare and `/workspace/tree` are different paths), but the naming
     collision at the module/vocabulary level was real and worth avoiding
     before any code was written.
+
+221. **Phase 5 documentation sync found and corrected a pre-existing stale
+    tag**, unrelated to any code this sprint touched: `docs/ARCHITECTURE.md`
+    §4.3 and `docs/design/UX_SPEC.md` §5.2 both labeled the Minor/Major/
+    Critical CEO-decision-tier classification as `[V1.1 — Sprint 13]`, and
+    `CLAUDE.md`'s roadmap table described Sprint 13 as "CEO↔PM conversation
+    + PM reports + decision authority." None of that is what
+    `docs/prompts/sprint-13.md` actually specified or what shipped — Sprint
+    13 built the CEO Workspace backend projection + `next_action` policy
+    (`app/modules/workspace_overview/`). No Minor/Major/Critical
+    classification exists anywhere in code (confirmed by grep). Retagged
+    both sections `[V1.1 — not yet scheduled]`, corrected the CLAUDE.md
+    roadmap row, and added a proper `§4.3 CEO Workspace backend projection
+    [Sprint 13 ✅]` section describing what actually shipped. This is a
+    documentation correction, not a scope or architecture change — Rule
+    #10 requires docs to match reality, and the old tag would otherwise
+    have kept claiming a still-nonexistent feature was delivered.
+
+222. **No browser-automation tool exists in this environment** (confirmed
+    via tool search — no Playwright/Puppeteer/similar). Interactive
+    click-through verification of the Sprint 13 Phase 4 proof page
+    (`/company/[id]/overview`) was therefore not performed. Per CLAUDE.md
+    §7.5/§16.7, this is recorded as UNVERIFIED rather than claimed. The
+    strongest verification actually performed instead: a full mock-mode,
+    zero-API-key, real-process walkthrough (`uvicorn` + real Postgres, no
+    test harness) — fresh `alembic upgrade head` + `scripts/seed.py`,
+    register/login, `GET .../workspace/overview` against a richly seeded
+    company, a live `POST /approvals/{id}/decision` that correctly
+    advanced `next_action` from `review_approval` to `setup_leadership`,
+    and cross-account/unauthenticated access checks (404 / 401 per Rule
+    #15). This proves the backend contract and route wiring are correct
+    under real conditions; it does not prove the page renders correctly
+    in an actual browser.

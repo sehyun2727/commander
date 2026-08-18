@@ -280,7 +280,52 @@ conversational counterpart (Rule #11) and a dedicated Sidebar
 Mission stamped with `specification_id` for provenance — pre-Sprint-12
 Missions remain valid with `specification_id = NULL`.
 
-### 4.3 Decision authority  *[V1.1 — Sprint 13]*
+### 4.3 CEO Workspace backend projection  *[V1.1 — Sprint 13 ✅]*
+
+`app/modules/workspace_overview/` (`schemas.py`, `service.py`,
+`next_action.py`, `routes.py`) is a read-only projection over existing
+tables/events — no new source of truth, per Rule #14. It exposes exactly
+one route, `GET /api/projects/{project_id}/workspace/overview`, returning
+a single `WorkspaceSnapshot`: organization roster/leadership, the
+Company's single `focus` resource, `pending_actions`, an `event_cursor`
+for resuming the existing SSE stream, and a computed `next_action`.
+
+`next_action.py` holds a strict, pure-function precedence policy (no DB
+access, unit-testable in isolation) over a plain-dataclass "facts" input:
+
+```
+1. vacant critical leadership (setup_leadership)
+2. blocking clarification needed from CEO
+3. (no reachable predicate yet — documented no-op slot, see DECISIONS.md #218)
+4. specification ready for CEO review
+5. approval awaiting a CEO decision
+6. Mission failure needing CEO attention
+7. planning/execution in progress, nothing needed from the CEO
+8. idle — no open Mission or Specification
+```
+
+The policy is the single source of truth for "what does the CEO do
+next" — consumers (the Sprint 14 CEO Workspace shell, the Phase 4 proof
+page) must render `next_action` verbatim and must never recompute or
+branch on Mission/Specification/Approval state to reach the same
+conclusion themselves (that would create a second, driftable copy of
+the precedence rules).
+
+All list fields (`missions.active`, `missions.recent`, `recent_activity`,
+`organization.employees`) are bounded by fixed constants
+(`MAX_ACTIVE_MISSIONS`, `MAX_RECENT_MISSIONS`, `MAX_RECENT_ACTIVITY`,
+`MAX_EMPLOYEES`) and built from a fixed number of sequential `select()`
+queries per request — the same shape as `situation/service.py` and
+`reports/service.py`, not a join-heavy or N+1 pattern (verified by a
+query-count test).
+
+The route reuses Rule #15's ownership gating (cross-account access
+returns 404) and the existing SSE event stream for incremental updates
+— there is no separate polling/websocket transport and no server-side
+cache or stored snapshot; every request recomputes the projection from
+current state.
+
+### 4.4 Decision authority  *[V1.1 — not yet scheduled]*
 
 | Level | Decided by | Examples |
 |---|---|---|
@@ -288,9 +333,9 @@ Missions remain valid with `specification_id = NULL`.
 | Major | PM + CTO | library choice, data model change, API contract change, perf/security tradeoffs |
 | Critical | CEO approval | specification approval, scope change, budget overrun, architecture change, external service adoption, irreversible actions |
 
-The goal is fewer CEO interruptions, not fewer CEO rights. Misclassifying a Critical decision as Minor is a trust violation, not an optimization — the classification criteria live in the PM's role contract and are auditable in the Timeline.
+The goal is fewer CEO interruptions, not fewer CEO rights. Misclassifying a Critical decision as Minor is a trust violation, not an optimization — the classification criteria will live in the PM's role contract and be auditable in the Timeline once built. Not implemented as of Sprint 13; no `Minor`/`Major`/`Critical` classification exists in code today (Sprint 13 built the CEO Workspace projection instead — see §4.3).
 
-### 4.4 Agent Harness  *[V1.1 — Sprints 16–17]*
+### 4.5 Agent Harness  *[V1.1 — Sprints 16–17]*
 
 Worker roles whose harness is `tool-loop` execute as:
 
@@ -304,9 +349,9 @@ analyze repo → plan → modify → run_checks → react to results → commit 
 - **`run_checks` is the only execution tool that exists** (Rule #12). The harness cannot gain a shell by any path.
 - The harness is an implementation of a stable worker interface, so an alternative worker (e.g. an external coding agent) can be substituted without changing events, payroll, or the surrounding organization.
 
-### 4.5 Self-correction  *[V1.1 — Sprint 17]*
+### 4.6 Self-correction  *[V1.1 — Sprint 17]*
 
-A failed check no longer waits for the CEO. The Employee reacts inside its budget; if it still fails, the Reviewer's feedback routes through PM judgment (§4.3) and only reaches the CEO when Critical.
+A failed check no longer waits for the CEO. The Employee reacts inside its budget; if it still fails, the Reviewer's feedback routes through PM judgment (§4.4) and only reaches the CEO when Critical.
 
 ---
 
@@ -355,6 +400,7 @@ Selective recall is mandatory: injecting the entire history into every prompt wo
 | `auth` | Local email+password accounts. `IdentityProvider` port + `LocalIdentityProvider`; bcrypt (cost 12) password hashing, no plaintext column anywhere; HttpOnly session cookies, SHA-256 token hash at rest, sliding 7-day expiry / 30-day max age; `register`/`login`/`logout`/`me` routes; `get_current_user` dependency applied to every non-health/non-auth router. | ✅ Sprint 9 |
 | Roles API | `GET /api/projects/{id}/roles` — read-only, template-owned Role data (`key`/`title`/`category`/`singleton`/`description`); no write route, Role is not CEO-owned. Lives in `projects` module, not a standalone `roles` module. | ✅ Sprint 10 |
 | `planning` | PM↔CTO Project Specification lifecycle (§4.2 "As built"): `PlanningOrchestrator` (bounded turn loop, turn-budget + malformed-output-retry guarded per Rule #13), `service` (start/resume/revise/approve/reject/cancel/begin-execution, all ownership-gated), `routes`. DB-backed `active_specification_locks` singleton lock, mirroring Sprint 11's hiring-lock pattern. | ✅ Sprint 12 |
+| `workspace_overview` | CEO Workspace read-only snapshot projection + `next_action` precedence policy (§4.3 "As built"). One route: `GET /projects/{id}/workspace/overview`. No new table, no mutation route, no server-side cache. | ✅ Sprint 13 |
 | `memory`, `widgets` | — | 🔲 **Do not exist** — Sprints 15–18 |
 
 ### 6.2 Lifecycles
@@ -435,6 +481,8 @@ Next.js App Router · TypeScript · Tailwind · TanStack Query. Dark, Render-ins
 | Situation Report | PM Report (UX_SPEC §3.2) |
 | Vitals (4 tiles) | Progress · Employees · Risks · Costs widgets |
 | Timeline excerpt | Timeline widget |
+
+**Sprint 13 proof-of-contract page:** `/company/[id]/overview` ("Workspace Overview (Preview)", reached from the Sidebar) renders the `WorkspaceSnapshot` verbatim — it exists only so the backend projection (§4.3) has a real running consumer before the Sprint 14 shell is built. It is explicitly not the CEO Workspace shell described above and will be replaced, not extended, when Sprint 14 ships the PM-conversation-plus-Widget-Dock layout.
 
 Rationale: the widget dock already replicates everything Headquarters does; keeping both would be a direct duplication and would force the CEO to guess which screen to check.
 
