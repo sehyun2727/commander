@@ -50,6 +50,7 @@ from .modules.workflow_engine import CommanderWorkflowEngine
 from .modules.workspace_manager import LocalGitWorkspaceManager
 from .modules.workspace_manager import router as workspace_router
 from .modules.workspace_overview import router as workspace_overview_router
+from .modules.workspace_widgets import router as workspace_widgets_router
 
 
 @asynccontextmanager
@@ -161,6 +162,7 @@ app.include_router(situation_router)
 app.include_router(skill_templates_router)
 app.include_router(workspace_router)
 app.include_router(workspace_overview_router)
+app.include_router(workspace_widgets_router)
 app.include_router(sandbox_router)
 app.include_router(planning_router)
 

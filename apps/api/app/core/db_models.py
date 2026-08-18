@@ -357,3 +357,29 @@ class ActiveSpecificationLockORM(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), primary_key=True)
     specification_id: Mapped[str] = mapped_column(ForeignKey("specifications.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class WorkspacePreferenceORM(Base):
+    """Sprint 15 §5, DECISIONS.md #228: one CEO Workspace widget layout per
+    (user, company). A single JSON column holds the whole ordered widget
+    list -- the set is always read/written together, so this mirrors
+    `SpecificationVersionORM`'s "grouped structured data as one JSON column"
+    convention rather than a normalized per-widget child table.
+
+    `revision` is the optimistic-concurrency token: bumped by 1 on every
+    successful update, checked against the client's `expected_revision` in
+    `service.update_preferences` before any write, so two stale tabs can
+    never silently clobber each other (§8, never a second source of
+    business truth -- this table only ever holds presentation config)."""
+
+    __tablename__ = "workspace_preferences"
+    __table_args__ = (UniqueConstraint("user_id", "project_id", name="uq_workspace_preferences_user_project"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    schema_version: Mapped[int] = mapped_column(Integer, default=1)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    widgets: Mapped[list] = mapped_column(JSON)  # list[{widget_key, visible, order, span}]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

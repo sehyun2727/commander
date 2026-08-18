@@ -103,3 +103,14 @@ class SpecificationAlreadyExecutingError(CommanderError):
     def __init__(self, specification_id: str) -> None:
         self.specification_id = specification_id
         super().__init__(f"Specification {specification_id!r} has already begun execution")
+
+
+class StaleRevisionError(CommanderError):
+    """Sprint 15 §5/§8: a Workspace preference update's `expected_revision`
+    did not match the row's current `revision` -- another tab/write already
+    moved the layout forward. The caller must reload the authoritative
+    preferences and retry, never silently overwrite (DECISIONS.md #228)."""
+
+    def __init__(self, current_revision: int) -> None:
+        self.current_revision = current_revision
+        super().__init__(f"Preferences have moved on to revision {current_revision}; reload and retry")

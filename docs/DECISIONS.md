@@ -3163,3 +3163,18 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       cookie only, never a client-supplied user id) and `project_owned_by`
       (Rule #15, 404 not 403) exactly as `workspace_overview/routes.py` and
       `skill_templates/routes.py` already do — no new auth primitive.
+
+229. **Preference lifecycle observability (initialized/updated/reset/
+    normalized/stale-conflict) is Python `logging`, not an EventBus/Timeline
+    event.** Every other structured-event emitter in this codebase
+    (`AGENT_PROFILE_UPDATED`, `SpecificationTurnPosted`, ...) represents an
+    organizationally meaningful fact another part of the company might care
+    about later. A CEO reordering or hiding their own Workspace cards has no
+    such downstream consequence — it is explicitly presentation-only
+    configuration (§4.6) and must never become a second source of company
+    history (Rule #14) or clutter the Timeline with noise no Employee or
+    future report would ever need to read. `workspace_widgets/service.py`
+    logs each lifecycle transition via `logging.getLogger(__name__)` with
+    safe structured fields only (`project_id`, `revision`, changed widget
+    keys, normalization reasons) — same field-safety bar as an event, just
+    routed to application logs instead of the company's event stream.

@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 15 — Safe CEO Workspace Widget System
- Overall: Phase 0 done, starting Phase 1.
- Now working on: Phase 1 — Registry, Persistence, and Validation
+ Overall: Phase 0 and Phase 1 done, starting Phase 2.
+ Now working on: Phase 2 — Preferences API and Isolation
  Last update: 2026-08-18
 ================================================
 
@@ -48,22 +48,50 @@ PHASE 0 — Baseline and Architecture Decision           (9/9)
         not autosave; responsive = one canonical order, half/full span
         packing, no free x/y grid
 
-PHASE 1 — Registry, Persistence, and Validation         (0/14)
-[ ] 1.1 canonical registry (app/modules/workspace_widgets/registry.py)
-[ ] 1.2 typed public schemas (schemas.py)
-[ ] 1.3 preference persistence ORM model + Alembic migration
-[ ] 1.4 default generation + normalization service
-[ ] 1.5 validation (known keys, uniqueness, required, visibility, order,
-        span, bounds)
-[ ] 1.6 optimistic-concurrency update path
-[ ] 1.7 tests: registry immutability / default layout
-[ ] 1.8 tests: malformed/unknown/duplicate entries normalize safely
-[ ] 1.9 tests: required-widget restoration
-[ ] 1.10 tests: new/retired-widget normalization
-[ ] 1.11 tests: stale-revision conflict
-[ ] 1.12 tests: user/company uniqueness + concurrent first-creation
-[ ] 1.13 migration verification (upgrade/downgrade on a scratch DB)
-[ ] 1.14 commit/push Phase 1 checkpoint
+PHASE 1 — Registry, Persistence, and Validation         (14/14)
+[x] 1.1 canonical registry (app/modules/workspace_widgets/registry.py):
+        frozen WidgetDefinition dataclass, 8 widgets (primary_next_action +
+        connection_status required/full, current_focus/pending_attention/
+        planning_summary/missions_summary/organization_summary/
+        recent_activity optional/half), WIDGETS tuple + WIDGETS_BY_KEY dict
+        + REQUIRED_WIDGET_KEYS frozenset, dense unique default_order
+[x] 1.2 typed public schemas (schemas.py): WidgetDefinitionResponse,
+        WidgetPreferenceEntry (order>=0, span Literal["full","half"]),
+        WorkspacePreferences (schema_version/revision/widgets bounded by
+        MAX_WIDGET_ENTRIES/updated_at), WorkspacePreferencesUpdateRequest
+[x] 1.3 preference persistence ORM model (WorkspacePreferenceORM in
+        core/db_models.py, UniqueConstraint(user_id, project_id)) +
+        Alembic migration 77037fd534fa (down_revision 7a1c9e3f2b6d)
+[x] 1.4 default generation + normalization service (service.py:
+        _default_widgets, _normalize -- tolerant, never raises, repairs
+        stored/legacy rows on every GET)
+[x] 1.5 validation (validate_update_entries -- strict, raises
+        DuplicateWidgetError/UnknownWidgetError/MissingWidgetError/
+        RequiredWidgetHiddenError on PUT; known keys, uniqueness, required-
+        visible, span/order bounds all enforced via schemas + service)
+[x] 1.6 optimistic-concurrency update path (integer `revision` body field;
+        mismatch raises core.errors.StaleRevisionError -> 409 in routes.py)
+[x] 1.7 tests: registry immutability / default layout
+        (test_workspace_widgets_registry.py, 5 tests)
+[x] 1.8 tests: malformed/unknown/duplicate entries normalize safely
+        (test_malformed_stored_entries_normalize_safely)
+[x] 1.9 tests: required-widget restoration
+        (test_required_widget_hidden_in_storage_is_restored,
+        test_update_rejects_required_widget_hidden)
+[x] 1.10 tests: new/retired-widget normalization
+        (test_stored_entries_missing_a_widget_get_it_added_back)
+[x] 1.11 tests: stale-revision conflict
+        (test_stale_revision_conflict_is_rejected)
+[x] 1.12 tests: user/company uniqueness + concurrent first-creation
+        (test_preferences_are_isolated_per_project_for_same_user,
+        test_preferences_are_isolated_per_user_for_same_project,
+        test_concurrent_first_creation_yields_exactly_one_row -- genuine
+        asyncio.gather race, mirrors test_employee_singleton.py)
+[x] 1.13 migration verification: upgrade head -> downgrade -1 -> upgrade
+        head round-trip against live local Postgres, all clean
+[x] 1.14 commit/push Phase 1 checkpoint: full backend suite re-run after
+        all Phase 1 work (356 passed, 4 skipped -- 336 baseline + 20 new
+        workspace_widgets tests, zero regressions); committed and pushed
 
 PHASE 2 — Preferences API and Isolation                 (0/14)
 PHASE 3 — Registry-Driven Workspace and Edit Mode        (0/19)
