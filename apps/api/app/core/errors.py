@@ -114,3 +114,51 @@ class StaleRevisionError(CommanderError):
     def __init__(self, current_revision: int) -> None:
         self.current_revision = current_revision
         super().__init__(f"Preferences have moved on to revision {current_revision}; reload and retry")
+
+
+class ToolDeniedError(CommanderError):
+    """Sprint 16 Agent Harness: a tool call was rejected by the permission
+    intersection (server global policy / RoleSpec.tools / skill-template
+    capabilities / stage kind / workspace availability) before it ran.
+    Fail-closed by design (DECISIONS.md #233) -- any missing or
+    unresolvable term denies the call rather than defaulting to allow."""
+
+    def __init__(self, tool_name: str, reason: str) -> None:
+        self.tool_name = tool_name
+        self.reason = reason
+        super().__init__(f"Tool {tool_name!r} denied: {reason}")
+
+
+class ToolPathViolationError(CommanderError):
+    """Sprint 16 Agent Harness: a tool call's path argument resolved
+    outside the Mission's workspace root, traversed via '..', or crossed a
+    symlink boundary. Confinement is always enforced via
+    `Path.resolve()` + `relative_to()`, never string-prefix matching (see
+    `workspace_manager/validation.py`, reused by the harness guard)."""
+
+    def __init__(self, tool_name: str, path: str) -> None:
+        self.tool_name = tool_name
+        self.path = path
+        super().__init__(f"Tool {tool_name!r} rejected path {path!r}: outside workspace root")
+
+
+class ToolCallMalformedError(CommanderError):
+    """Sprint 16 Agent Harness: provider output for a tool call failed
+    schema validation (unknown tool name or invalid arguments) even after
+    the bounded retry budget (DECISIONS.md #233) was spent."""
+
+    def __init__(self, tool_name: str, attempts: int, detail: str) -> None:
+        self.tool_name = tool_name
+        self.attempts = attempts
+        self.detail = detail
+        super().__init__(f"Tool call {tool_name!r} malformed after {attempts} attempt(s): {detail}")
+
+
+class PatchConflictError(CommanderError):
+    """Sprint 16 Agent Harness: `apply_patch`'s optional base-hash/
+    expected-content check detected the file changed since the Engineer
+    last read it (DECISIONS.md #233's stale-conflict detection)."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        super().__init__(f"Patch conflict at {path!r}: file content no longer matches the expected base")

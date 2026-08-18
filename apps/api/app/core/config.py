@@ -49,6 +49,15 @@ class Settings(BaseSettings):
     commander_cookie_secure: bool = False
     commander_demo_email: str = "ceo@commander.local"
     commander_demo_password: str = "commander1234"
+    # Agent Harness (Sprint 16, Rule #12/#13, DECISIONS.md #233) -- server
+    # global policy switch and the tool-loop's own iteration/time budget,
+    # checked in addition to (not instead of) the mission budget above;
+    # exhaustion blocks the mission the same way
+    # (modules/workflow_engine/engine.py._check_budget).
+    commander_harness_enabled: bool = True
+    commander_harness_max_tool_calls: int = 40
+    commander_harness_max_seconds: int = 600
+    commander_harness_max_output_bytes: int = 16 * 1024
 
 
 settings = Settings()

@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 16 — Secure Agent Harness
- Overall: Phase 0 in progress.
- Now working on: Phase 0 baseline, threat model, and architecture decisions
+ Overall: Phase 0-1 complete.
+ Now working on: Phase 2 -- safe tool handlers and audit persistence
  Last update: 2026-08-18
 ================================================
 
@@ -62,9 +62,72 @@ PHASE 0 — Baseline, Repository Inspection, and Architecture Decisions
          integration point, one-commit-per-attempt preservation, and the
          new harness_tool_calls audit migration requirement
 [x] 0.14 replaced PROGRESS.txt with this Sprint 16 live checklist
-[ ] 0.15 commit and push Phase 0 checkpoint
+[x] 0.15 commit and push Phase 0 checkpoint (c53f2b9)
 
 PHASE 1 — Registry, Authorization, and Guards
+[x] 1.1 new module apps/api/app/modules/agent_harness/, following the
+        skill_templates/workspace_widgets frozen-dataclass-tuple pattern
+[x] 1.2 registry.py: immutable ToolDefinition tuple (6 tools --
+        list_repository, read_file, search_repository, inspect_git,
+        apply_patch, run_validation), TOOLS_BY_KEY, WRITE_TOOL_KEYS;
+        every tool requires "repository_tools"; no shell/exec tool exists
+[x] 1.3 profiles.py: VALIDATION_PROFILES_BY_NAME/resolve_validation_profile
+        reusing TEMPLATE.checks (python-syntax/pytest/node-test) as the
+        canonical named validation-profile registry instead of a new one
+[x] 1.4 schemas.py: pydantic v2 argument schemas (extra="forbid") for all
+        6 tools plus ToolCallRequest; bounds mirror workspace_manager
+        .validation's MAX_FILES_PER_ATTEMPT/MAX_FILE_BYTES exactly
+[x] 1.5 permissions.py: resolve_permitted_tools/authorize_tool_call --
+        intersection of harness_enabled ∩ RoleSpec.tools ∩ skill-template
+        capabilities ∩ stage_kind=="produce" ∩ workspace_ready; any
+        missing/unknown term denies (fail-closed); raises ToolDeniedError
+[x] 1.6 guards.py: guard_path/guard_content wrapping workspace_manager
+        .validation's genuine Path.resolve()+relative_to() confinement,
+        plus one new check rejecting writes through an existing symlink
+        at the resolved target (confused-deputy protection
+        validate_path had no reason to include); raises
+        ToolPathViolationError
+[x] 1.7 budget.py: HarnessBudget (tool_calls_made/max_tool_calls,
+        max_seconds) -- checked before every tool-loop iteration, raises
+        the existing BudgetExceededError with new limit_kind "tool_calls"
+        so exhaustion reaches the same mission-blocking path
+        (_block_task_on_budget) the mission budget already uses
+[x] 1.8 context.py: frozen ToolRunContext (project_id/task_id/repo_root/
+        branch_name/role/skill_template/stage_kind/harness_enabled/
+        workspace_ready/budget) -- server-issued, never provider-derived;
+        tool handlers (Phase 2) will only ever receive this plus already-
+        validated arguments
+[x] 1.9 output.py: bound_output (mirrors LocalGitWorkspaceManager.diff's
+        (text, truncated) convention) and redact_environment_like_content
+        (defense-in-depth secret-shaped-line masking, Rule #7)
+[x] 1.10 core/errors.py: ToolDeniedError, ToolPathViolationError,
+         ToolCallMalformedError, PatchConflictError, following the
+         existing CommanderError subclass convention
+[x] 1.11 core/config.py: commander_harness_enabled/max_tool_calls/
+         max_seconds/max_output_bytes settings
+[x] 1.12 deliberately did NOT flip RoleSpec.harness/RoleSpec.tools/
+         SkillTemplate.capabilities yet -- Phase 1/2 stay purely additive
+         infrastructure with zero behavior change to the existing
+         pipeline; the switch flips only in Phase 3 once
+         _run_engineer_tool_loop actually exists and is tested, so every
+         phase boundary leaves the mission pipeline fully working
+[x] 1.13 unit/threat tests: test_agent_harness_registry.py,
+         test_agent_harness_permissions.py (fail-closed on every missing
+         term), test_agent_harness_guards.py (absolute/traversal/.git/
+         symlink-escape/direct-symlink-target -- 2 symlink cases SKIP on
+         this Windows environment without symlink privilege, honestly
+         reported per CLAUDE.md §16.7, not silently passed),
+         test_agent_harness_schemas.py, test_agent_harness_budget.py,
+         test_agent_harness_context.py, test_agent_harness_output.py,
+         test_agent_harness_profiles.py -- 47 new tests, all passing
+[x] 1.14 full backend regression suite: 413 passed / 6 skipped (373
+         baseline + 40 new harness tests; 4 baseline skips + 2 new
+         symlink-privilege skips on this Windows dev environment), zero
+         regressions
+[x] 1.15 update PROGRESS.txt (this file) and commit/push Phase 1
+         checkpoint
+
+PHASE 2 — Safe Tool Handlers and Audit Persistence
 [ ] not started
 
 PHASE 2 — Safe Tool Handlers and Audit Persistence
