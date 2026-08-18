@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ErrorState } from "@/components/ErrorState";
 import { mutationErrorMessage } from "@/components/ToastProvider";
 import {
@@ -112,6 +112,8 @@ function WorkspaceEditModeReady({
   const [conflict, setConflict] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [focusRequest, setFocusRequest] = useState<{ widgetKey: string; direction: -1 | 1 } | null>(null);
+  const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const update = useUpdateWorkspacePreferences(companyId);
   const reset = useResetWorkspacePreferences(companyId);
@@ -135,6 +137,24 @@ function WorkspaceEditModeReady({
 
   const visible = [...entries].filter((e) => e.visible).sort((a, b) => a.order - b.order);
   const hidden = [...entries].filter((e) => !e.visible).sort((a, b) => a.order - b.order);
+
+  // Sprint 15 §7.5: reordering a widget to a list boundary disables the
+  // button the CEO just pressed (Move up at position 1, Move down at the
+  // end). A disabled button cannot hold focus, so without this the browser
+  // would silently drop focus back to <body> after every boundary move.
+  // This refocuses the still-enabled sibling (Move down/up) on the same
+  // widget instead, keeping keyboard navigation continuous.
+  useEffect(() => {
+    if (!focusRequest) return;
+    const { widgetKey, direction } = focusRequest;
+    const primaryKey = `${widgetKey}:${direction === -1 ? "up" : "down"}`;
+    const fallbackKey = `${widgetKey}:${direction === -1 ? "down" : "up"}`;
+    const primary = buttonRefs.current.get(primaryKey);
+    const fallback = buttonRefs.current.get(fallbackKey);
+    const target = primary && !primary.disabled ? primary : fallback;
+    target?.focus();
+    setFocusRequest(null);
+  }, [entries, focusRequest]);
 
   function titleFor(widgetKey: string): string {
     return catalogByKey.get(widgetKey)?.title ?? widgetKey;
@@ -160,6 +180,7 @@ function WorkspaceEditModeReady({
     setAnnouncement(
       `${titleFor(a.widget_key)} moved to position ${swapIdx + 1} of ${visible.length}.`
     );
+    setFocusRequest({ widgetKey, direction });
   }
 
   function hideWidget(widgetKey: string) {
@@ -316,19 +337,29 @@ function WorkspaceEditModeReady({
                 <div className="flex shrink-0 items-center gap-1.5">
                   <button
                     type="button"
+                    ref={(el) => {
+                      const key = `${entry.widget_key}:up`;
+                      if (el) buttonRefs.current.set(key, el);
+                      else buttonRefs.current.delete(key);
+                    }}
                     aria-label={`Move ${titleFor(entry.widget_key)} up`}
                     onClick={() => moveVisible(entry.widget_key, -1)}
                     disabled={index === 0}
-                    className="rounded-lg border border-base-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-base-hover disabled:opacity-30"
+                    className="min-h-[44px] min-w-[44px] rounded-lg border border-base-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-base-hover disabled:opacity-30 sm:min-h-0 sm:min-w-0"
                   >
                     Move up
                   </button>
                   <button
                     type="button"
+                    ref={(el) => {
+                      const key = `${entry.widget_key}:down`;
+                      if (el) buttonRefs.current.set(key, el);
+                      else buttonRefs.current.delete(key);
+                    }}
                     aria-label={`Move ${titleFor(entry.widget_key)} down`}
                     onClick={() => moveVisible(entry.widget_key, 1)}
                     disabled={index === visible.length - 1}
-                    className="rounded-lg border border-base-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-base-hover disabled:opacity-30"
+                    className="min-h-[44px] min-w-[44px] rounded-lg border border-base-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-base-hover disabled:opacity-30 sm:min-h-0 sm:min-w-0"
                   >
                     Move down
                   </button>
@@ -337,7 +368,7 @@ function WorkspaceEditModeReady({
                       type="button"
                       aria-label={`Hide ${titleFor(entry.widget_key)}`}
                       onClick={() => hideWidget(entry.widget_key)}
-                      className="rounded-lg border border-base-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-base-hover"
+                      className="min-h-[44px] min-w-[44px] rounded-lg border border-base-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-base-hover sm:min-h-0 sm:min-w-0"
                     >
                       Hide
                     </button>
@@ -374,7 +405,7 @@ function WorkspaceEditModeReady({
                     type="button"
                     aria-label={`Restore ${titleFor(entry.widget_key)}`}
                     onClick={() => restoreWidget(entry.widget_key)}
-                    className="shrink-0 rounded-lg border border-base-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-base-hover"
+                    className="min-h-[44px] min-w-[44px] shrink-0 rounded-lg border border-base-border px-2.5 py-1.5 text-xs font-medium text-text hover:bg-base-hover sm:min-h-0 sm:min-w-0"
                   >
                     Restore
                   </button>

@@ -72,7 +72,13 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
         </button>
       </header>
 
-      <WorkspaceWidgetGrid entries={visibleEntries} snapshot={snapshot} companyId={companyId} onRefresh={() => refetch()} />
+      <WorkspaceWidgetGrid
+        entries={visibleEntries}
+        snapshot={snapshot}
+        companyId={companyId}
+        onRefresh={() => refetch()}
+        catalog={catalog}
+      />
     </main>
   );
 }

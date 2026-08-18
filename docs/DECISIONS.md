@@ -3210,3 +3210,49 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       keyed by anything other than the 8 compile-time-known registry
       keys (§7.1/§8 — never dynamically import from a client-provided
       string).
+
+231. **Sprint 15 Phase 4 failure-isolation and accessibility decisions.**
+    - **Per-widget error isolation uses a single class-component error
+      boundary (`components/workspace/WidgetErrorBoundary.tsx`)**, the
+      first in this codebase — React only supports catching render
+      errors via `componentDidCatch`/`getDerivedStateFromError`, which
+      has no hook equivalent, so this is necessarily a class component
+      even though the rest of the app is functional-only. It wraps each
+      rendered widget individually in `WorkspaceWidgetGrid`, so one
+      widget throwing shows a small "couldn't load" card with a Retry
+      button in its own slot instead of unmounting the entire Workspace
+      (§4.11). No stack trace or payload is ever rendered into the
+      fallback; the underlying error is only sent to `console.error`,
+      matching the existing observability bar for this frontend.
+    - **The primary-action slot gets a distinct `critical` fallback**,
+      per §4.11's explicit "stronger fallback" requirement: a full-width
+      amber card with a plain-language message and a Refresh button,
+      rather than the generic small red card every other widget gets —
+      the CEO's main action must never appear to just vanish.
+    - **Boundary-move focus handoff.** Moving a visible widget to the
+      top/bottom of the list disables the button just pressed (Move
+      up at position 1, Move down at the end); a disabled button can't
+      hold focus, so without intervention the browser drops focus to
+      `<body>` after every boundary move. `WorkspaceEditMode` now tracks
+      a `focusRequest` and, once the reordered list re-renders, focuses
+      the still-enabled sibling button (Move down/up) on the same
+      widget via a small `buttonRefs` map, keeping keyboard reordering
+      continuous (§7.5 "maintain focus after movement").
+    - **Touch target sizing is mobile-only.** The reorder/hide/restore
+      buttons get `min-h-[44px] min-w-[44px]` (WCAG 2.5.5) below the
+      `sm` breakpoint and revert to their original compact size at
+      `sm:` and above — Edit Mode is control-dense on desktop, and this
+      codebase's existing buttons (e.g. `SettingsPage`) are already
+      sized well under 44px there, so enlarging every button at every
+      breakpoint would be an unrelated global style change beyond this
+      sprint's scope; only the touch-input case needed the fix.
+    - **No browser automation tool exists in this environment** (checked
+      again via ToolSearch, same finding as Phase 0). Phase 4's
+      interaction-dependent verification items (drag/click/touch feel,
+      literal focus-ring visibility, on-device tap-target comfort) are
+      therefore verified by code inspection only (native `<button>`
+      elements, explicit `aria-label`s, `aria-live` announcements,
+      query-key isolation by `companyId`, no `placeholderData`/stale-data
+      carryover across company switches) and reported as UNVERIFIED for
+      literal on-screen/on-device behavior, per CLAUDE.md §16.7 — not
+      claimed as browser-verified.

@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 15 — Safe CEO Workspace Widget System
- Overall: Phases 0-3 done, starting Phase 4.
- Now working on: Phase 4 — Failure Isolation, Responsive, and Accessibility
+ Overall: Phases 0-4 done, starting Phase 5.
+ Now working on: Phase 5 — Regression, Security Audit, and Documentation
  Last update: 2026-08-18
 ================================================
 
@@ -187,5 +187,97 @@ PHASE 3 — Registry-Driven Workspace and Edit Mode        (19/19)
 [x] 3.18 PROGRESS.txt updated per completed item (this entry)
 [x] 3.19 commit/push Phase 3 checkpoint
 
-PHASE 4 — Failure Isolation, Responsive, and Accessibility (0/21)
+PHASE 4 — Failure Isolation, Responsive, and Accessibility (21/21)
+[x] 4.1 per-widget error isolation: new
+        components/workspace/WidgetErrorBoundary.tsx (this codebase's first
+        class component -- React error boundaries require
+        componentDidCatch/getDerivedStateFromError, no hook equivalent
+        exists); WorkspaceWidgetGrid wraps each rendered widget
+        individually so one widget throwing shows a small isolated
+        "couldn't load" card + Retry, never unmounts the rest of the
+        Workspace; no stack trace/payload ever rendered, error only
+        goes to console.error
+[x] 4.2 stronger next-action fallback: WidgetErrorBoundary's `critical`
+        prop (set only for primary_next_action in WorkspaceWidgetGrid)
+        renders a full-width amber card with plain-language copy + a
+        Refresh button instead of the generic small red card, so the
+        CEO's main action degrades safely rather than silently
+        vanishing (brief §4.11)
+[x] 4.3 unsupported-widget fallback formalized: normal mode already
+        omitted unsupported keys safely with a deduped console.warn
+        (Phase 3); edit mode already showed an inline "Unsupported --
+        will not display" badge (Phase 3) -- both re-verified against
+        §7.1's exact requirement list, no gaps found
+[x] 4.4 focus preservation after reorder: boundary-move case (Move
+        up at position 1 / Move down at the end disables the button
+        just pressed) previously dropped focus to <body>; added
+        `focusRequest` state + `buttonRefs` map in WorkspaceEditMode so
+        the still-enabled sibling button (Move down/up) on the same
+        widget is focused after the reordered list re-renders
+[x] 4.5 screen-reader position announcements: aria-live="polite"
+        region (already added Phase 3) announces
+        "<title> moved to position X of Y" on every reorder, plus
+        hide/restore/save/reset outcomes
+[x] 4.6 keyboard-only reorder/hide/restore/reset verified by code
+        inspection: every control is a native <button type="button">
+        with an explicit aria-label (no click-only <div>s anywhere in
+        the widget system), so Tab+Enter/Space operates all of them by
+        default; no drag-and-drop exists, so no keyboard alternative is
+        needed beyond the buttons themselves
+[x] 4.7 mobile edit mode verified by code inspection: EditModeShell
+        and both widget lists use flex-col on mobile / sm:flex-row on
+        desktop, same responsive pattern as the rest of the dashboard
+        (SettingsPage, etc.)
+[x] 4.8 touch-sized controls: Move up/down, Hide, and Restore buttons
+        get min-h-[44px] min-w-[44px] (WCAG 2.5.5) below the `sm`
+        breakpoint, reverting to their original compact size at sm:
+        and above -- desktop Edit Mode is control-dense and this
+        codebase's existing buttons are already well under 44px there,
+        so only the touch-input case needed the fix (DECISIONS.md #231)
+[x] 4.9 desktop and mobile ordering verified by code inspection: both
+        derive from the same sorted `visible` list (WorkspaceWidgetGrid
+        packRows for desktop pairing, mobile just stacks it) -- no
+        separate mobile order exists to drift out of sync
+[x] 4.10 company switching verified by code inspection: keys.
+        workspaceWidgets(companyId)/workspacePreferences(companyId) are
+        keyed by companyId (lib/hooks.ts), so navigating to a different
+        /company/[id] always issues a fresh query under a new key
+[x] 4.11 no cross-company layout/data flash verified by code
+        inspection: none of the workspace queries use
+        placeholderData/keepPreviousData, so a company switch shows
+        WorkspaceSkeleton (isLoading) rather than the previous
+        company's stale widgets momentarily
+[x] 4.12 navigation with unsaved changes verified by code inspection:
+        beforeunload guard (tab close/reload) active only while dirty,
+        window.confirm on Cancel/Close discards intentionally -- no
+        in-app router-level guard exists anywhere in this codebase to
+        extend (DECISIONS.md #230's documented scope boundary)
+[x] 4.13 reset confirmation verified by code inspection:
+        handleReset requires window.confirm before calling the reset
+        mutation, matching SettingsPage.handleArchive's precedent
+[x] 4.14 loading/empty/error/conflict states verified by code
+        inspection: WorkspaceSkeleton (page.tsx) / EditModeShell's
+        pulse skeleton, ErrorState on isError, "Every optional widget
+        is currently visible" empty state for the hidden tray, amber
+        conflict banner + red error banner in WorkspaceEditMode -- all
+        four states have distinct, non-overlapping UI
+[x] 4.15 typecheck (tsc --noEmit) clean after all Phase 4 edits
+[x] 4.16 production build clean after all Phase 4 edits, all 19 routes
+        compile (/company/[id] now 10 kB)
+[x] 4.17 targeted tests supported by existing tooling: none -- same
+        finding as Phase 3, still holds (no jest/vitest/
+        testing-library/playwright in this repo)
+[x] 4.18 browser interaction verification: re-confirmed via ToolSearch
+        that no browser automation tool exists in this environment
+        (same finding as Phase 0's audit)
+[x] 4.19 interactive drag/click/touch/visual checks recorded as
+        UNVERIFIED per CLAUDE.md §16.7 -- everything in this phase
+        that requires literal on-screen/on-device observation (focus
+        ring visibility, actual tap comfort, real screen-reader output)
+        is NOT claimed as verified; only code-level guarantees
+        (semantics, ARIA attributes, query-key isolation, CSS classes)
+        are claimed, and are listed as such above
+[x] 4.20 PROGRESS.txt updated per completed item (this entry)
+[x] 4.21 commit/push Phase 4 checkpoint
+
 PHASE 5 — Regression, Security Audit, and Documentation  (0/24)

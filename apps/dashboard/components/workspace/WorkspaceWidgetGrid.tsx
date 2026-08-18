@@ -1,4 +1,6 @@
-import type { WidgetPreferenceEntry, WorkspaceSnapshot } from "@/lib/types";
+import { useMemo } from "react";
+import type { WidgetDefinition, WidgetPreferenceEntry, WorkspaceSnapshot } from "@/lib/types";
+import { WidgetErrorBoundary } from "./WidgetErrorBoundary";
 import { WORKSPACE_WIDGET_COMPONENTS } from "./widgetComponents";
 
 // Sprint 15 §4.9/DECISIONS.md #228: one canonical order drives both
@@ -35,13 +37,16 @@ export function WorkspaceWidgetGrid({
   snapshot,
   companyId,
   onRefresh,
+  catalog,
 }: {
   entries: WidgetPreferenceEntry[];
   snapshot: WorkspaceSnapshot;
   companyId: string;
   onRefresh: () => void;
+  catalog?: WidgetDefinition[];
 }) {
   const rows = packRows(entries);
+  const catalogByKey = useMemo(() => new Map((catalog ?? []).map((w) => [w.key, w])), [catalog]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -62,9 +67,12 @@ export function WorkspaceWidgetGrid({
               }
               return null;
             }
+            const title = catalogByKey.get(entry.widget_key)?.title ?? entry.widget_key;
             return (
               <div key={entry.widget_key}>
-                <Widget snapshot={snapshot} companyId={companyId} onRefresh={onRefresh} />
+                <WidgetErrorBoundary widgetTitle={title} critical={entry.widget_key === "primary_next_action"}>
+                  <Widget snapshot={snapshot} companyId={companyId} onRefresh={onRefresh} />
+                </WidgetErrorBoundary>
               </div>
             );
           })}
