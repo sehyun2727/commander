@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 15 — Safe CEO Workspace Widget System
- Overall: Phase 0 and Phase 1 done, starting Phase 2.
- Now working on: Phase 2 — Preferences API and Isolation
+ Overall: Phases 0-2 done, starting Phase 3.
+ Now working on: Phase 3 — Registry-Driven Workspace and Edit Mode
  Last update: 2026-08-18
 ================================================
 
@@ -93,7 +93,42 @@ PHASE 1 — Registry, Persistence, and Validation         (14/14)
         all Phase 1 work (356 passed, 4 skipped -- 336 baseline + 20 new
         workspace_widgets tests, zero regressions); committed and pushed
 
-PHASE 2 — Preferences API and Isolation                 (0/14)
+PHASE 2 — Preferences API and Isolation                 (14/14)
+[x] 2.1 widget-registry endpoint (GET .../workspace/widgets, built during
+        Phase 1's routes.py pass, verified against Phase 2's requirements)
+[x] 2.2 effective-preferences endpoint (GET .../workspace/preferences)
+[x] 2.3 update endpoint (PUT .../workspace/preferences)
+[x] 2.4 reset endpoint (POST .../workspace/preferences/reset)
+[x] 2.5 auth required on all 4 routes (get_current_user, session cookie)
+[x] 2.6 ownership enforced on all 4 routes (project_owned_by, Rule #15 --
+        404 not 403, never a client-supplied user id)
+[x] 2.7 GET responses are always the normalized, authoritative
+        representation (service.get_effective_preferences normalizes on
+        every read)
+[x] 2.8 structured 4xx mapping in routes.py: Duplicate/Unknown/Missing ->
+        400, RequiredWidgetHidden -> 422, oversized widgets list -> 422
+        (enforced structurally by WorkspacePreferencesUpdateRequest's
+        Field(max_length=MAX_WIDGET_ENTRIES))
+[x] 2.9 StaleRevisionError -> 409 with {error, current_revision} body
+[x] 2.10 observability stays presentation-only (Python logging only, no
+        EventBus/Timeline emission -- DECISIONS.md #229)
+[x] 2.11 API/integration tests (test_workspace_widgets_api.py, 17 tests
+        over real HTTP via api_client/harness): unauthenticated 401 x2,
+        cross-account 404, widgets catalog matches registry, default read,
+        valid update + persists across reload, reset, per-company
+        isolation, per-user isolation, unknown/duplicate/missing/
+        required-hidden rejection, stale-revision 409, oversized-payload
+        422, and a business-state-non-mutation check (event_cursor
+        unchanged by preference writes)
+[x] 2.12 live mock-mode API walkthrough via curl against a real uvicorn
+        process + local Postgres: register -> create company -> GET
+        widgets -> GET preferences (default, revision 1) -> PUT (revision
+        bumps to 2) -> PUT with wrong widgets while stale (400, validated
+        before revision check, as designed) -> POST reset (revision 3) ->
+        unauthenticated GET (401) -- all behaved as specified
+[x] 2.13 PROGRESS.txt updated per completed item (this entry)
+[x] 2.14 commit/push Phase 2 checkpoint
+
 PHASE 3 — Registry-Driven Workspace and Edit Mode        (0/19)
 PHASE 4 — Failure Isolation, Responsive, and Accessibility (0/21)
 PHASE 5 — Regression, Security Audit, and Documentation  (0/24)
