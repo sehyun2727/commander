@@ -3,8 +3,9 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import type { HireEmployeeRequest, ProfileUpdateRequest } from "./api";
+import { ApiError } from "./api";
 import { mutationErrorMessage, useToast } from "@/components/ToastProvider";
-import type { Task } from "./types";
+import type { Task, WidgetPreferenceEntry } from "./types";
 
 export const keys = {
   companies: ["companies"] as const,
@@ -40,6 +41,8 @@ export const keys = {
   specificationTurns: (specId: string) => ["specificationTurns", specId] as const,
   specificationVersions: (specId: string) => ["specificationVersions", specId] as const,
   workspaceOverview: (companyId: string) => ["workspaceOverview", companyId] as const,
+  workspaceWidgets: (companyId: string) => ["workspaceWidgets", companyId] as const,
+  workspacePreferences: (companyId: string) => ["workspacePreferences", companyId] as const,
 };
 
 export function useCompanies() {
@@ -202,6 +205,57 @@ export function useWorkspaceOverview(companyId: string) {
     queryFn: () => api.getWorkspaceOverview(companyId),
     refetchInterval: 30_000,
   });
+}
+
+// Sprint 15: the widget registry is a static, server-owned catalog
+// (app/modules/workspace_widgets/registry.py) -- same "no polling needed"
+// rationale as useRoles/useSkillTemplates above.
+export function useWorkspaceWidgets(companyId: string) {
+  return useQuery({ queryKey: keys.workspaceWidgets(companyId), queryFn: () => api.listWorkspaceWidgets(companyId) });
+}
+
+// Per-(CEO, company) layout preferences. No polling -- only this CEO can
+// ever write their own layout (Rule #15 scoping), so there's no other
+// actor whose change this tab needs to pick up passively the way Missions
+// or Approvals do.
+export function useWorkspacePreferences(companyId: string) {
+  return useQuery({
+    queryKey: keys.workspacePreferences(companyId),
+    queryFn: () => api.getWorkspacePreferences(companyId),
+  });
+}
+
+export function useUpdateWorkspacePreferences(companyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { expected_revision: number; widgets: WidgetPreferenceEntry[] }) =>
+      api.updateWorkspacePreferences(companyId, body),
+    onSuccess: (prefs) => {
+      qc.setQueryData(keys.workspacePreferences(companyId), prefs);
+    },
+  });
+}
+
+export function useResetWorkspacePreferences(companyId: string) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  return useMutation({
+    mutationFn: () => api.resetWorkspacePreferences(companyId),
+    onSuccess: (prefs) => {
+      qc.setQueryData(keys.workspacePreferences(companyId), prefs);
+    },
+    onError: (error) => showToast(mutationErrorMessage(error)),
+  });
+}
+
+/** True only for the specific 409 the widget-preferences PUT raises when
+ * `expected_revision` no longer matches the stored row (StaleRevisionError,
+ * routes.py). The response body is a structured object, not a plain
+ * string, so callers must not read `.message` for this case -- they
+ * should refetch the authoritative preferences and show a conflict
+ * notice instead (§7.3: avoid retry storms on 409, never guess a merge). */
+export function isStaleRevisionConflict(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409;
 }
 
 export function useGenerateReport(companyId: string) {

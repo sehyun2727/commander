@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 15 — Safe CEO Workspace Widget System
- Overall: Phases 0-2 done, starting Phase 3.
- Now working on: Phase 3 — Registry-Driven Workspace and Edit Mode
+ Overall: Phases 0-3 done, starting Phase 4.
+ Now working on: Phase 4 — Failure Isolation, Responsive, and Accessibility
  Last update: 2026-08-18
 ================================================
 
@@ -129,6 +129,63 @@ PHASE 2 — Preferences API and Isolation                 (14/14)
 [x] 2.13 PROGRESS.txt updated per completed item (this entry)
 [x] 2.14 commit/push Phase 2 checkpoint
 
-PHASE 3 — Registry-Driven Workspace and Edit Mode        (0/19)
+PHASE 3 — Registry-Driven Workspace and Edit Mode        (19/19)
+[x] 3.1 converted app/company/[id]/page.tsx from Sprint 14's hardcoded
+        fixed sections to registry-driven composition (WorkspaceWidgetGrid)
+[x] 3.2 reused every existing Sprint 14 widget component unchanged
+        (ConnectionStatusBar, CurrentFocusCard, MissionSummaryCard,
+        OrganizationSummaryCard, PendingAttentionList, PlanningSummaryCard,
+        PrimaryActionPanel, RecentActivityList)
+[x] 3.3 safe static component map added
+        (components/workspace/widgetComponents.tsx --
+        Record<string, ComponentType>, literal keys only, DECISIONS.md #230)
+[x] 3.4 effective-preference queries/hooks added (lib/hooks.ts:
+        useWorkspaceWidgets, useWorkspacePreferences,
+        useUpdateWorkspacePreferences, useResetWorkspacePreferences,
+        isStaleRevisionConflict; lib/api.ts: listWorkspaceWidgets/
+        getWorkspacePreferences/updateWorkspacePreferences/
+        resetWorkspacePreferences; lib/types.ts: WidgetDefinition/
+        WidgetPreferenceEntry/WorkspacePreferences)
+[x] 3.5 distinct edit mode added (components/workspace/WorkspaceEditMode.tsx
+        -- full-page takeover, not a modal, entered/exited via an
+        accessible "Customize Workspace"/"Close" button pair)
+[x] 3.6 reorder controls (Move up/down buttons per visible widget, swap
+        `order` within the visible subset only -- DECISIONS.md #230)
+[x] 3.7 hide/restore controls (Hide button per non-required visible
+        widget; Restore button per hidden-tray widget)
+[x] 3.8 reset-to-default (window.confirm-gated immediate server call,
+        same pattern as SettingsPage.handleArchive)
+[x] 3.9 save/cancel (explicit, not autosave, per DECISIONS.md #228) with
+        isPending "Saving…" state
+[x] 3.10 dirty/saving/success/error states (dirty computed by structural
+        entry comparison; Save disabled when !dirty; inline error banner
+        on non-conflict failures; announcement region on save/reset)
+[x] 3.11 stale-write conflict UX (409 -> amber conflict banner with an
+        explicit "Reload Latest Layout" action; local edits preserved,
+        never silently clobbered or auto-merged)
+[x] 3.12 optimistic rollback: not applicable -- Phase 3 deliberately does
+        NOT use optimistic UI (Save is request-then-commit-locally,
+        matching the explicit-save decision in DECISIONS.md #228); no
+        rollback needed because the UI is never updated ahead of the
+        server's response
+[x] 3.13 company-switch preference isolation (query keys keyed by
+        companyId: keys.workspaceWidgets/workspacePreferences -- switching
+        /company/[id] can never read another company's cached layout)
+[x] 3.14 required-widget removal prevented in the UI (Hide button omitted
+        entirely for entries where catalog.required is true, in addition
+        to the existing server-side RequiredWidgetHiddenError backstop)
+[x] 3.15 no dynamic imports anywhere in the widget system (verified:
+        widgetComponents.tsx is a static literal object, no next/dynamic,
+        no computed import path)
+[x] 3.16 targeted tests supported by existing tooling: none -- confirmed
+        (again, same as Sprint 14) no jest/vitest/testing-library/
+        playwright config or dependency exists anywhere in apps/dashboard;
+        typecheck + build are the only existing frontend verification
+        tools, both run below
+[x] 3.17 typecheck (tsc --noEmit) clean; production build clean, all 19
+        routes compile (/company/[id] included, now 9.48 kB)
+[x] 3.18 PROGRESS.txt updated per completed item (this entry)
+[x] 3.19 commit/push Phase 3 checkpoint
+
 PHASE 4 — Failure Isolation, Responsive, and Accessibility (0/21)
 PHASE 5 — Regression, Security Audit, and Documentation  (0/24)

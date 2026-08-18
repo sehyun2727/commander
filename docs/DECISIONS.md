@@ -3178,3 +3178,35 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
     safe structured fields only (`project_id`, `revision`, changed widget
     keys, normalization reasons) — same field-safety bar as an event, just
     routed to application logs instead of the company's event stream.
+
+230. **Sprint 15 Phase 3 frontend execution decisions.**
+    - **Reorder swaps `order` only within the visible subset.** The
+      widget grid renders only `visible` entries sorted by `order`; a
+      hidden entry's `order` value has zero effect on anything rendered.
+      So "Move up/down" swaps `order` between the two adjacent *visible*
+      entries only, leaving every hidden entry's `order` untouched — no
+      need to keep a single dense 0..7 sequence client-side, since the
+      backend's `_resequence` (service.py) already re-derives a dense
+      sequence from whatever `order` integers are submitted, stably
+      tie-broken by registry `default_order`.
+    - **Reset applies immediately server-side, gated by `window.confirm`**
+      — the same pattern `SettingsPage.handleArchive` already uses for a
+      destructive, immediately-effective action — rather than being a
+      pending local-only edit that still requires a separate Save. This
+      avoids an ambiguous "reset is queued but not yet saved" state and
+      matches the one existing confirm-then-mutate precedent in this
+      codebase.
+    - **Unsaved-changes navigation protection is scoped to `beforeunload`
+      (tab close/reload) plus an in-page `window.confirm` on Cancel/Close.**
+      No page in this codebase blocks Next.js client-side route navigation
+      (no router-level guard precedent exists anywhere), so Edit Mode does
+      not add one either, per §7.2's "where consistent with current
+      patterns" qualifier — full route-level interception is out of scope
+      for this sprint, not a gap introduced by it.
+    - **The widget→component map (`components/workspace/widgetComponents.tsx`)
+      is a static, literal `Record<string, ComponentType>`** — the only
+      place a `widget_key` string is ever turned into a rendered
+      component. No `next/dynamic`, no computed import path, no lookup
+      keyed by anything other than the 8 compile-time-known registry
+      keys (§7.1/§8 — never dynamically import from a client-provided
+      string).

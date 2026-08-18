@@ -23,10 +23,13 @@ import type {
   TimelinePage,
   User,
   WorkingStyle,
+  WidgetDefinition,
   WorkspaceFileContent,
   WorkspaceFileEntry,
   WorkspaceMergeRecord,
+  WorkspacePreferences,
   WorkspaceSnapshot,
+  WidgetPreferenceEntry,
 } from "./types";
 import type { Agent } from "./types";
 
@@ -250,6 +253,27 @@ export const api = {
   // new endpoint (DECISIONS.md #217).
   getWorkspaceOverview: (companyId: string) =>
     request<WorkspaceSnapshot>(`/api/projects/${companyId}/workspace/overview`),
+
+  // CEO Workspace widget system (Sprint 15) -- the registry is a static,
+  // server-owned catalog; preferences are per-(CEO, company) layout state
+  // guarded by an optimistic-concurrency `revision` (app/modules/
+  // workspace_widgets/routes.py).
+  listWorkspaceWidgets: (companyId: string) =>
+    request<WidgetDefinition[]>(`/api/projects/${companyId}/workspace/widgets`),
+  getWorkspacePreferences: (companyId: string) =>
+    request<WorkspacePreferences>(`/api/projects/${companyId}/workspace/preferences`),
+  updateWorkspacePreferences: (
+    companyId: string,
+    body: { expected_revision: number; widgets: WidgetPreferenceEntry[] }
+  ) =>
+    request<WorkspacePreferences>(`/api/projects/${companyId}/workspace/preferences`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  resetWorkspacePreferences: (companyId: string) =>
+    request<WorkspacePreferences>(`/api/projects/${companyId}/workspace/preferences/reset`, {
+      method: "POST",
+    }),
 
   // Execution Sandbox
   getCapabilities: () => request<Capability>("/api/system/capabilities"),

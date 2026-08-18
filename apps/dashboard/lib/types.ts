@@ -403,3 +403,36 @@ export interface WorkspaceSnapshot {
   recent_activity: ActivityItem[];
   event_cursor: number;
 }
+
+// Sprint 15: the CEO Workspace widget system (app/modules/workspace_widgets/
+// registry.py + schemas.py). `WidgetDefinition` is the server-owned, static
+// catalog (one GET, effectively never changes); `WorkspacePreferences` is
+// per-(CEO, company) layout state with an optimistic-concurrency `revision`
+// (DECISIONS.md #228) -- the frontend must always echo the `revision` it
+// last read back as `expected_revision` on update, never invent one.
+export type WidgetSpan = "full" | "half";
+
+export interface WidgetDefinition {
+  key: string;
+  title: string;
+  description: string;
+  category: string;
+  required: boolean;
+  default_visible: boolean;
+  default_order: number;
+  default_span: WidgetSpan;
+}
+
+export interface WidgetPreferenceEntry {
+  widget_key: string;
+  visible: boolean;
+  order: number;
+  span: WidgetSpan;
+}
+
+export interface WorkspacePreferences {
+  schema_version: number;
+  revision: number;
+  widgets: WidgetPreferenceEntry[];
+  updated_at: string;
+}
