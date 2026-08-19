@@ -1,404 +1,90 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 16 — Secure Agent Harness
- Overall: Phase 0-5 complete. SPRINT 16 DONE.
- Now working on: nothing -- awaiting Sprint 17 brief
+ Sprint: 17 — Self-Correction Loop
+ Overall: Phase 0 complete. Starting Phase 1.
+ Now working on: Phase 1 — failure-aware loop + correction enforcement
  Last update: 2026-08-19
 ================================================
 
 PHASE 0 — Baseline, Repository Inspection, and Architecture Decisions
-[x] 0.1 verify local HEAD == origin/master (d3d6425, Sprint 15 close);
-        working tree clean except untracked docs/prompts/sprint-16.md;
-        matches sprint-16.md's stated baseline exactly
-[x] 0.2 baseline backend suite via apps/api/.venv: 373 passed / 4 skipped
-        in 320.30s, matches sprint-16.md's stated baseline exactly
-[x] 0.3 dashboard typecheck (tsc --noEmit) and production build both
-        clean (all 19 routes compile)
-[x] 0.4 read full sprint-16.md brief (874 lines) in full before starting
-[x] 0.5 inventoried subprocess/shell/git call sites via dedicated
-        investigation agent: zero os.system/shell=True/eval/exec/symlink-
-        following calls anywhere in apps/api/app; three subprocess sites,
-        all already argv-list form (boot_checks.py:68,
-        workspace_manager/git_process.py:42, sandbox/docker_process.py:50)
-[x] 0.6 inventoried file-write/patch code: workspace_manager/validation.py
-        (validate_path/validate_content, genuine Path.resolve()+
-        relative_to() root confinement, judged directly reusable) and
-        local_git.py's write_files (best-effort per-file, NOT atomic --
-        new apply_patch tool needs pre-validate-then-write-all-or-reject
-        semantics instead)
-[x] 0.7 inventoried sandbox security utilities: DockerSandbox already
-        --network none, non-root, --cap-drop ALL,
-        --security-opt no-new-privileges, memory/cpu/pids-limited,
-        timeout-bounded, output-truncated -- reused directly for
-        run_validation instead of building a new isolation layer
-[x] 0.8 confirmed RoleSpec.harness ("one_shot" only today), RoleSpec.tools
-        (empty tuple on all 4 roles), and SkillTemplate.capabilities
-        (empty/inert) are pre-scaffolded Sprint 10/11 extension points
-        explicitly intended for this sprint (code comments point at
-        "Sprint 16" directly)
-[x] 0.9 confirmed provider tool-use support is absent entirely: neither
-        AnthropicProvider nor MockProvider sends/parses tool_use content
-        blocks today; CompletionResult has no tool_calls/stop_reason field
-[x] 0.10 read WorkflowEngine's full _run_pipeline (engine.py:620-843,
-         including _block_task_on_budget) to find the exact integration
-         point: a new _run_engineer_tool_loop branch gated on
-         role.harness=="tool_loop" and deliverable_type=="code", alongside
-         (not replacing) the existing _run_role/_land_code_changes path
-[x] 0.11 read core/errors.py's full CommanderError subclass set (naming/
-         docstring convention for new harness error classes) and
-         core/interfaces/agent_runtime.py (confirmed no loop/iteration
-         concept exists there -- tool-loop state lives in workflow_engine
-         or the new harness module)
-[x] 0.12 listed existing relevant tests as the natural home for new
-         harness threat tests (test_workspace_path_safety.py,
-         test_sandbox.py, test_code_missions.py, etc.); confirmed
-         migration head 77037fd534fa, no branch conflicts
-[x] 0.13 recorded Phase 0 architecture decisions in docs/DECISIONS.md
-         (#233): trust boundary, 6-tool initial set, TEMPLATE.checks reuse
-         as validation-profile registry, DockerSandbox reuse for process
-         isolation, full-file-replacement patch format, RoleSpec/
-         skill-template wiring plan, CompletionResult extension plan,
-         non-streaming tool-loop turns, budget reuse, _run_pipeline
-         integration point, one-commit-per-attempt preservation, and the
-         new harness_tool_calls audit migration requirement
-[x] 0.14 replaced PROGRESS.txt with this Sprint 16 live checklist
-[x] 0.15 commit and push Phase 0 checkpoint (c53f2b9)
+[x] 0.1 verify local HEAD == origin/master (9cfedc9, Sprint 16 close);
+        working tree clean except untracked docs/prompts/sprint-17.md;
+        matches sprint-17.md's stated baseline exactly
+[x] 0.2 baseline backend suite: 455 passed / 6 skipped in 328.40s, matches
+        sprint-17.md's stated baseline exactly
+[x] 0.3 dashboard typecheck (tsc --noEmit) clean
+[x] 0.4 read full sprint-17.md brief (723 lines) in full before starting
+[x] 0.5 read CLAUDE.md, docs/ARCHITECTURE.md §4.5/§4.6, docs/DECISIONS.md
+        #233-238, FOR_CTO.md §7 (Agent Harness architecture)
+[x] 0.6 read every file named in sprint-17.md §3 required inspection:
+        orchestrator.py, handlers.py, registry.py, context.py, budget.py,
+        schemas.py, audit.py, permissions.py, output.py, guards.py,
+        local_git.py, git_process.py, interfaces/workspace_manager.py,
+        errors.py, events/types.py, db_models.py (HarnessToolCallORM),
+        workflow_engine/engine.py (produce-stage branch + exception
+        handling), test_agent_harness_orchestrator.py,
+        test_agent_harness_handlers.py, test_agent_harness_context.py,
+        test_role_hardcoding_guard.py, conftest.py, fake_sandbox.py,
+        sandbox/interfaces.py, provider_gateway/mock_provider.py,
+        tasks/service.py + schemas.py + routes.py
+[x] 0.7-0.12 architecture decisions recorded: docs/DECISIONS.md #239
+        (head_sha() scope, EmployeeSurrenderedError, LoopState placement,
+        mock-scenario split, surrender-marker regex)
+[x] 0.13 confirmed AST role-hardcoding guard (test_role_hardcoding_guard.py)
+        only flags role-KEY string comparisons/subscripts -- stop_reason
+        string comparisons ("employee_surrendered" etc.) are unaffected
+[x] 0.14 PROGRESS.txt replaced with this Sprint 17 checklist
+[x] 0.15 decisions recorded in docs/DECISIONS.md #239
+[ ] 0.16 commit/push Phase 0 checkpoint
 
-PHASE 1 — Registry, Authorization, and Guards
-[x] 1.1 new module apps/api/app/modules/agent_harness/, following the
-        skill_templates/workspace_widgets frozen-dataclass-tuple pattern
-[x] 1.2 registry.py: immutable ToolDefinition tuple (6 tools --
-        list_repository, read_file, search_repository, inspect_git,
-        apply_patch, run_validation), TOOLS_BY_KEY, WRITE_TOOL_KEYS;
-        every tool requires "repository_tools"; no shell/exec tool exists
-[x] 1.3 profiles.py: VALIDATION_PROFILES_BY_NAME/resolve_validation_profile
-        reusing TEMPLATE.checks (python-syntax/pytest/node-test) as the
-        canonical named validation-profile registry instead of a new one
-[x] 1.4 schemas.py: pydantic v2 argument schemas (extra="forbid") for all
-        6 tools plus ToolCallRequest; bounds mirror workspace_manager
-        .validation's MAX_FILES_PER_ATTEMPT/MAX_FILE_BYTES exactly
-[x] 1.5 permissions.py: resolve_permitted_tools/authorize_tool_call --
-        intersection of harness_enabled ∩ RoleSpec.tools ∩ skill-template
-        capabilities ∩ stage_kind=="produce" ∩ workspace_ready; any
-        missing/unknown term denies (fail-closed); raises ToolDeniedError
-[x] 1.6 guards.py: guard_path/guard_content wrapping workspace_manager
-        .validation's genuine Path.resolve()+relative_to() confinement,
-        plus one new check rejecting writes through an existing symlink
-        at the resolved target (confused-deputy protection
-        validate_path had no reason to include); raises
-        ToolPathViolationError
-[x] 1.7 budget.py: HarnessBudget (tool_calls_made/max_tool_calls,
-        max_seconds) -- checked before every tool-loop iteration, raises
-        the existing BudgetExceededError with new limit_kind "tool_calls"
-        so exhaustion reaches the same mission-blocking path
-        (_block_task_on_budget) the mission budget already uses
-[x] 1.8 context.py: frozen ToolRunContext (project_id/task_id/repo_root/
-        branch_name/role/skill_template/stage_kind/harness_enabled/
-        workspace_ready/budget) -- server-issued, never provider-derived;
-        tool handlers (Phase 2) will only ever receive this plus already-
-        validated arguments
-[x] 1.9 output.py: bound_output (mirrors LocalGitWorkspaceManager.diff's
-        (text, truncated) convention) and redact_environment_like_content
-        (defense-in-depth secret-shaped-line masking, Rule #7)
-[x] 1.10 core/errors.py: ToolDeniedError, ToolPathViolationError,
-         ToolCallMalformedError, PatchConflictError, following the
-         existing CommanderError subclass convention
-[x] 1.11 core/config.py: commander_harness_enabled/max_tool_calls/
-         max_seconds/max_output_bytes settings
-[x] 1.12 deliberately did NOT flip RoleSpec.harness/RoleSpec.tools/
-         SkillTemplate.capabilities yet -- Phase 1/2 stay purely additive
-         infrastructure with zero behavior change to the existing
-         pipeline; the switch flips only in Phase 3 once
-         _run_engineer_tool_loop actually exists and is tested, so every
-         phase boundary leaves the mission pipeline fully working
-[x] 1.13 unit/threat tests: test_agent_harness_registry.py,
-         test_agent_harness_permissions.py (fail-closed on every missing
-         term), test_agent_harness_guards.py (absolute/traversal/.git/
-         symlink-escape/direct-symlink-target -- 2 symlink cases SKIP on
-         this Windows environment without symlink privilege, honestly
-         reported per CLAUDE.md §16.7, not silently passed),
-         test_agent_harness_schemas.py, test_agent_harness_budget.py,
-         test_agent_harness_context.py, test_agent_harness_output.py,
-         test_agent_harness_profiles.py -- 47 new tests, all passing
-[x] 1.14 full backend regression suite: 413 passed / 6 skipped (373
-         baseline + 40 new harness tests; 4 baseline skips + 2 new
-         symlink-privilege skips on this Windows dev environment), zero
-         regressions
-[x] 1.15 update PROGRESS.txt (this file) and commit/push Phase 1
-         checkpoint
+PHASE 1 — Failure-aware loop + correction enforcement
+[ ] 1.1 core/errors.py: SelfCorrectionExhaustedError, EmployeeSurrenderedError
+[ ] 1.2 core/events/types.py: EventType.SELF_CORRECTION_TRIGGERED
+[ ] 1.3 agent_harness/context.py: ToolRunContext.branch_base_sha field;
+        new LoopState mutable dataclass
+[ ] 1.4 update all ToolRunContext(...) construction call sites (engine.py,
+        3 test files) with branch_base_sha
+[ ] 1.5 interfaces/workspace_manager.py + local_git.py: head_sha()
+[ ] 1.6 orchestrator.py: MAX_CORRECTION_ATTEMPTS=3; termination
+        interception (surrender-marker check, last_validation_status
+        failure interception with corrective reminder injection,
+        exhaustion after 3 attempts); on_self_correction_triggered
+        callback param
+[ ] 1.7 handlers.py: dispatch_tool_call gains loop_state kwarg;
+        apply_patch/run_validation mutate loop_state
+[ ] 1.8 unit/threat tests in test_agent_harness_orchestrator.py
+[ ] 1.9 commit Phase 1 checkpoint
 
-PHASE 2 — Safe Tool Handlers and Audit Persistence
-[x] 2.1 core/db_models.py: HarnessToolCallORM (harness_tool_calls table) --
-        project_id/task_id/agent_id (FK'd), call_id, tool_name, status
-        ("success"|"denied"|"error"), arguments_summary (JSON, bounded,
-        never full file content), output_excerpt, error_detail,
-        duration_seconds, created_at (indexed); docstring cites
-        DECISIONS.md #233
-[x] 2.2 alembic/versions/b1f4c8d5e9a2_harness_tool_calls.py on top of head
-        77037fd534fa; verified upgrade/downgrade/upgrade round-trip
-        against the real dev Postgres container (commander-postgres-1)
-[x] 2.3 agent_harness/audit.py: summarize_arguments (tool-specific,
-        content-free: apply_patch keeps file_count+paths only,
-        read/list/search keep non-content args, run_validation keeps
-        profile only, inspect_git keeps nothing, unknown tools keep
-        sorted key names) + record_tool_call (persists one
-        HarnessToolCallORM row per call)
-[x] 2.4 agent_harness/handlers.py: list_repository, read_file,
-        search_repository, inspect_git, apply_patch, run_validation --
-        every handler takes ToolRunContext + already-validated args,
-        calls WorkspaceManager/SandboxRunner directly, bounds output via
-        output.bound_output; apply_patch pre-validates every file via
-        guards.py before writing any (reject-whole-patch-on-any-
-        violation) and detects stale writes via optional
-        expected_content
-[x] 2.5 ToolRunContext gained an explicit agent_id field (context.py) --
-        the audit row's agent_id FK needs the acting Employee's real
-        agents.id, not RoleSpec.key (a role identifier like "engineer",
-        not a DB row id); caught before it could reach a real FK
-        violation against Postgres
-[x] 2.6 dispatch_tool_call: single entry point -- schema-validate ->
-        authorize -> run handler -> bound output -> persist an audit row
-        in `finally` so every outcome (success/denied/error, including
-        malformed args and unknown tool names) is recorded exactly once
-[x] 2.7 DECISIONS.md #234: apply_patch commits immediately after a
-        non-empty write_files, correcting #233's "commit deferred to
-        tool-loop end" plan -- discovered via a real test failure
-        (list_repository/read_file/inspect_git all resolve through a
-        committed git ref via `git ls-tree`/`git show`/`git diff`, never
-        the working tree, so an uncommitted apply_patch would be
-        invisible to the Engineer's own next read in the same loop);
-        Phase 3/4 must compute code_stats from a branch-vs-base diff
-        rather than a single CommitResult for multi-patch attempts
-[x] 2.8 new tests: test_agent_harness_handlers.py (16) and
-        test_agent_harness_audit.py (6) against the real LocalGitWorkspace-
-        Manager + FakeSandbox (harness fixture), not hand-rolled fakes --
-        bounded list/read/search, path-escape rejection, reject-whole-
-        patch-on-any-violation, stale-conflict (expected_content)
-        detection, run_validation's execution-disabled/unknown-profile/
-        success paths, and dispatch_tool_call's full lifecycle
-        (success/denied/malformed-args/unknown-tool all producing
-        exactly one audit row with the correct status)
-[x] 2.9 full backend regression suite: 451 collected, 445 passed / 6
-        skipped, zero failures. Verified via isolated collection: the
-        377 non-agent_harness tests are byte-for-byte the original
-        Sprint 0 baseline (373 passed + 4 skipped) with zero regressions
-        anywhere outside this module; all 74 agent_harness tests
-        (Phase 1's 8 files + this phase's 2 new files, handlers.py=16 +
-        audit.py=6) pass, skip count unchanged (2 Windows symlink-
-        privilege skips from Phase 1's guards tests, none new)
-[x] 2.10 update PROGRESS.txt (this file) and commit/push Phase 2
-         checkpoint
+PHASE 2 — Rollback tool (revert_last_patch)
+[ ] 2.1 registry.py: REVERT_LAST_PATCH tool definition; ENGINEER.tools
+        gains "revert_last_patch"
+[ ] 2.2 schemas.py: RevertLastPatchArgs
+[ ] 2.3 local_git.py + interface: revert_last_commit() with ancestry check
+[ ] 2.4 handlers.py: revert_last_patch handler; dispatch_tool_call wiring
+[ ] 2.5 orchestrator.py: post-success bookkeeping (pop history, clear
+        last_validation_status) after a successful revert_last_patch call
+[ ] 2.6 audit.py: revert_last_patch argument summary
+[ ] 2.7 tests: handler-level + orchestrator-level rollback coverage
+[ ] 2.8 commit Phase 2 checkpoint
 
-PHASE 3 — Harness and AgentRuntime Integration
-[x] 3.1 built app/modules/agent_harness/orchestrator.py: run_tool_loop,
-        the single bounded provider/tool loop for harness == "tool_loop"
-        Roles -- tool_schemas_for(), two independent resettable streak
-        counters (denied_streak bound 2, malformed_streak bound 3) each
-        raising ToolLoopExhaustedError on exhaustion, seen_call_ids
-        idempotency (duplicate call_id answered, never re-dispatched),
-        context.budget.check() before every iteration and every call,
-        asyncio.CancelledError never caught (propagates per Sprint 9's
-        cooperative cancellation model)
-[x] 3.2 extended core/interfaces/provider_gateway.py: ToolCallData,
-        CompletionResult.tool_calls/stop_reason (additive, every
-        pre-Sprint-16 caller unaffected); AnthropicProvider sends
-        tools/parses tool_use blocks; MockProvider gained a
-        deterministic 5-turn tool-loop fixture
-        (list_repository -> read_file -> apply_patch -> run_validation
-        -> completion)
-[x] 3.3 added WorkspaceManager.diff_stats() (#234's deferred multi-commit
-        stats aggregation) and WorkspaceManager.repo_root() (public
-        accessor for ToolRunContext.repo_root -- engine must not reach
-        into LocalGitWorkspaceManager's private _repo_dir, Rule #1)
-[x] 3.4 flipped RoleSpec.harness ("tool_loop" on ENGINEER only),
-        ENGINEER.tools, and all three SkillTemplate.capabilities from
-        inert placeholder data to real permission-granting data; added
-        TEMPLATE.tool_loop_contracts (mirrors PLANNING_CONTRACTS' shape)
-[x] 3.5 wired workflow_engine.engine._run_pipeline's produce stage to
-        branch on role_spec.harness == "tool_loop" and
-        task.deliverable_type == "code" (Rule #16 -- Role-owned data +
-        workflow-stage shape, never a hardcoded role name); new
-        _run_engineer_tool_loop (mirrors _run_role) and
-        _land_tool_loop_changes (mirrors _land_code_changes, uses
-        diff_stats() since apply_patch commits per-call); one-shot path
-        untouched
-[x] 3.6 regression pass surfaced and fixed two real bugs: (a)
-        ENGINEER.tools/SkillTemplate.capabilities flip broke two
-        Phase 1/2 tests that relied on stock templates staying inert --
-        fixed with explicit UNGRANTED_ROLE/EMPTY_TEMPLATE fixtures;
-        (b) apply_patch's commit() raised ValueError on a byte-identical
-        rewrite (write_files reports "written" regardless of content
-        change), crashing the pipeline stage -- fixed by treating that
-        specific ValueError as a benign no-op; the mock's tool-loop
-        fixture also needed to vary rework content (CEO-feedback-aware),
-        mirroring the one-shot mock's existing context-aware behavior
-[x] 3.7 new tests/test_agent_harness_orchestrator.py (8 tests): scripted
-        FakeGateway against the real Harness fixture -- deterministic
-        read/patch/validate/complete, denied-path streak exhaustion,
-        streak reset on intervening success, malformed-argument streak
-        exhaustion, duplicate call_id never re-dispatched, tool-call and
-        wall-time budget exhaustion, uncaught cancellation
-[x] 3.8 docs/DECISIONS.md #235 (orchestrator/provider/template design)
-        and #236 (engine wiring + the two bugs) recorded
-[x] 3.9 full suite green: 453 passed, 6 skipped in 343.17s
-[x] 3.10 commit/push Phase 3 checkpoint
+PHASE 3 — Mission integration + audit aggregate + mock scenarios
+[ ] 3.1 engine.py: branch_base_sha wiring, on_self_correction_triggered
+        publishing SELF_CORRECTION_TRIGGERED, surrender-path divergence,
+        _fail_task_with_reason_code, except clauses in _run_pipeline
+[ ] 3.2 audit.py: record_loop_event() for synthetic _loop:* rows
+[ ] 3.3 tasks/service.py + schemas.py: harness-summary aggregate gains
+        correction_attempts, rollback_count, surrendered, exhausted
+[ ] 3.4 mock_provider.py: SELF_CORRECTION_DEMO/ROLLBACK scenario markers
+[ ] 3.5 full-pipeline mock tests (DEMO, ROLLBACK) + orchestrator-level
+        FakeGateway tests (EXHAUSTED, SURRENDER)
+[ ] 3.6 scripts/generate_ts_schemas.py rerun if HarnessSummaryResponse
+        shape changed
+[ ] 3.7 commit Phase 3 checkpoint
 
-PHASE 4 — Mission Integration and Safe Observability
-[x] 4.1 harness integrated into authorized code-mission produce stage
-        (Phase 3, engine.py:858 branches on role_spec.harness=="tool_loop"
-        AND task.deliverable_type=="code" -- Rule #16 compliant)
-[x] 4.2 verified specification approval gate is untouched: the tool loop
-        runs entirely inside the existing produce stage of an already-
-        assigned, already-approved Mission; nothing in Phase 3/4 changes
-        how a Specification becomes an assignable Mission
-[x] 4.3 verified central Employee resolution is untouched: assign_task's
-        idle-first Role->Employee resolution (tasks/service.py) still runs
-        before the pipeline starts; the tool loop only changes what
-        happens once an agent is already assigned
-[x] 4.4 verified per-Employee model/skill configuration still applies:
-        _run_engineer_tool_loop still resolves model_ref via
-        _agent_model_override(agent) and passes context.skill_template
-        into permission resolution, same as the one-shot path
-[x] 4.5 verified validation failure blocks success: run_checks' output is
-        folded into the Reviewer's context exactly like the pre-existing
-        one-shot path (engine.py:890-897) -- checks are Reviewer evidence,
-        not a hard gate, consistent with V1's established design; not a
-        Sprint 16 regression
-[x] 4.6 verified Reviewer receives real diff/evidence: same
-        change_summary + diff_text + check_summary context assembly
-        (engine.py:886-897) drives the review stage for both harness and
-        one-shot paths
-[x] 4.7 verified cancellation/failure frees the Employee: already
-        exercised end-to-end by test_reliability.py's
-        test_cancel_running_mission_transitions_to_cancelled_and_frees_agent
-        (now runs the tool-loop path since deliverable_type defaults to
-        "code" -- DECISIONS.md #236)
-[x] 4.8 added a safe, bounded harness summary observability surface:
-        tasks/service.py:get_harness_summary aggregates
-        HarnessToolCallORM rows into {tool_call_count, tools_used,
-        denied_count, error_count, total_duration_seconds} (counts and
-        tool names only -- never arguments_summary/output_excerpt
-        content); new GET /api/tasks/{task_id}/harness-summary route
-        follows the existing GET .../diff derived-data pattern exactly
-        (resource_owned_by 404 check, service returns None -> 404); no
-        new TaskORM column/migration needed since this is computed on
-        read from the existing audit table (Rule #14 spirit)
-[x] 4.9 dashboard: no change made. MissionDetail.tsx already surfaces
-        code_stats and check_results prominently for code missions; the
-        harness summary is supplementary audit evidence, not something
-        the current UI is missing or would render confusingly without --
-        sprint-16.md's own Phase 4 wording ("only if current UI requires
-        it") does not apply here
-[x] 4.10 verified visible error states: ToolLoopExhaustedError and
-        BudgetExceededError both flow through the same paths the sprint
-        already wired in Phase 1/3 -- BudgetExceededError is caught
-        explicitly (engine.py:969) and blocks the Mission with a
-        BUDGET_EXCEEDED event carrying limit_kind/limit_value/observed;
-        ToolLoopExhaustedError falls through the generic except Exception
-        (engine.py:972) into _fail_task, which publishes TASK_FAILED with
-        reason=str(exc) -- visible on the Timeline exactly like any other
-        stage failure (Rule #3/#18)
-[x] 4.11 verified no public arbitrary-tool endpoint exists: no FastAPI
-        route imports dispatch_tool_call or run_tool_loop; the only public
-        surface is the new read-only harness-summary endpoint
-[x] 4.12 dashboard typecheck/build: skipped, no dashboard files changed
-[x] 4.13 mock mission E2E with zero keys: already covered -- the entire
-        suite runs under COMMANDER_PROVIDER=mock with zero provider keys,
-        and the two new get_harness_summary tests exercise a full
-        create->assign->tool-loop->pending_approval mission lifecycle
-[x] 4.14 new tests: test_workspace_service.py +2
-        (test_get_harness_summary_reflects_tool_calls_for_a_code_mission,
-        test_get_harness_summary_is_none_when_harness_never_ran)
-[x] 4.15 full suite regression green: 455 passed, 6 skipped in 305.97s
-        (up from 453 -- the 2 new get_harness_summary tests); commit/push
-        Phase 4 checkpoint
-
-PHASE 5 — Security Audit, Regression, and Documentation
-[x] 5.1 full backend suite green (see 5.6 for the final post-doc-sync
-        number)
-[x] 5.2 frontend tests: none exist/changed for this sprint -- n/a
-[x] 5.3 dashboard typecheck (tsc --noEmit) and production build both
-        clean, all 19 routes compile (no dashboard files touched this
-        sprint, ran anyway as a release gate)
-[x] 5.4 verified migration chain from Sprint 15's baseline: `alembic
-        heads` shows one linear head (b1f4c8d5e9a2, "harness tool
-        calls"); `alembic history` shows no branching
-[x] 5.5 verified fresh DB bootstrap end-to-end against live Postgres
-        (Docker was up): scripts/seed.py dropped the entire schema and
-        re-ran every migration from base through b1f4c8d5e9a2, then
-        drove the real service layer through 5 missions including one
-        full tool-loop code mission ("Build login page" -> Completed)
-        and one rework/changes-requested tool-loop cycle ("Set up CI
-        pipeline" -> changes requested -> approved -> Completed) --
-        this doubles as 5.6's deterministic mock Harness E2E, run
-        against real Postgres rather than the test suite's sqlite
-[x] 5.6 deterministic mock Harness E2E: covered by 5.5 (real Postgres,
-        zero provider keys, COMMANDER_PROVIDER=mock) plus the full
-        pytest suite's test_code_missions.py/test_agent_harness_*.py
-[x] 5.7 existing planning/specification/mission/workspace/widget
-        regressions: all green as part of the full suite (no
-        module-specific regressions introduced)
-[x] 5.8-5.19 independent security audit -- delegated to a dedicated
-        read-only investigation, then spot-verified directly (guards.py,
-        output.py, docker_sandbox.py read in full and matched exactly).
-        All 12 items PASS, zero CONCERN/FAIL:
-        8.  tool allowlisting -- frozen code-owned registry, re-derived
-            fail-closed intersection on every call (permissions.py)
-        9.  shell=False -- zero shell=True/os.system/create_subprocess_
-            shell hits anywhere in apps/api/app; all 3 subprocess sites
-            are argv-list form
-        10. path/symlink handling -- validate_path resolves via
-            Path.resolve()+relative_to() (genuine confinement, not
-            string-prefix); guards.py additionally rejects a resolved
-            target that is itself a symlink (confused-deputy defense
-            validate_path had no reason to add)
-        11. patch atomicity -- apply_patch guards every file before
-            writing any of them; a workspace_manager.commit() no-op
-            ValueError (#236) is the only benign partial-state case,
-            already handled
-        12. timeout/process-tree termination -- docker_sandbox.py's
-            120s hard timeout calls `docker kill <container>` on
-            expiry, killing the whole container (not just one PID);
-            `finally: docker rm -f` always cleans up
-        13. environment minimization -- no --env flags passed to
-            `docker create`; harness handlers never read os.environ
-        14. output bounds/redaction -- output.py's bound_output()
-            truncates by UTF-8 byte length;
-            redact_environment_like_content() masks key-shaped secret
-            lines as defense-in-depth (primary control: SecretsProvider
-            values never enter a mission workspace or harness env)
-        15. permission intersections -- resolve_permitted_tools is a
-            single fail-closed AND across all 5 terms; any missing term
-            yields an empty set
-        16. cancellation/stale-callback -- asyncio.CancelledError is a
-            BaseException, never caught by run_tool_loop's except
-            clauses; engine.py's pipeline catches it once at the top
-            level and frees the Employee back to idle
-        17. secret exposure -- audit.py's summarize_arguments never
-            persists file content; no agent_harness code path returns a
-            secret through an event/API/prompt
-        18. no public arbitrary-execution endpoint -- confirmed again
-            independently (see 4.11)
-        19. WorkflowEngine/AgentRuntime module boundaries -- engine.py
-            only imports agent_harness's public functions/dataclasses;
-            agent_harness never imports workflow_engine (Rule #1)
-[x] 5.20 inspected the complete Phase 0-5 diff for scope leakage: no
-        Sprint 17+ features (self-correction, project memory) were
-        implemented; no changes outside agent_harness/workflow_engine/
-        tasks/docs
-[x] 5.21 documentation sync: CLAUDE.md (roadmap row 16 -> "16 ✅"),
-        docs/ARCHITECTURE.md §4.5 rewritten to match the as-built
-        harness (6 named tools, run_validation not the stale
-        "run_checks", fail-closed permission intersection, budget/
-        streak bounds, audit-table-not-per-call-event observability
-        split) plus its two other stale run_checks references fixed;
-        docs/DECISIONS.md #237 (Phase 4) and #238 (Phase 5 close-out)
-        added; README.md and docs/design/UX_SPEC.md needed no changes
-        (no dev-workflow or CEO-facing UI change this sprint)
-[x] 5.22 residual limitations recorded honestly (see DECISIONS.md #238)
-[x] 5.23 Sprint 17 boundaries recorded (see DECISIONS.md #238)
-[x] 5.24 final full-suite re-run after all doc changes: 455 passed, 6
-        skipped in 308.54s -- unchanged from Phase 4 (Phase 5 was
-        docs-only, no product code changed)
-[x] 5.25 final commit/push (689788d), clean working tree, local HEAD
-        == origin/master confirmed
+PHASE 4 — Regression, security audit, documentation, close-out
+[ ] 4.1 full backend suite green
+[ ] 4.2 dashboard tsc --noEmit + next build clean (no UI changes expected
+        beyond generated TS types)
+[ ] 4.3 security audit pass (Rule #9/#12/#13/#18, revert bounds checklist)
+[ ] 4.4 CLAUDE.md / docs/ARCHITECTURE.md §4.6 / FOR_CTO.md doc sync
+[ ] 4.5 final commit + push; verify remote HEAD

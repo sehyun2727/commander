@@ -3804,3 +3804,76 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       455 passed, 6 skipped). Dashboard `tsc --noEmit` and `next build`
       both clean, all 19 routes compiling. Local `HEAD` verified equal
       to `origin/master` after the final push.
+
+239. **Phase 0: Sprint 17 (Self-Correction) baseline + architecture
+     decisions.** Baseline confirmed unchanged from Sprint 16's close-out:
+     local `HEAD` == `origin/master` == `9cfedc9`, alembic head
+     `b1f4c8d5e9a2`, full backend suite 455 passed / 6 skipped, dashboard
+     `tsc --noEmit` clean. Five judgment calls made before writing any
+     Sprint 17 code:
+    - **`WorkspaceManager.head_sha()` is a new, dedicated, minimal port
+      method** (`git rev-parse <branch>`), but it is called at most once
+      per tool-loop attempt (context construction, to seed
+      `ToolRunContext.branch_base_sha` right after `create_branch`) — not
+      once per `apply_patch` as originally considered. `apply_patch`'s
+      own real-commit-vs-no-op detection (needed for
+      `LoopState.apply_patch_commit_history`, §4.8) instead reuses the
+      signal the handler already computes: `workspace_manager.commit()`
+      returns a `CommitResult(commit_sha=...)` on a real commit and
+      raises `ValueError` when nothing was staged (the existing
+      DECISIONS.md #234/#236 no-op path). Reusing that avoids a second,
+      redundant `git rev-parse` per patch and avoids a second source of
+      truth for "was this a no-op" — a deliberate, simpler deviation from
+      the brief's literal "pre/post HEAD sha diff" phrasing that produces
+      the same observable result.
+    - **New `EmployeeSurrenderedError(CommanderError)`** added alongside
+      the brief-named `SelfCorrectionExhaustedError`, even though only
+      the latter is explicitly named in §5. `workflow_engine._run_pipeline`
+      already routes every distinct stage failure through a dedicated
+      `except` clause (`BudgetExceededError` -> blocked,
+      `Exception` -> failed); giving employee-surrender its own exception
+      type keeps that dispatch uniform (raise -> catch -> fail-with-
+      reason-code) instead of special-casing a normal-looking return value
+      deep inside `_run_engineer_tool_loop`. Both new exceptions carry a
+      `task_id`/reason string and map to `TaskState.FAILED` with a
+      `reason_code` on `TASK_FAILED`'s payload (`self_correction_exhausted`
+      / `employee_surrendered`) — an additive field, no schema change.
+    - **`LoopState` lives in `agent_harness/context.py`** next to
+      `ToolRunContext` (a plain mutable `@dataclass`, not frozen) and is
+      threaded through as an optional `loop_state: LoopState | None = None`
+      kwarg on `dispatch_tool_call` and into the `apply_patch`/
+      `run_validation` handlers directly, rather than folded into the
+      frozen `ToolRunContext` or kept orchestrator-only. `run_validation`
+      sets `loop_state.last_validation_status` from the structural
+      `CheckResult.status` (never text-parsed, per §4.1); `apply_patch`
+      appends to `loop_state.apply_patch_commit_history` only on a real
+      commit. Handler-level mutation was chosen over orchestrator-level
+      post-processing because only the handler has the `CommitResult`/
+      `CheckResult` in hand — recomputing either at the orchestrator would
+      mean a second git/sandbox call.
+    - **Mock-mode coverage split exactly as §4.15 sanctions.**
+      `SELF_CORRECTION_DEMO`/`SELF_CORRECTION_ROLLBACK` are real
+      full-pipeline tests (`mock_provider._tool_loop_response` extended to
+      recognize the marker in the initial user message and extend the
+      turn sequence past the first `run_validation`) paired with a
+      per-test `CommanderWorkflowEngine` built on a `FakeSandbox`
+      configured with **two different named profiles** — e.g.
+      `results={"pytest": CheckResult(..., status="failed", ...)}` with
+      `default_status="passed"` — so the mock's first `run_validation`
+      call uses the failing profile and its post-correction retry uses a
+      different, passing profile. This reaches a real `status="failed"`
+      through the *real* `run_validation` handler and sandbox port
+      without inventing a sequenced/call-counting `FakeSandbox` subclass
+      — the existing per-profile-name `results` dict is already
+      sufficient. `SELF_CORRECTION_EXHAUSTED`/`SELF_CORRECTION_SURRENDER`
+      are orchestrator-level `FakeGateway` tests only (§4.15's explicit
+      "may live as orchestrator-level tests instead" + DoD #37) since
+      they only need to prove the loop's own bound/marker handling, not a
+      full mission lifecycle.
+    - **Surrender marker regex mirrors `parsing.parse_verdict`'s lenient
+      style**: `re.search(r"\*\*Unable to Complete:\*\*", text,
+      flags=re.IGNORECASE)` — tolerant of surrounding prose and case,
+      consistent with how the Reviewer's `**Verdict:**` line is already
+      parsed, so provider output formatting quirks (extra
+      whitespace/case) don't turn a genuine surrender into a false
+      "still working" read.
