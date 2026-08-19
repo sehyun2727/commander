@@ -1,11 +1,15 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
- Sprint: 18 — Project Memory (deterministic, PM-triggered recall)
- Overall: SPRINT 18 DONE. Phase 0-4 complete, 512 passed / 6 skipped,
- final commit 4219d37, pushed to origin/master.
- Now working on: nothing -- awaiting Sprint 19 brief.
+ Sprint: 19 — OpenRouter provider, correlation ID / structured logging,
+ load smoke, real-LLM E2E, deployment docs, V1.1 release readiness
+ Overall: Phase 0 in progress.
+ Now working on: Phase 0 architecture decisions (OpenRouter default
+ model registry, log formatter shape) -- Phase 1 (OpenRouterProvider)
+ next.
  Last update: 2026-08-19
 ================================================
+
+(Sprint 18 close-out record retained below for history.)
 
 PHASE 0 — Baseline, Repository Inspection, and Architecture Decisions
 [x] 0.1 verify local HEAD == origin/master (5017b13, Sprint 17 close);
@@ -293,5 +297,91 @@ PHASE 4 — Regression, security audit, documentation, close-out
         regression verification and documentation sync"
 [x] 4.12 verify clean working tree -- confirmed
 [x] 4.13 verify local HEAD == origin/master -- confirmed
+
+CLOSE-OUT NOTES (fill in at Phase 4)
+
+================================================
+ SPRINT 19 — OpenRouter provider, observability, release readiness
+================================================
+
+PHASE 0 — Baseline verification and architecture decisions
+[x] 0.1 verified local HEAD == origin/master (dbb299b, Sprint 18 close);
+        working tree clean except untracked docs/prompts/sprint-19.md
+[x] 0.2 read sprint-19.md in full (§1-13); read CLAUDE.md, DECISIONS.md
+        (through #248), ARCHITECTURE.md, UX_SPEC.md relevant sections
+[x] 0.3 read provider_gateway/ (anthropic_provider.py, gateway.py,
+        mock_provider.py, __init__.py protocol), model_registry/registry.py,
+        core/config.py, core/secrets.py, core/boot_checks.py, main.py,
+        workflow_engine/engine.py (_spawn/_run_pipeline/_run_role/
+        _run_engineer_tool_loop), scripts/verify_real_llm.py, Makefile,
+        projects/service.py::create_project, agent_runtime/service.py::
+        hire_employee, planning/service.py::begin_execution -- confirmed
+        exact call sequence needed for Phase 3's full Specification-
+        lifecycle E2E script and Phase 1's provider/registry/boot-check
+        wiring points
+[x] 0.4 queried OpenRouter's live catalog directly (curl
+        https://openrouter.ai/api/v1/models, filtered on
+        pricing.prompt=="0" and pricing.completion=="0" and "tools" in
+        supported_parameters) rather than trusting stale training data or
+        a WebFetch of the JS-rendered /models page (which only returned
+        embedding/audio models -- confirmed the rendered page lazy-loads
+        its filtered table client-side). Result: 17 free + tool-capable
+        models as of 2026-08-19 (see DECISIONS.md #249)
+[x] 0.5 architecture decision recorded: DECISIONS.md #249 -- OpenRouter
+        default model registry (openai/gpt-oss-20b:free for all 6 logical
+        refs; AVAILABLE_MODELS also offers z-ai/glm-5.2:free,
+        nvidia/nemotron-3-super-120b-a12b:free, and the paid
+        anthropic/claude-sonnet-4.5 for CEO override / §4.6 release
+        evidence); log formatter shape (per §4.9, no new decision needed
+        beyond confirming the brief's spec); §4.5 vs §4.6 script-split
+        decision (extend verify_real_llm.py for both the two release-
+        evidence runs AND the free-tier full-Specification-lifecycle smoke
+        test, via a --provider flag plus a --full-lifecycle flag rather
+        than a second script, to avoid duplicating throwaway-DB bootstrap
+        code)
+[x] 0.6 docs/KNOWN_ISSUES.md skeleton drafted (accepted tradeoffs +
+        Sprint 15-18 deferrals filled in now; Sprint 19 load-smoke,
+        provider-variance, and upgrade-caveat sections left as TODO for
+        Phase 3-4 evidence)
+[x] 0.7 PROGRESS.txt updated with Sprint 19 live checklist
+[x] 0.8 Phase 0 commit + push
+
+PHASE 1 — OpenRouter provider + model registry + boot check
+[ ] 1.1 apps/api/app/modules/provider_gateway/openrouter_provider.py
+[ ] 1.2 config.py / secrets.py / boot_checks.py extension
+[ ] 1.3 model_registry/registry.py openrouter map + AVAILABLE_MODELS +
+        PRICE_PER_MILLION_TOKENS
+[ ] 1.4 gateway.py::build_gateway new branch
+[ ] 1.5 .env.example, verify_real_llm.py --provider flag, Makefile
+        verify-llm-openrouter target
+[ ] 1.6 tests: test_openrouter_provider.py, build_gateway dispatch,
+        model-resolution, boot-check-failure
+[ ] 1.7 full backend suite green; commit + push
+
+PHASE 2 — Correlation ID + structured logging
+[ ] 2.1 core/logging.py (contextvars + JSONFormatter + install_logging())
+[ ] 2.2 main.py: install_logging() + correlation-ID middleware
+[ ] 2.3 workflow_engine.py contextvar wiring (task_id/project_id/agent_id)
+[ ] 2.4 tests; full backend suite green; commit + push
+
+PHASE 3 — Load smoke + real-LLM E2E + deployment doc
+[ ] 3.1 scripts/load_smoke.py (4 scenarios)
+[ ] 3.2 make verify-llm (Anthropic direct) evidence recorded
+[ ] 3.3 make verify-llm-openrouter -> anthropic/claude-sonnet-4.5 evidence
+[ ] 3.4 make verify-llm-openrouter full Specification lifecycle against
+        free-tier default model; quality notes in KNOWN_ISSUES.md
+[ ] 3.5 docs/DEPLOYMENT.md walkthrough dry run; Alembic round-trip verify
+[ ] 3.6 commit + push
+
+PHASE 4 — Security audit + docs + close-out
+[ ] 4.1 full backend suite + dashboard typecheck/build green
+[ ] 4.2 independent security audit (dedicated agent, §10 checklist)
+[ ] 4.3 docs/DEPLOYMENT.md, .env.production.example, docs/KNOWN_ISSUES.md,
+        CHANGELOG.md
+[ ] 4.4 README.md, CLAUDE.md, ARCHITECTURE.md, DECISIONS.md #249+
+        close-out, FOR_CTO.md sync
+[ ] 4.5 final commit + push -- Sprint 19 done (NO v1.1.0 tag -- CEO's
+        own responsibility per explicit instruction)
+[ ] 4.6 verify local HEAD == origin/master, working tree clean
 
 CLOSE-OUT NOTES (fill in at Phase 4)

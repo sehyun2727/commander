@@ -4382,3 +4382,96 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
   `/projects/{id}/workspace/*`. Anything Sprint 19 does with Memory (e.g.
   a "Company Knowledge" widget, or richer recall ranking) is new scope for
   that sprint's own brief, not an extension folded in here.
+
+### #249 — Sprint 19 Phase 0: OpenRouter default model registry, log
+formatter shape, and E2E-script split
+
+- **OpenRouter free-tier default model choice: `openai/gpt-oss-20b:free`
+  for all six logical refs** (`planner-default`, `builder-default`,
+  `reviewer-default`, `reporter-default`, `situation-default`,
+  `advisor-default`) rather than a per-role split like the `anthropic` map
+  uses. Sprint 19 §4.3 requires a Phase-0-time, DECISIONS.md-recorded
+  choice from whatever OpenRouter's current free tier offers with
+  reasonable tool-use support, since free-tier availability changes and
+  must not be baked into the brief itself.
+  - **How the shortlist was built:** queried OpenRouter's public REST
+    catalog directly (`curl https://openrouter.ai/api/v1/models`) rather
+    than trusting training data or a WebFetch of the rendered
+    `openrouter.ai/models` page (the rendered page lazy-loads its filtered
+    table client-side and returned only embedding/audio models when
+    fetched as markdown -- not a reliable source). Filtered the raw JSON
+    on `pricing.prompt == "0" and pricing.completion == "0"` and
+    `"tools" in supported_parameters`. As of 2026-08-19 this produced 17
+    models: `cohere/north-mini-code:free`, `dots-studio/dots-3-note-preview:free`,
+    `google/gemma-4-26b-a4b-it:free`, `google/gemma-4-31b-it:free`,
+    `liquid/lfm-2.5-2.6b:free`, `nvidia/nemotron-3-nano-30b-a3b:free`,
+    `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`,
+    `nvidia/nemotron-3-super-120b-a12b:free`,
+    `nvidia/nemotron-3-ultra-550b-a55b:free`,
+    `nvidia/nemotron-3.5-lightning:free`,
+    `nvidia/nemotron-nano-12b-v2-vl:free`, `nvidia/nemotron-nano-9b-v2:free`,
+    `openai/gpt-oss-20b:free`, `openrouter/free` (a meta-router, not a
+    concrete model -- excluded from consideration), `poolside/laguna-s-2.1:free`,
+    `poolside/laguna-xs-2.1:free`, `z-ai/glm-5.2:free`.
+  - **Why `openai/gpt-oss-20b:free` specifically:** it is OpenAI's own
+    open-weight release, so its tool-calling behavior is a well-documented,
+    known quantity against the exact OpenAI-compatible `tools`/`tool_calls`
+    wire shape `OpenRouterProvider` translates to/from (§4.2) -- lower risk
+    of the free-tier smoke test (§4.5) failing for uninteresting reasons
+    (malformed tool-call JSON, inconsistent `finish_reason`) versus a
+    less-documented community fine-tune. 20B parameters keeps the smoke
+    test fast and comfortably inside free-tier rate limits. Using one
+    model for every logical ref (rather than mixing free models per role,
+    the way `anthropic` mixes Haiku/Sonnet by cost) keeps the free-tier
+    path simple and honest: it is a wiring smoke test, not a curated
+    quality experience (§4.5 explicitly disclaims production-quality
+    claims for the free tier).
+  - **`AVAILABLE_MODELS["openrouter"]`** additionally offers
+    `z-ai/glm-5.2:free`, `nvidia/nemotron-3-super-120b-a12b:free` (two
+    other credible, well-known-lab free options a CEO could reassign a
+    role to), and the paid `anthropic/claude-sonnet-4.5` (OpenRouter's id
+    for Claude Sonnet 4.5, confirmed via the same catalog query, priced at
+    $3/$15 per million input/output tokens -- matching the direct
+    Anthropic price already in `PRICE_PER_MILLION_TOKENS`). The paid
+    Claude entry exists so §4.6's "Claude via OpenRouter" release-evidence
+    run can use the registry's normal `model_ref` override path instead of
+    an ad-hoc in-process fixture, and so a CEO who wants OpenRouter's
+    unified billing but Anthropic-grade quality has a real registry
+    option, not just a temporary test-only override.
+  - **Full 6-ref parity, not the 4 refs §4.3's prose names:** §4.3 lists
+    only `planner-default`/`builder-default`/`reviewer-default`/
+    `advisor-default` as examples, but the existing `anthropic` map
+    populates all six refs including `reporter-default` and
+    `situation-default` (Daily Report summarization and the Situation
+    Report one-liner, per `registry.py`'s own comment -- not pipeline
+    roles, so the CEO can't reassign them, but the workflow still calls
+    `resolve()` for them). Omitting those two from the `openrouter` map
+    would make Daily Report / Situation Report generation raise
+    `ValueError: no model registered` the moment a Company is switched to
+    `commander_provider=openrouter`, an obvious §18 silent-failure risk.
+    Treated the 4-ref list as illustrative, not exhaustive, and populated
+    all six to match `anthropic`'s existing shape.
+- **Log formatter shape:** no new decision beyond what §4.9 already fully
+  specifies (JSON per line: `ts`/`level`/`logger`/`msg` plus whatever
+  contextvars are currently set; secret-key-shaped field redaction via a
+  fixed blocklist; `formatException` for tracebacks, never raw `exc_info`;
+  no new logging dependency). Recorded here only to close out the Phase 0
+  checklist item -- Phase 2 implements this verbatim.
+- **§4.5 vs §4.6 real-LLM script split:** rather than writing a second,
+  separate script for the free-tier full-Specification-lifecycle smoke
+  test, `scripts/verify_real_llm.py` is extended with a `--provider`
+  flag (§4.7, required regardless) and reused for both purposes: the two
+  §4.6 release-evidence runs stay on the script's existing simple
+  direct-Mission path (`create_project` -> `create_task` -> pipeline ->
+  Reviewer verdict -> CEO decision), while the §4.5 free-tier smoke test
+  drives the same script through the fuller `found Company -> hire CTO
+  (agent_runtime.service.hire_employee) -> start a Specification
+  (planning.service) -> CEO approval -> planning.service.begin_execution
+  -> Mission executes -> CEO decision` path, selected by an additional
+  flag rather than a second throwaway-database bootstrap. One script
+  avoids duplicating the throwaway-DB setup/teardown code across two
+  files for what is fundamentally the same "spin up a real process
+  against a disposable DB and drive it with a real API key" concern; the
+  two paths differ only in how many organizational stages they walk
+  through before reaching a Mission, which is a natural flag rather than
+  a reason to fork the script.
