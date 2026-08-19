@@ -347,16 +347,39 @@ PHASE 0 — Baseline verification and architecture decisions
 [x] 0.8 Phase 0 commit + push
 
 PHASE 1 — OpenRouter provider + model registry + boot check
-[ ] 1.1 apps/api/app/modules/provider_gateway/openrouter_provider.py
-[ ] 1.2 config.py / secrets.py / boot_checks.py extension
-[ ] 1.3 model_registry/registry.py openrouter map + AVAILABLE_MODELS +
-        PRICE_PER_MILLION_TOKENS
-[ ] 1.4 gateway.py::build_gateway new branch
-[ ] 1.5 .env.example, verify_real_llm.py --provider flag, Makefile
-        verify-llm-openrouter target
-[ ] 1.6 tests: test_openrouter_provider.py, build_gateway dispatch,
-        model-resolution, boot-check-failure
-[ ] 1.7 full backend suite green; commit + push
+[x] 1.1 apps/api/app/modules/provider_gateway/openrouter_provider.py --
+        implements ProviderGateway from scratch (not an AnthropicProvider
+        subclass, per sprint-19.md §4.2). Translates (system, messages) ->
+        OpenAI messages incl. Anthropic-shaped tool_use/tool_result content
+        blocks (needed for the Agent Harness tool loop to work unmodified),
+        tools=[{name,description,input_schema}] -> OpenAI function-tool
+        shape, and the OpenAI response (content/tool_calls/finish_reason)
+        back to CompletionResult/ToolCallData. 401/403 -> CEO-legible
+        RuntimeError, same discipline as AnthropicProvider. stream()
+        supported for text-only streaming
+[x] 1.2 config.py (openrouter added to commander_provider Literal +
+        openrouter_api_key field) / secrets.py (_ENV_DEFAULTS entry) /
+        boot_checks.py (openrouter branch, same shape as the anthropic
+        check) extended
+[x] 1.3 model_registry/registry.py: openrouter map (all 6 logical refs,
+        not just the 4 sprint-19.md §4.3 names -- reporter-default/
+        situation-default included for parity with anthropic, see
+        DECISIONS.md #249) -> openai/gpt-oss-20b:free; AVAILABLE_MODELS
+        adds 3 free options + paid anthropic/claude-sonnet-4.5;
+        PRICE_PER_MILLION_TOKENS entries for all 4
+[x] 1.4 gateway.py::build_gateway new openrouter branch -> OpenRouterProvider
+[x] 1.5 .env.example (OPENROUTER_API_KEY=), verify_real_llm.py --provider
+        {anthropic,openrouter} flag (default anthropic), Makefile
+        verify-llm-openrouter target added alongside verify-llm
+[x] 1.6 tests: tests/test_openrouter_provider.py (401/403/429/missing-key,
+        text + tool-call response translation, malformed tool-call JSON
+        tolerance, request message/tool translation incl. tool_use/
+        tool_result blocks, streaming) -- 20 new tests; build_gateway
+        dispatch tests + openrouter model-resolution/options-for-role
+        tests added to test_model_registry.py; boot-check-failure/pass
+        tests added to test_boot_checks.py
+[x] 1.7 full backend suite green: 532 passed / 6 skipped (512 baseline +
+        20 new), zero regressions -- Phase 1 commit + push next
 
 PHASE 2 — Correlation ID + structured logging
 [ ] 2.1 core/logging.py (contextvars + JSONFormatter + install_logging())

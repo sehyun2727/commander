@@ -5,9 +5,14 @@ import pytest
 from app.core.events.types import EventType
 from app.modules.model_registry import options_for_role
 from app.modules.model_registry.overrides import get_override
+from app.modules.model_registry.registry import resolve
 from app.modules.model_registry.service import effective_model, list_catalog, set_role_model
 from app.modules.projects.service import create_project
 from app.modules.provider_gateway import build_gateway
+from app.modules.provider_gateway.anthropic_provider import AnthropicProvider
+from app.modules.provider_gateway.gateway import RoutedProviderGateway
+from app.modules.provider_gateway.mock_provider import MockProvider
+from app.modules.provider_gateway.openrouter_provider import OpenRouterProvider
 
 
 def test_options_for_role_restricts_mock_to_its_own_model_per_role():
@@ -110,3 +115,38 @@ async def test_gateway_resolve_model_honors_override(harness):
 async def test_gateway_resolve_model_falls_back_without_project_context():
     gateway = build_gateway("mock", secrets=None)
     assert await gateway.resolve_model("planner-default") == "mock-planner-v1"
+
+
+def test_build_gateway_dispatches_openrouter_to_openrouter_provider():
+    gateway = build_gateway("openrouter", secrets=None)
+    assert isinstance(gateway, RoutedProviderGateway)
+    assert isinstance(gateway._underlying, OpenRouterProvider)
+
+
+def test_build_gateway_dispatches_mock_and_anthropic():
+    assert isinstance(build_gateway("mock", secrets=None)._underlying, MockProvider)
+    assert isinstance(build_gateway("anthropic", secrets=None)._underlying, AnthropicProvider)
+
+
+def test_openrouter_registry_has_all_six_logical_refs():
+    for ref in (
+        "planner-default",
+        "builder-default",
+        "reviewer-default",
+        "reporter-default",
+        "situation-default",
+        "advisor-default",
+    ):
+        assert resolve("openrouter", ref) == "openai/gpt-oss-20b:free"
+
+
+def test_options_for_role_openrouter_allows_any_model_for_any_role():
+    options = options_for_role("openrouter", "reviewer")
+    assert "openai/gpt-oss-20b:free" in options
+    assert "anthropic/claude-sonnet-4.5" in options
+
+
+@pytest.mark.asyncio
+async def test_gateway_resolve_model_openrouter_falls_back_without_project_context():
+    gateway = build_gateway("openrouter", secrets=None)
+    assert await gateway.resolve_model("builder-default") == "openai/gpt-oss-20b:free"

@@ -21,8 +21,12 @@ _REPO_ROOT_ENV = Path(__file__).resolve().parents[4] / ".env"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_REPO_ROOT_ENV, env_prefix="", extra="ignore")
 
-    commander_provider: Literal["mock", "anthropic"] = "mock"
+    commander_provider: Literal["mock", "anthropic", "openrouter"] = "mock"
     anthropic_api_key: str | None = None
+    # OpenRouter (Sprint 19) -- OpenAI-compatible routing to many upstream
+    # models, including free-tier tool-capable ones. Only required when
+    # commander_provider == "openrouter"; see boot_checks.py.
+    openrouter_api_key: str | None = None
     # Postgres (via `make db-up` / docker-compose.yml) is the documented
     # default for `make dev`; sqlite+aiosqlite stays wired as the
     # zero-dependency fallback for tests and quick local runs (see

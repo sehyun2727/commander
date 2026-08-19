@@ -1,4 +1,4 @@
-.PHONY: help install dev demo seed test sandbox-image db-up db-down db-upgrade db-downgrade verify-llm export-users
+.PHONY: help install dev demo seed test sandbox-image db-up db-down db-upgrade db-downgrade verify-llm verify-llm-openrouter export-users
 
 .DEFAULT_GOAL := help
 
@@ -57,7 +57,10 @@ sandbox-image: ## Build the Docker image used by the execution sandbox (optional
 	docker build -t commander-sandbox -f sandbox/Dockerfile sandbox
 
 verify-llm: ## Run one real Mission against a live Anthropic key + throwaway DB
-	$(API_PY) scripts/verify_real_llm.py
+	$(API_PY) scripts/verify_real_llm.py --provider anthropic
+
+verify-llm-openrouter: ## Run one real Mission against a live OpenRouter key + throwaway DB
+	$(API_PY) scripts/verify_real_llm.py --provider openrouter
 
 export-users: ## Export all CEO accounts to CSV (no plaintext passwords) on stdout
 	$(API_PY) scripts/export_users.py

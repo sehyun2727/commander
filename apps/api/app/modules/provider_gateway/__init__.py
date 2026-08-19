@@ -9,5 +9,6 @@ routes logical model refs to concrete models via model_registry.
 from .anthropic_provider import AnthropicProvider
 from .gateway import RoutedProviderGateway, build_gateway
 from .mock_provider import MockProvider
+from .openrouter_provider import OpenRouterProvider
 
-__all__ = ["AnthropicProvider", "MockProvider", "RoutedProviderGateway", "build_gateway"]
+__all__ = ["AnthropicProvider", "MockProvider", "OpenRouterProvider", "RoutedProviderGateway", "build_gateway"]

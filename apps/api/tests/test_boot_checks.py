@@ -25,6 +25,19 @@ def test_anthropic_provider_with_a_key_passes(monkeypatch: pytest.MonkeyPatch):
     validate_boot_config()  # must not raise
 
 
+def test_openrouter_provider_without_a_key_fails_fast(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "commander_provider", "openrouter")
+    monkeypatch.setattr(settings, "openrouter_api_key", None)
+    with pytest.raises(BootConfigError, match="OPENROUTER_API_KEY"):
+        validate_boot_config()
+
+
+def test_openrouter_provider_with_a_key_passes(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "commander_provider", "openrouter")
+    monkeypatch.setattr(settings, "openrouter_api_key", "sk-or-real-key")
+    validate_boot_config()  # must not raise
+
+
 def test_unsupported_database_scheme_fails_fast(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "commander_provider", "mock")
     monkeypatch.setattr(settings, "database_url", "mysql://user:pass@localhost/db")

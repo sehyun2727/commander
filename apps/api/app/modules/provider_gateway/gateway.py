@@ -21,6 +21,7 @@ from ...core.secrets import SecretsProvider
 from ..model_registry import get_override, resolve
 from .anthropic_provider import AnthropicProvider
 from .mock_provider import MockProvider
+from .openrouter_provider import OpenRouterProvider
 
 logger = logging.getLogger("commander.provider_gateway")
 
@@ -159,9 +160,13 @@ def build_gateway(
     project_id: str | None = None,
     session_factory=None,
 ) -> ProviderGateway:
-    underlying: ProviderGateway = (
-        MockProvider() if provider_name == "mock" else AnthropicProvider(secrets)
-    )
+    underlying: ProviderGateway
+    if provider_name == "mock":
+        underlying = MockProvider()
+    elif provider_name == "openrouter":
+        underlying = OpenRouterProvider(secrets)
+    else:
+        underlying = AnthropicProvider(secrets)
     return RoutedProviderGateway(
         provider_name,
         underlying,

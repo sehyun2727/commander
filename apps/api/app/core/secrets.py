@@ -12,7 +12,10 @@ from abc import ABC, abstractmethod
 from .config import settings
 from .db_models import SettingORM
 
-_ENV_DEFAULTS = {"ANTHROPIC_API_KEY": lambda: settings.anthropic_api_key}
+_ENV_DEFAULTS = {
+    "ANTHROPIC_API_KEY": lambda: settings.anthropic_api_key,
+    "OPENROUTER_API_KEY": lambda: settings.openrouter_api_key,
+}
 
 
 class SecretsProvider(ABC):

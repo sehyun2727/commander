@@ -32,6 +32,17 @@ MODEL_REGISTRY: dict[str, dict[str, str]] = {
         "situation-default": "claude-haiku-4-5-20251001",
         "advisor-default": "claude-haiku-4-5-20251001",
     },
+    "openrouter": {
+        # One free-tier, tool-capable model for every role (Sprint 19,
+        # docs/DECISIONS.md #249) -- this is a wiring smoke test, not a
+        # curated per-role quality lineup like Anthropic's.
+        "planner-default": "openai/gpt-oss-20b:free",
+        "builder-default": "openai/gpt-oss-20b:free",
+        "reviewer-default": "openai/gpt-oss-20b:free",
+        "reporter-default": "openai/gpt-oss-20b:free",
+        "situation-default": "openai/gpt-oss-20b:free",
+        "advisor-default": "openai/gpt-oss-20b:free",
+    },
 }
 
 RECOMMENDED_PROVIDER = "mock"
@@ -44,6 +55,15 @@ ROLES = ("planner", "builder", "reviewer")
 AVAILABLE_MODELS: dict[str, list[str]] = {
     "mock": ["mock-planner-v1", "mock-builder-v1", "mock-reviewer-v1"],
     "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6"],
+    "openrouter": [
+        "openai/gpt-oss-20b:free",
+        "z-ai/glm-5.2:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        # Paid, OpenRouter-routed Claude -- lets a CEO trade unified
+        # OpenRouter billing for Anthropic-grade quality (docs/DECISIONS.md
+        # #249); also what sprint-19.md §4.6's release-evidence run targets.
+        "anthropic/claude-sonnet-4.5",
+    ],
 }
 
 # Illustrative USD per-million-token prices, (input, output). Approximate by
@@ -58,6 +78,12 @@ PRICE_PER_MILLION_TOKENS: dict[str, tuple[float, float]] = {
     "mock-advisor-v1": (0.25, 1.25),
     "claude-haiku-4-5-20251001": (1.00, 5.00),
     "claude-sonnet-4-6": (3.00, 15.00),
+    # Free-tier OpenRouter models are genuinely $0 -- not a placeholder.
+    "openai/gpt-oss-20b:free": (0.0, 0.0),
+    "z-ai/glm-5.2:free": (0.0, 0.0),
+    "nvidia/nemotron-3-super-120b-a12b:free": (0.0, 0.0),
+    # Matches direct Anthropic pricing (docs/DECISIONS.md #249).
+    "anthropic/claude-sonnet-4.5": (3.00, 15.00),
 }
 
 

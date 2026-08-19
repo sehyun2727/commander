@@ -1,21 +1,27 @@
 """One-command real-LLM smoke test: drives a full Mission through a real
-Anthropic PM -> Engineer -> Reviewer pipeline and reports pass/fail.
+PM -> Engineer -> Reviewer pipeline and reports pass/fail.
 
 Exercises exactly what Sprint 7 Phase 3 needs verified against real (not
-mock) model output: the request actually reaches Anthropic, the trailing
-**Verdict:** line still parses, a missing/invalid key surfaces as a
-plain-language error instead of a traceback, and real token usage becomes
-a real USD cost. Safe to run repeatedly -- everything happens in a
+mock) model output: the request actually reaches the provider, the
+trailing **Verdict:** line still parses, a missing/invalid key surfaces as
+a plain-language error instead of a traceback, and real token usage
+becomes a real USD cost. Safe to run repeatedly -- everything happens in a
 throwaway SQLite database and workspace directory, never touching the
 project's own dev database or git history.
 
-Usage: `make verify-llm` or `apps/api/.venv/bin/python scripts/verify_real_llm.py`
-Requires ANTHROPIC_API_KEY to be set (in the repo-root .env or the
-environment) -- exits early with a plain-language message if it isn't.
+Usage:
+  `make verify-llm` (Anthropic direct) or
+  `make verify-llm-openrouter` (OpenRouter, Sprint 19), or directly:
+  `apps/api/.venv/bin/python scripts/verify_real_llm.py --provider anthropic|openrouter`
+
+Requires the matching API key (ANTHROPIC_API_KEY or OPENROUTER_API_KEY) to
+be set in the repo-root .env or the environment -- exits early with a
+plain-language message if it isn't.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import shutil
 import sys
@@ -59,12 +65,28 @@ async def wait_for_state(session_factory, task_id: str, *states: TaskState, time
     raise TimeoutError(f"mission {task_id} never reached {target} within {timeout}s")
 
 
+_PROVIDER_KEY_ENV = {
+    "anthropic": ("ANTHROPIC_API_KEY", lambda: settings.anthropic_api_key),
+    "openrouter": ("OPENROUTER_API_KEY", lambda: settings.openrouter_api_key),
+}
+
+
 async def main() -> int:
-    if not settings.anthropic_api_key:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--provider",
+        choices=sorted(_PROVIDER_KEY_ENV),
+        default="anthropic",
+        help="Which real provider to verify against (default: anthropic).",
+    )
+    args = parser.parse_args()
+
+    env_name, read_key = _PROVIDER_KEY_ENV[args.provider]
+    if not read_key():
         print(
-            "FAIL: no ANTHROPIC_API_KEY configured.\n"
-            "Set it in the repo-root .env (see .env.example), or export it in "
-            "your shell, then re-run `make verify-llm`."
+            f"FAIL: no {env_name} configured.\n"
+            f"Set it in the repo-root .env (see .env.example), or export it in "
+            f"your shell, then re-run this script with --provider {args.provider}."
         )
         return 1
 
@@ -89,9 +111,9 @@ async def main() -> int:
 
         user = await auth_service.register(session_factory, "verify-llm@commander.local", "verifypassword123", "Verify LLM")
 
-        print("Founding a throwaway company against the real Anthropic API...")
+        print(f"Founding a throwaway company against the real {args.provider} API...")
         project = await projects_service.create_project(
-            session_factory, event_bus, agent_runtime, name="Real-LLM Verification", provider="anthropic",
+            session_factory, event_bus, agent_runtime, name="Real-LLM Verification", provider=args.provider,
             owner_id=user.id,
         )
 
@@ -126,13 +148,14 @@ async def main() -> int:
         print(f"  Sections parsed: {sorted(approval.sections.keys()) or '(none)'}")
         print(f"  Real token cost for this mission: ${cost:.6f}")
         print(
-            "\nRecord this outcome (verdict + cost) in docs/DECISIONS.md's Sprint 7 "
-            "section per the mission brief."
+            "\nRecord this outcome (provider, verdict, turn count, token spend, wall "
+            "time) in docs/DECISIONS.md per the relevant sprint brief."
         )
         return 0
     except RuntimeError as exc:
-        # e.g. a rejected API key -- AnthropicProvider already turned this
-        # into a plain-language message; surface it as-is, no traceback.
+        # e.g. a rejected API key -- AnthropicProvider/OpenRouterProvider
+        # already turned this into a plain-language message; surface it
+        # as-is, no traceback.
         print(f"FAIL: {exc}")
         return 1
     finally:

@@ -41,6 +41,13 @@ def validate_boot_config() -> None:
             "COMMANDER_PROVIDER=mock to run without a key."
         )
 
+    if settings.commander_provider == "openrouter" and not settings.openrouter_api_key:
+        raise BootConfigError(
+            "COMMANDER_PROVIDER=openrouter but no OPENROUTER_API_KEY is set. "
+            "Set OPENROUTER_API_KEY in .env (see .env.example), or switch "
+            "COMMANDER_PROVIDER=mock to run without a key."
+        )
+
     if not settings.database_url.startswith(("sqlite", "postgresql")):
         raise BootConfigError(
             f"DATABASE_URL ({redact_database_url(settings.database_url)}) is not a "
