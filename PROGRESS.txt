@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 18 — Project Memory (deterministic, PM-triggered recall)
- Overall: Phase 4 documentation sync complete (items 1-10). Remaining:
- final commit/push + clean-tree/HEAD verification (items 11-13).
- Now working on: Phase 4 items 11-13 (final commit, push, verify).
+ Overall: SPRINT 18 DONE. Phase 0-4 complete, 512 passed / 6 skipped,
+ final commit 4219d37, pushed to origin/master.
+ Now working on: nothing -- awaiting Sprint 19 brief.
  Last update: 2026-08-19
 ================================================
 
@@ -289,8 +289,9 @@ PHASE 4 — Regression, security audit, documentation, close-out
         work, no memory-consuming widget, no workspace_widgets/registry.py
         change, no new workspace route -- anything Sprint 19 does with
         Memory is that sprint's own scoped brief
-[ ] 4.11 final commit + push
-[ ] 4.12 verify clean working tree
-[ ] 4.13 verify local HEAD == origin/master
+[x] 4.11 final commit + push -- 4219d37 "docs(sprint18): Phase 4 --
+        regression verification and documentation sync"
+[x] 4.12 verify clean working tree -- confirmed
+[x] 4.13 verify local HEAD == origin/master -- confirmed
 
 CLOSE-OUT NOTES (fill in at Phase 4)
