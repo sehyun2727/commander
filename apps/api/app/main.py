@@ -34,6 +34,7 @@ from .modules.approvals import router as approvals_router
 from .modules.auth import router as auth_router
 from .modules.costs import router as costs_router
 from .modules.event_bus import InProcessEventBus
+from .modules.memory import install_memory_subscribers
 from .modules.model_registry import router as models_router
 from .modules.planning import router as planning_router
 from .modules.projects import router as projects_router
@@ -83,6 +84,7 @@ async def lifespan(app: FastAPI):
     session_factory = async_session_factory
     secrets = DBSecretsProvider(session_factory)
     event_bus = InProcessEventBus(session_factory)
+    install_memory_subscribers(event_bus, session_factory)
     agent_runtime = DBAgentRuntime(session_factory, event_bus)
     workspace_manager = LocalGitWorkspaceManager(settings.commander_workspace_root)
     sandbox_runner = DockerSandbox(settings.commander_sandbox_image)

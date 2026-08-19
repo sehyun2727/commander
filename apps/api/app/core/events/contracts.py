@@ -367,10 +367,13 @@ class MemoryRecordedPayload(Payload):
 class MemoryRecalledPayload(Payload):
     """The PM explicitly requested recall during PM<->CTO planning. No
     preview text, no keyword echo, no record content -- just enough to
-    audit that recall happened, for what, and how many records matched."""
+    audit that recall happened, for what, and how many records matched.
+    `requested_categories` is always the *resolved* list (all six when the
+    PM's request omitted `categories`), never null -- see sprint-18.md
+    §4.12."""
 
-    specification_id: str
-    requested_categories: list[str] | None = None
+    spec_id: str | None = None
+    requested_categories: list[str]
     match_count: int
     memory_ids: list[str]
 

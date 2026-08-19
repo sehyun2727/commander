@@ -416,3 +416,36 @@ class HarnessToolCallORM(Base):
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_seconds: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class MemoryRecordORM(Base):
+    """Sprint 18 §4/§9, DECISIONS.md #243: one deterministic projection of
+    an already-persisted event into Company Memory (Rule #14 -- Memory is
+    an index over the event stream, never a second source of truth).
+
+    `source_event_id` is UNIQUE: the database, not an app-level
+    check-then-insert, is what makes the real-time subscriber and the
+    idempotent `backfill_memory()` script safe to run concurrently or
+    repeatedly over the same event -- a losing insert's `IntegrityError` is
+    caught and treated as "already recorded," never a real failure.
+    `content_json`/`tags`/`keywords_text` are always bounded, extracted
+    fields (never a raw event payload dump) -- see `modules/memory/`.
+    Append-only: no update/delete path exists; a wrong record means the
+    extractor was buggy and gets fixed, then re-backfilled, never patched
+    in place."""
+
+    __tablename__ = "memory_records"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    category: Mapped[str] = mapped_column(String, index=True)
+    source_event_id: Mapped[str] = mapped_column(ForeignKey("events.id"), unique=True)
+    source_task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
+    source_specification_id: Mapped[str | None] = mapped_column(
+        ForeignKey("specifications.id"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String)
+    content_json: Mapped[dict] = mapped_column(JSON)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    keywords_text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)

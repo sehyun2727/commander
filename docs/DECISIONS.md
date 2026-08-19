@@ -4162,3 +4162,55 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       malformed-payload extractor returning `None` and logging INFO,
       rather than raising, is the correct shape, not a defensive
       redundancy).
+
+244. **Phase 1: extractor signature resolves a tension in sprint-18.md
+    §4.1 vs §5 — extractors take `(event, session)`, not `(event)` alone.**
+    - **The tension:** §5 describes `projection.py` extractors as `(event)
+      -> MemoryRecord | None`, "pure functions of the event's payload plus
+      `project_id`. Zero I/O." But §4.1's "extractor produces" column
+      requires fields no payload actually carries — every `Payload`
+      subclass has `extra="forbid"` (`contracts.py:22`) and was inspected
+      field-by-field: `ApprovalGrantedPayload`/`ApprovalRejectedPayload`/
+      `ApprovalChangesRequestedPayload` carry only `approval_id` (§4.1
+      wants subject/task_id/decision/comment); `SpecificationApprovedPayload`
+      carries only `specification_id`/`version` (§4.1 wants
+      title/problem_statement/goals/requirements/acceptance_criteria);
+      `TaskFailedPayload` carries `task_id`/`reason_code` (§4.1 wants
+      title + a reason string body); `TaskCompletedPayload` carries only
+      `task_id` (§4.1 wants title/branch_name/code_stats/check_results);
+      `SpecificationTurnPostedPayload` carries
+      `specification_id`/`turn_index`/`role_key`/`agent_id`/`kind` (§4.1
+      wants the turn's text excerpt). Only `ReviewCompletedPayload`
+      (post-#243's additive `sections` field) is fully self-contained.
+    - **Resolved by treating §5's forbidden-imports bullet as the
+      controlling text**, since it explicitly sanctions exactly this: "if
+      it needs a Task, it goes through the `TaskORM` shared floor via a
+      session query, not a service import." That sentence only makes
+      sense if extractors (or the service layer wrapping them) open a DB
+      session — so "Zero I/O" in §5's summary line is read as "no
+      `ProviderGateway`/LLM/network/sandbox I/O" (consistent with §4.2's
+      "no LLM anywhere" framing immediately preceding it), not "no
+      database session." A literally payload-only extractor cannot
+      satisfy §4.1 for five of six categories, so it was rejected as
+      infeasible-as-written rather than followed literally.
+    - **Decision:** every `projection.py` extractor is
+      `async def extract_xxx(event: Event, session: AsyncSession) ->
+      _ExtractedRecord | None`, hydrating the one additional row it needs
+      (`ApprovalORM` by `approval_id`, `SpecificationVersionORM` by
+      `(specification_id, current_version)` read off `SpecificationORM`,
+      `TaskORM` by `task_id`, `SpecificationTurnORM` by
+      `(specification_id, turn_index)`) via a direct `select(...)` against
+      the shared ORM floor — never importing `approvals.service`,
+      `tasks.service`, or `planning.service`. `_ExtractedRecord` is a
+      small internal dataclass (`category, title, content_json, tags,
+      keywords_text, source_task_id, source_specification_id`), not the
+      full `MemoryRecord` Pydantic model, because `id`/`project_id`/
+      `created_at` are only known once `service.record_memory` actually
+      inserts the row — matching how `record_memory(session_factory,
+      event_bus, event) -> MemoryRecord | None` (§5) is the one place that
+      already owns a session and constructs the final persisted shape. A
+      missing hydration row (e.g. an `ApprovalORM` deleted out from under
+      an old event — never happens today, since Memory rows are
+      append-only and nothing deletes `ApprovalORM`, but defensive
+      nonetheless) makes the extractor return `None`, following the same
+      malformed-payload contract as every other extractor failure mode.

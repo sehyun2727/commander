@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 18 — Project Memory (deterministic, PM-triggered recall)
- Overall: Phase 0 in progress.
- Now working on: Phase 0 checkpoint (repository inspection + decisions).
+ Overall: Phase 1 complete, committing.
+ Now working on: Phase 1 commit/push, then Phase 2 (recall + planning integration).
  Last update: 2026-08-19
 ================================================
 
@@ -75,22 +75,47 @@ PHASE 0 — Baseline, Repository Inspection, and Architecture Decisions
         green
 
 PHASE 1 — memory_records table, ORM, migration, projection module, subscriber wiring
-[ ] 1.1 core/events/types.py + contracts.py: MEMORY_RECORDED, MEMORY_RECALLED
-        event types + payload contracts (bounded, no content bodies)
-[ ] 1.2 core/events/contracts.py: ReviewCompletedPayload.sections additive field;
+[x] 1.1 core/events/types.py + contracts.py: MEMORY_RECORDED, MEMORY_RECALLED
+        event types + payload contracts (bounded, no content bodies) --
+        done as part of the Phase 0 commit (b844bd4), since it was pure
+        contract/plumbing with zero behavior yet (see 0.17)
+[x] 1.2 core/events/contracts.py: ReviewCompletedPayload.sections additive field;
         engine.py publish site populates it from the already-in-scope
-        `sections` dict
-[ ] 1.3 core/db_models.py: MemoryRecordORM
-[ ] 1.4 alembic migration: memory_records table + indexes
-[ ] 1.5 app/modules/memory/registry.py: six category strings, tag rules
-[ ] 1.6 app/modules/memory/schemas.py: MemoryRecord/RecallRequest/RecalledMemory
-[ ] 1.7 app/modules/memory/projection.py: one pure extractor per EventType
-[ ] 1.8 app/modules/memory/service.py: record_memory()
-[ ] 1.9 app/modules/memory/subscriber.py: install_memory_subscribers()
-[ ] 1.10 main.py::lifespan wiring
-[ ] 1.11 unit tests: one extractor test per category, malformed-payload
-        handling, UNIQUE dedup, subscriber-failure-does-not-break-publish
-[ ] 1.12 Phase 1 commit + push
+        `sections` dict -- also done in b844bd4 (see 0.9, 0.17)
+[x] 1.3 core/db_models.py: MemoryRecordORM
+[x] 1.4 alembic migration: memory_records table + indexes
+        (c2a7e1f4b6d3_memory_records.py, down_revision=b1f4c8d5e9a2) --
+        verified against real Postgres: upgrade head, downgrade -1,
+        re-upgrade head all clean; `alembic history` confirms a single
+        linear chain with c2a7e1f4b6d3 on top
+[x] 1.5 app/modules/memory/registry.py: six category strings, tag rules,
+        tokenizer, bounding/recall constants, recency_decay()
+[x] 1.6 app/modules/memory/schemas.py: MemoryRecord/RecallRequest/RecalledMemory
+        (lenient field_validators per DECISIONS.md #244's
+        malformed-tags-parse-as-empty-list requirement)
+[x] 1.7 app/modules/memory/projection.py: one extractor per projected
+        EventType -- async (event, session) per DECISIONS.md #244, not a
+        pure payload-only function, since most payloads carry only ids
+[x] 1.8 app/modules/memory/service.py: record_memory() (extract, insert,
+        IntegrityError-catch dedup, MEMORY_RECORDED publish) -- recall()
+        also implemented ahead of schedule (ranking/caps per §4.9-§4.11),
+        wired up properly in Phase 2
+[x] 1.9 app/modules/memory/subscriber.py: install_memory_subscribers()
+[x] 1.10 main.py::lifespan wiring -- install_memory_subscribers(event_bus,
+        session_factory) called immediately after `event_bus` construction,
+        before agent_runtime/orphan recovery
+[x] 1.11 unit tests (tests/test_memory_projection.py, 20 tests, all
+        green): one extractor test per category (including reason_code
+        variants + redaction + oversized-content truncation), extractor
+        safety (malformed/null/missing-row payloads return None and never
+        insert), unprojected-event-type short-circuit, UNIQUE dedup
+        (record_memory called twice -> one row, same id returned),
+        subscriber wiring through a real EventBus.publish, double-install
+        idempotency, and a raising extractor proven not to break publish
+        fan-out to other subscribers
+[x] 1.12 full backend suite re-run after Phase 1: 492 passed / 6 skipped
+        (472 baseline + 20 new memory tests, 0 regressions, exit 0,
+        437.94s) -- Phase 1 commit + push next
 
 PHASE 2 — recall service + PM contract extension + planning integration
 [ ] 2.1 app/modules/memory/service.py: recall() with deterministic ranking
