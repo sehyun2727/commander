@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 
 from ...core.contracts import AgentProfile
@@ -19,7 +20,7 @@ from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
 from ...core.interfaces.event_bus import EventBus
 from ...core.lifecycle.agent_states import AGENT_TRANSITIONS, AgentState
-from ...core.lifecycle.state_machine import transition
+from ...core.lifecycle.state_machine import InvalidTransition, transition
 from ..model_registry import options_for_role
 from ..skill_templates import DEFAULT_SKILL_TEMPLATE_KEY, SKILL_TEMPLATES_BY_KEY
 from ...templates import TEMPLATE
@@ -218,7 +219,24 @@ class DBAgentRuntime(AgentRuntime):
                 raise ValueError(f"unknown agent_id {agent_id}")
             current = AgentState(row.state)
             transition(current, target, AGENT_TRANSITIONS)
-            row.state = target.value
+            # Sprint 19 §4.8 concurrent-mission finding: a plain read-then-
+            # write here lets two concurrent pipelines both read the same
+            # `current` state and both "successfully" transition the same
+            # Employee, since neither commit re-checks the other's write.
+            # The WHERE clause below makes the write a compare-and-swap --
+            # if another pipeline already moved this Employee's state since
+            # our read, `rowcount` is 0 and this raises the same
+            # InvalidTransition callers (e.g. `_claim_agent`) already
+            # handle, instead of silently double-driving one Employee.
+            result = await session.execute(
+                update(AgentORM)
+                .where(AgentORM.id == agent_id, AgentORM.state == current.value)
+                .values(state=target.value)
+            )
+            if result.rowcount == 0:
+                raise InvalidTransition(
+                    f"{agent_id}: state changed concurrently since it was read as {current!r}"
+                )
             await session.commit()
             project_id = row.project_id
             agent_name = row.name

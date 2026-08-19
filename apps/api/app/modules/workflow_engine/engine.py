@@ -39,7 +39,7 @@ from ...core.interfaces.sandbox import SandboxRunner
 from ...core.interfaces.workflow_engine import WorkflowEngine
 from ...core.interfaces.workspace_manager import WorkspaceManager
 from ...core.lifecycle.agent_states import AgentState
-from ...core.lifecycle.state_machine import transition
+from ...core.lifecycle.state_machine import InvalidTransition, transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
 from ...core.logging import agent_id_var, project_id_var, task_id_var
 from ...core.secrets import SecretsProvider
@@ -73,6 +73,17 @@ CEO_ACTOR = Actor(role="ceo", id="ceo", name="CEO")
 # where a CEO "request changes" decision resumes: the first "produce"
 # stage, skipping any earlier planning rather than redoing it.
 _REWORK_STAGE_INDEX = first_stage_index(TEMPLATE.pipeline, "produce")
+
+# Sprint 19 §4.8 load-smoke finding: the founding roster seeds exactly one
+# Employee per Role (Sprint 10 §12), so concurrent Missions in one Company
+# routinely contend for the same Employee. `resolve_employee_for_role`'s
+# own fallback rule can hand back a busy Employee when nobody's idle, and
+# a race between two concurrent pipelines can also both resolve the same
+# idle Employee before either claims it. `_claim_agent` bounds how long it
+# waits for that Employee to actually go idle before giving up (Rule #13:
+# budgeted, never forever).
+_AGENT_CLAIM_TIMEOUT_SECONDS = 120.0
+_AGENT_CLAIM_POLL_SECONDS = 0.2
 
 
 @dataclass(frozen=True)
@@ -363,6 +374,25 @@ class CommanderWorkflowEngine(WorkflowEngine):
         )
         return selected
 
+    async def _claim_agent(self, agent_id: str, reason: str) -> None:
+        """IDLE -> ASSIGNED, waiting out a busy Employee instead of
+        crashing with `InvalidTransition`. `_resolve_agent` can hand back
+        an Employee that isn't actually idle yet by the time this runs --
+        either its own fallback rule picked a busy Employee, or a
+        concurrent pipeline claimed the same idle Employee first (see
+        `_AGENT_CLAIM_TIMEOUT_SECONDS` above). Poll until the transition
+        is legal; a genuinely stuck Employee still fails loud once the
+        bounded wait runs out."""
+        deadline = asyncio.get_event_loop().time() + _AGENT_CLAIM_TIMEOUT_SECONDS
+        while True:
+            try:
+                await self._agent_runtime.transition(agent_id, AgentState.ASSIGNED, reason)
+                return
+            except InvalidTransition:
+                if asyncio.get_event_loop().time() >= deadline:
+                    raise
+                await asyncio.sleep(_AGENT_CLAIM_POLL_SECONDS)
+
     async def _stream_say(
         self, project_id: str, agent: AgentORM, task_id: str, gateway: ProviderGateway, model_ref: str, **opts
     ) -> tuple[str, dict[str, int]]:
@@ -417,7 +447,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
         project_token = project_id_var.set(project_id)
         try:
             try:
-                await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
+                await self._claim_agent(agent.id, f"Picked up mission '{task.title}'")
                 await _pause()
                 await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing the mission brief")
                 await _pause()
@@ -483,7 +513,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
         project_token = project_id_var.set(project_id)
         try:
             try:
-                await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
+                await self._claim_agent(agent.id, f"Picked up mission '{task.title}'")
                 await _pause()
                 await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing the mission brief")
                 await _pause()

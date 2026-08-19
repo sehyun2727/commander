@@ -417,7 +417,34 @@ PHASE 2 — Correlation ID + structured logging
         zero regressions -- Phase 2 commit + push next
 
 PHASE 3 — Load smoke + real-LLM E2E + deployment doc
-[ ] 3.1 scripts/load_smoke.py (4 scenarios)
+[x] 3.1 scripts/load_smoke.py (4 scenarios) -- all 4 PASS, stable across
+        repeated runs. Building it surfaced 2 real concurrent-Mission
+        races, fixed in product code (DECISIONS.md #250):
+          - engine.py: new DBAgentRuntime._claim_agent bounded poll/retry
+            wrapper around the IDLE->ASSIGNED transition, so a busy
+            fallback Employee (single-Employee-per-Role founding roster
+            + concurrent Missions) is waited out instead of crashing with
+            InvalidTransition.
+          - agent_runtime/service.py: transition() rewritten as an atomic
+            compare-and-swap UPDATE ... WHERE state=:current instead of a
+            non-atomic read-then-write, closing a race where 2 concurrent
+            pipelines could both validate against the same stale read.
+        Also surfaced (and fixed) a load-smoke-script-only deadlock: SSE
+        scenario 2 was hanging under httpx.ASGITransport for ANY number
+        of concurrent /api/events/stream connections (including 1) --
+        root cause is ASGITransport itself, which buffers the whole ASGI
+        response before returning, incompatible with the never-
+        terminating SSE response. Fixed by having scenario 2 boot a real
+        uvicorn.Server on 127.0.0.1:0 instead (uvicorn is already a
+        runtime dep, so no new dependency). Two defensive hardenings also
+        landed while diagnosing (kept even though neither was the actual
+        cause): correlation-ID middleware converted from
+        @app.middleware("http")/BaseHTTPMiddleware to plain ASGI in
+        main.py; removed a redundant request.is_disconnected() poll in
+        realtime/routes.py that raced sse_starlette's own disconnect
+        listener for the same one-shot receive() channel.
+        Full backend suite re-verified green after all fixes: 553 passed
+        / 6 skipped, zero regressions.
 [ ] 3.2 make verify-llm (Anthropic direct) evidence recorded
 [ ] 3.3 make verify-llm-openrouter -> anthropic/claude-sonnet-4.5 evidence
 [ ] 3.4 make verify-llm-openrouter full Specification lifecycle against

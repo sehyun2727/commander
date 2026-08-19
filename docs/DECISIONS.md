@@ -4475,3 +4475,84 @@ formatter shape, and E2E-script split
   two paths differ only in how many organizational stages they walk
   through before reaching a Mission, which is a natural flag rather than
   a reason to fork the script.
+
+### #250 — Sprint 19 Phase 3: two real concurrent-Mission races fixed, one
+load-smoke-script-only SSE deadlock diagnosed and worked around
+
+`scripts/load_smoke.py`'s scenario 2 (3 Companies x 3 concurrent Missions
+each, one shared SSE connection per Company) surfaced three distinct
+failures while being built. Two were genuine, production-reachable bugs
+in the Employee/AgentState lifecycle and are fixed in product code per
+§4.8's explicit instruction ("if a scenario reveals a genuine bug... fix
+it inside Sprint 19"). The third was a deadlock specific to the load-smoke
+script's own HTTP client, not a product bug, and is fixed in the script.
+
+- **Bug 1 — `IDLE -> ASSIGNED` crash when `resolve_employee_for_role`
+  falls back to a busy Employee.** The founding roster seeds exactly one
+  Employee per founding Role (Sprint 10 §12), so 3 concurrent Companies
+  each running 3 concurrent Missions routinely contend for the same PM/
+  Engineer/Reviewer. `resolve_employee_for_role` (pure, deterministic,
+  already covered by its own `test_employee_resolution.py` — left
+  untouched) legitimately returns a busy Employee when nobody's idle, but
+  `_run_role`/`_run_engineer_tool_loop` in
+  `apps/api/app/modules/workflow_engine/engine.py` then unconditionally
+  called `transition(agent.id, AgentState.ASSIGNED, ...)`, which crashed
+  with `InvalidTransition` (e.g. `PLANNING -> ASSIGNED`) instead of
+  waiting for the Employee to free up. Fixed by adding
+  `DBAgentRuntime._claim_agent` (called at both `ASSIGNED`-transition call
+  sites): a bounded poll/retry wrapper — `InvalidTransition` is treated as
+  "not yet available" and retried every 0.2s up to
+  `_AGENT_CLAIM_TIMEOUT_SECONDS = 120.0`, after which it re-raises,
+  because per Rule #13 a budgeted wait must still fail loud once
+  genuinely exhausted rather than block forever.
+- **Bug 2 — non-atomic read-then-write race in `AgentRuntime.transition()`
+  itself.** Even with Bug 1 fixed, two concurrent pipelines could both
+  `session.get()` the same `AgentORM` row, both see e.g. `COMPLETED`, both
+  pass the pure `transition()` validator, and both write `IDLE` — or one
+  write clobbers the other's more-recent state — because neither commit
+  re-checked the row against the other's write. Fixed by making the write
+  in `apps/api/app/modules/agent_runtime/service.py`'s `transition()` an
+  atomic compare-and-swap: `UPDATE agents SET state=:target WHERE
+  id=:agent_id AND state=:current`, raising `InvalidTransition` when
+  `rowcount == 0` (another pipeline already moved this Employee since the
+  read) instead of silently double-driving one Employee. This is the same
+  `InvalidTransition` type callers already handle (including the new
+  `_claim_agent` retry loop above), so no caller-side branching changed.
+  Verified via 2 clean `load_smoke.py` runs plus the full 553-test suite
+  (0 regressions) that this is behaviorally transparent for every
+  existing single-writer call pattern.
+- **Non-bug — `httpx.ASGITransport` cannot support the realtime SSE
+  endpoint at all, with any number of concurrent connections.**
+  Initial symptoms looked like a middleware/app problem (an
+  `asyncio.TimeoutError` opening 3 concurrent `/api/events/stream`
+  connections), and two real hardening fixes were made while chasing it —
+  converting the Sprint 19 §7.1 correlation-ID middleware from
+  `@app.middleware("http")` (Starlette `BaseHTTPMiddleware`, which has
+  documented issues bridging concurrent long-lived streaming responses
+  through its internal task/memory-stream) to a plain ASGI middleware
+  class in `apps/api/app/main.py`; and removing a redundant manual
+  `request.is_disconnected()` poll from `apps/api/app/modules/realtime/
+  routes.py`'s `event_generator` (this call independently consumes the
+  ASGI `receive()` channel that `sse_starlette.EventSourceResponse`'s own
+  `_listen_for_disconnect` task already owns exclusively — two concurrent
+  consumers of a one-shot channel is a latent bug worth keeping fixed
+  even though it wasn't the cause here). Neither fix resolved the hang.
+  Root-caused by reading `httpx/_transports/asgi.py`:
+  `ASGITransport.handle_async_request` `await self.app(scope, receive,
+  send)`s the entire ASGI call and only constructs an `httpx.Response`
+  once the app's call *returns* (i.e. once `more_body=False` has been
+  sent) — it has no incremental/concurrent streaming model at all. The
+  realtime endpoint's response never terminates on its own (15s heartbeat
+  loop until client disconnect), so `client.stream(...)` under
+  `ASGITransport` deadlocks outright — reproduced with a single
+  connection in complete isolation, nothing to do with concurrency or app
+  code. **Fix lives in `scripts/load_smoke.py`, not product code:**
+  scenario 2 now boots a real `uvicorn.Server` on `127.0.0.1:0` (`lifespan
+  ="off"`, since the throwaway `Stack`'s dependency overrides bypass
+  `app.state` entirely) and drives it with a plain `httpx.AsyncClient`
+  over real loopback sockets instead of `ASGITransport`. `uvicorn` is
+  already a runtime dependency (it's what `make dev` runs), so this adds
+  no new dependency per §4.8. Scenarios 1/3/4 keep `ASGITransport` — it is
+  fine for ordinary request/response endpoints, just not this one.
+  Verified stable across repeated runs; the full test suite (which never
+  opens concurrent SSE connections via `ASGITransport`) is unaffected.

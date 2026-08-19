@@ -15,6 +15,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .core.boot_checks import (
     BootConfigError,
@@ -115,22 +117,48 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Commander API", lifespan=lifespan)
 
 
-@app.middleware("http")
-async def correlation_id_middleware(request: Request, call_next):
+class CorrelationIdMiddleware:
     """Server-issued UUID per request (Sprint 19 §7.1) -- NEVER trusts an
     incoming X-Request-Id header (a client-supplied ID could be forged to
     make unrelated requests appear correlated in the logs). Registered
     before CORSMiddleware so the correlation ID covers the whole request,
-    including CORS's own preflight/rejection handling."""
-    request_id = str(uuid.uuid4())
-    token = request_id_var.set(request_id)
-    try:
-        response = await call_next(request)
-        response.headers["X-Request-Id"] = request_id
-        return response
-    finally:
-        request_id_var.reset(token)
+    including CORS's own preflight/rejection handling.
 
+    Sprint 19 §4.8 load-smoke finding: this was originally a
+    `@app.middleware("http")` function, which Starlette implements via
+    `BaseHTTPMiddleware`. That base class bridges each response body
+    through its own internal task + memory stream, which deadlocks when
+    multiple long-lived streaming responses (the realtime SSE endpoint)
+    are in flight concurrently -- reproduced with 3 concurrent
+    `/api/events/stream` connections never completing their handshake.
+    A plain ASGI middleware has no such bridging: it passes `receive`/
+    `send` straight through, so it composes safely with any number of
+    concurrent streaming responses."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = str(uuid.uuid4())
+        token = request_id_var.set(request_id)
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.append("X-Request-Id", request_id)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            request_id_var.reset(token)
+
+
+app.add_middleware(CorrelationIdMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

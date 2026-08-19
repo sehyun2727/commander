@@ -17,6 +17,27 @@ Usage:
 Requires the matching API key (ANTHROPIC_API_KEY or OPENROUTER_API_KEY) to
 be set in the repo-root .env or the environment -- exits early with a
 plain-language message if it isn't.
+
+Sprint 19 §4.5/§4.6 add two flags on top of the original single-mission
+shape:
+
+  --model <id>       In-process fixture (§4.5's own suggested approach):
+                      overrides every logical ref in the resolved
+                      provider's model_registry map to this exact model id
+                      for the duration of this process only. Used to route
+                      OpenRouter at "anthropic/claude-sonnet-4.5" for
+                      release evidence without touching the DB-backed
+                      per-role override machinery.
+
+  --full-lifecycle    Walks the same order a first-time CEO would use
+                      Commander (§4.5 design constraint #1): found Company
+                      -> hire CTO -> start a Specification (PM<->CTO
+                      planning) -> CEO approves -> begin-execution ->
+                      Mission runs -> CEO Decision. Without this flag the
+                      script keeps its original shortcut of creating and
+                      assigning one Mission directly, which is sufficient
+                      for the two release-evidence runs (§4.6) but not for
+                      the free-tier full-E2E smoke test (§4.5).
 """
 
 from __future__ import annotations
@@ -40,10 +61,13 @@ from app.core.events import EventType  # noqa: E402
 from app.core.lifecycle.task_states import TaskState  # noqa: E402
 from app.core.secrets import DBSecretsProvider  # noqa: E402
 from app.modules.agent_runtime import DBAgentRuntime  # noqa: E402
+from app.modules.agent_runtime.service import hire_employee  # noqa: E402
 from app.modules.approvals import service as approvals_service  # noqa: E402
 from app.modules.auth import service as auth_service  # noqa: E402
 from app.modules.costs import service as costs_service  # noqa: E402
 from app.modules.event_bus import InProcessEventBus  # noqa: E402
+from app.modules.model_registry import registry as model_registry  # noqa: E402
+from app.modules.planning import service as planning_service  # noqa: E402
 from app.modules.projects import service as projects_service  # noqa: E402
 from app.modules.sandbox import DockerSandbox  # noqa: E402
 from app.modules.tasks import service as tasks_service  # noqa: E402
@@ -52,6 +76,15 @@ from app.modules.workflow_engine.parsing import parse_verdict  # noqa: E402
 from app.modules.workspace_manager import LocalGitWorkspaceManager  # noqa: E402
 
 _TIMEOUT_SECONDS = 120.0
+
+
+def _override_model_registry(provider: str, model: str) -> None:
+    """In-process fixture (§4.5): every logical ref for this provider now
+    resolves to `model`. Never persisted -- the process exits right after
+    this script's one mission, so there's nothing to restore."""
+    model_registry.MODEL_REGISTRY[provider] = {
+        ref: model for ref in model_registry.MODEL_REGISTRY[provider]
+    }
 
 
 async def wait_for_state(session_factory, task_id: str, *states: TaskState, timeout: float) -> TaskState:
@@ -79,6 +112,18 @@ async def main() -> int:
         default="anthropic",
         help="Which real provider to verify against (default: anthropic).",
     )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Override every logical model ref for --provider to this exact model id "
+        "for this process only (e.g. anthropic/claude-sonnet-4.5 when --provider openrouter).",
+    )
+    parser.add_argument(
+        "--full-lifecycle",
+        action="store_true",
+        help="Walk found-Company -> hire-CTO -> Specification -> CEO-approve -> "
+        "Mission -> CEO-Decision instead of the direct-Mission shortcut.",
+    )
     args = parser.parse_args()
 
     env_name, read_key = _PROVIDER_KEY_ENV[args.provider]
@@ -89,6 +134,10 @@ async def main() -> int:
             f"your shell, then re-run this script with --provider {args.provider}."
         )
         return 1
+
+    if args.model:
+        _override_model_registry(args.provider, args.model)
+        print(f"Model registry override: every {args.provider} logical ref -> {args.model}")
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="commander-verify-llm-"))
     db_path = tmp_dir / "verify.db"
@@ -117,16 +166,42 @@ async def main() -> int:
             owner_id=user.id,
         )
 
-        task = await tasks_service.create_task(
-            session_factory,
-            event_bus,
-            project.id,
-            "Write a welcome note",
-            "Draft a short, friendly one-paragraph welcome message for new users of our product.",
-            "low",
-        )
-        print(f"Mission '{task.title}' created ({task.id}); assigning to the Department...")
-        await tasks_service.assign_task(session_factory, event_bus, agent_runtime, workflow_engine, task.id, None)
+        if args.full_lifecycle:
+            print("Hiring a CTO...")
+            await hire_employee(session_factory, event_bus, project.id, args.provider, "cto", "Casey")
+
+            print("Starting a Project Specification (PM<->CTO planning)...")
+            spec = await planning_service.start_planning(
+                session_factory,
+                event_bus,
+                agent_runtime,
+                secrets,
+                project.id,
+                "Draft a short, friendly one-paragraph welcome message for new users of our product.",
+            )
+            print(f"Specification {spec.id} reached status={spec.status}")
+            if spec.status not in ("ready_for_review",):
+                print(f"FAIL: specification never reached ready_for_review (status={spec.status})")
+                return 1
+
+            spec = await planning_service.approve_specification(session_factory, event_bus, spec.id)
+            print(f"CEO approved Specification v{spec.current_version}")
+
+            task = await planning_service.begin_execution(
+                session_factory, event_bus, agent_runtime, workflow_engine, spec.id
+            )
+            print(f"Mission '{task.title}' created ({task.id}) via begin-execution...")
+        else:
+            task = await tasks_service.create_task(
+                session_factory,
+                event_bus,
+                project.id,
+                "Write a welcome note",
+                "Draft a short, friendly one-paragraph welcome message for new users of our product.",
+                "low",
+            )
+            print(f"Mission '{task.title}' created ({task.id}); assigning to the Department...")
+            await tasks_service.assign_task(session_factory, event_bus, agent_runtime, workflow_engine, task.id, None)
 
         final_state = await wait_for_state(
             session_factory, task.id, TaskState.PENDING_APPROVAL, TaskState.FAILED, timeout=_TIMEOUT_SECONDS
@@ -141,6 +216,15 @@ async def main() -> int:
 
         approval = (await approvals_service.list_pending(session_factory, project.id))[0]
         verdict = parse_verdict(approval.raw_summary)
+
+        if args.full_lifecycle:
+            print("CEO Decision: approving...")
+            await approvals_service.decide(session_factory, workflow_engine, approval.id, "approve", "Verified via script")
+            completed_state = await wait_for_state(
+                session_factory, task.id, TaskState.COMPLETED, TaskState.FAILED, timeout=_TIMEOUT_SECONDS
+            )
+            print(f"Mission final state after CEO Decision: {completed_state.value}")
+
         cost = await costs_service.summary_for_task(session_factory, task.id)
 
         print("\n--- Real-LLM verification: PASS ---")
