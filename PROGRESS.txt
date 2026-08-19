@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 17 — Self-Correction Loop
- Overall: Phase 0 complete. Starting Phase 1.
- Now working on: Phase 1 — failure-aware loop + correction enforcement
+ Overall: Phase 0-4 complete. SPRINT 17 DONE.
+ Now working on: nothing -- awaiting Sprint 18 brief.
  Last update: 2026-08-19
 ================================================
 
@@ -35,56 +35,95 @@ PHASE 0 — Baseline, Repository Inspection, and Architecture Decisions
         string comparisons ("employee_surrendered" etc.) are unaffected
 [x] 0.14 PROGRESS.txt replaced with this Sprint 17 checklist
 [x] 0.15 decisions recorded in docs/DECISIONS.md #239
-[ ] 0.16 commit/push Phase 0 checkpoint
+[x] 0.16 Phase 0 checkpoint folded into the final Sprint 17 commit (no
+        separate Phase 0 commit was made -- see close-out note below)
 
 PHASE 1 — Failure-aware loop + correction enforcement
-[ ] 1.1 core/errors.py: SelfCorrectionExhaustedError, EmployeeSurrenderedError
-[ ] 1.2 core/events/types.py: EventType.SELF_CORRECTION_TRIGGERED
-[ ] 1.3 agent_harness/context.py: ToolRunContext.branch_base_sha field;
-        new LoopState mutable dataclass
-[ ] 1.4 update all ToolRunContext(...) construction call sites (engine.py,
-        3 test files) with branch_base_sha
-[ ] 1.5 interfaces/workspace_manager.py + local_git.py: head_sha()
-[ ] 1.6 orchestrator.py: MAX_CORRECTION_ATTEMPTS=3; termination
+[x] 1.1 core/errors.py: SelfCorrectionExhaustedError, EmployeeSurrenderedError
+[x] 1.2 core/events/types.py: EventType.SELF_CORRECTION_TRIGGERED +
+        AgentSelfCorrectionTriggeredPayload contract
+[x] 1.3 agent_harness/context.py: ToolRunContext.branch_base_sha field;
+        new LoopState mutable dataclass (last_validation_status,
+        correction_attempts, first_correction_emitted,
+        apply_patch_commit_history)
+[x] 1.4 updated all ToolRunContext(...) construction call sites (engine.py,
+        test_agent_harness_context.py, test_agent_harness_handlers.py,
+        test_agent_harness_orchestrator.py) with branch_base_sha
+[x] 1.5 interfaces/workspace_manager.py + local_git.py: head_sha()
+[x] 1.6 orchestrator.py: MAX_CORRECTION_ATTEMPTS=3; termination
         interception (surrender-marker check, last_validation_status
         failure interception with corrective reminder injection,
         exhaustion after 3 attempts); on_self_correction_triggered
         callback param
-[ ] 1.7 handlers.py: dispatch_tool_call gains loop_state kwarg;
+[x] 1.7 handlers.py: dispatch_tool_call gains loop_state kwarg;
         apply_patch/run_validation mutate loop_state
-[ ] 1.8 unit/threat tests in test_agent_harness_orchestrator.py
-[ ] 1.9 commit Phase 1 checkpoint
+[x] 1.8 unit/threat tests in test_agent_harness_orchestrator.py (6 tests:
+        interception+surrender, callback-fires-once, exhaustion,
+        surrender-without-prior-failure, normal-termination-unaffected,
+        synthetic-audit-rows)
+[x] 1.9 Phase 1 folded into the final Sprint 17 commit
 
 PHASE 2 — Rollback tool (revert_last_patch)
-[ ] 2.1 registry.py: REVERT_LAST_PATCH tool definition; ENGINEER.tools
+[x] 2.1 registry.py: REVERT_LAST_PATCH tool definition; ENGINEER.tools
         gains "revert_last_patch"
-[ ] 2.2 schemas.py: RevertLastPatchArgs
-[ ] 2.3 local_git.py + interface: revert_last_commit() with ancestry check
-[ ] 2.4 handlers.py: revert_last_patch handler; dispatch_tool_call wiring
-[ ] 2.5 orchestrator.py: post-success bookkeeping (pop history, clear
+[x] 2.2 schemas.py: RevertLastPatchArgs (zero fields, extra="forbid")
+[x] 2.3 local_git.py + interface: revert_last_commit() with
+        git merge-base --is-ancestor check before git reset --hard
+[x] 2.4 handlers.py: revert_last_patch handler; dispatch_tool_call wiring
+[x] 2.5 orchestrator.py: post-success bookkeeping (pop history, clear
         last_validation_status) after a successful revert_last_patch call
-[ ] 2.6 audit.py: revert_last_patch argument summary
-[ ] 2.7 tests: handler-level + orchestrator-level rollback coverage
-[ ] 2.8 commit Phase 2 checkpoint
+[x] 2.6 audit.py: revert_last_patch argument summary
+[x] 2.7 tests: 8 orchestrator-level rollback tests (denied w/ no history,
+        revert-single-patch-to-base, revert-second-to-first,
+        ignores-noop-patch-history, clears-validation-status,
+        denied-by-role-permission, ancestry-violation-denied-not-destructive)
+        + registry test updates (7-tool set, WRITE_TOOL_KEYS)
+[x] 2.8 Phase 2 folded into the final Sprint 17 commit
 
 PHASE 3 — Mission integration + audit aggregate + mock scenarios
-[ ] 3.1 engine.py: branch_base_sha wiring, on_self_correction_triggered
+[x] 3.1 engine.py: branch_base_sha wiring, on_self_correction_triggered
         publishing SELF_CORRECTION_TRIGGERED, surrender-path divergence,
         _fail_task_with_reason_code, except clauses in _run_pipeline
-[ ] 3.2 audit.py: record_loop_event() for synthetic _loop:* rows
-[ ] 3.3 tasks/service.py + schemas.py: harness-summary aggregate gains
+[x] 3.2 audit.py: record_loop_event() for synthetic _loop:* rows
+        (status="recorded")
+[x] 3.3 tasks/service.py + schemas.py: harness-summary aggregate gains
         correction_attempts, rollback_count, surrendered, exhausted
-[ ] 3.4 mock_provider.py: SELF_CORRECTION_DEMO/ROLLBACK scenario markers
-[ ] 3.5 full-pipeline mock tests (DEMO, ROLLBACK) + orchestrator-level
-        FakeGateway tests (EXHAUSTED, SURRENDER)
-[ ] 3.6 scripts/generate_ts_schemas.py rerun if HarnessSummaryResponse
-        shape changed
-[ ] 3.7 commit Phase 3 checkpoint
+[x] 3.4 mock_provider.py: SELF_CORRECTION_DEMO/ROLLBACK scenario markers
+        (deviates from #239's two-profile plan -- see DECISIONS.md #241)
+[x] 3.5 full-pipeline mock tests (DEMO, ROLLBACK in
+        test_self_correction_integration.py) + orchestrator-level
+        FakeGateway tests (EXHAUSTED, SURRENDER, already in 1.8) +
+        test_workflow_engine_reason_code.py for _fail_task_with_reason_code
+[x] 3.6 scripts/generate_ts_schemas.py rerun -- additive-only diff (9 lines,
+        SELF_CORRECTION_TRIGGERED); no dashboard code consumes
+        HarnessSummaryResponse yet, so no manual frontend edit needed
+[x] 3.7 Phase 3 folded into the final Sprint 17 commit
 
 PHASE 4 — Regression, security audit, documentation, close-out
-[ ] 4.1 full backend suite green
-[ ] 4.2 dashboard tsc --noEmit + next build clean (no UI changes expected
-        beyond generated TS types)
-[ ] 4.3 security audit pass (Rule #9/#12/#13/#18, revert bounds checklist)
-[ ] 4.4 CLAUDE.md / docs/ARCHITECTURE.md §4.6 / FOR_CTO.md doc sync
-[ ] 4.5 final commit + push; verify remote HEAD
+[x] 4.1 full backend suite green: 472 passed, 6 skipped in 364.67s
+        (baseline 455 + 17 new/changed)
+[x] 4.2 dashboard tsc --noEmit + next build clean, all 19 routes -- no UI
+        changes beyond the regenerated TS event contract
+[x] 4.3 independent security audit (dedicated read-only agent, not
+        self-audit): 12/12 PASS, zero CONCERN/FAIL -- branch-base
+        confinement, ancestry check, argv-list git, mission/harness
+        budget enforcement during correction, bounded surrender text,
+        no silent completion on failed validation, bounded event
+        payload, bounded get_harness_summary, Reviewer unreachable on
+        both failure paths, no role-hardcoding, no new arbitrary-
+        execution endpoint
+[x] 4.4 CLAUDE.md roadmap row 17 -> "17 (checkmark)" / docs/ARCHITECTURE.md
+        §4.5-4.6 rewritten to match as-built / docs/DECISIONS.md #240-242
+        / FOR_CTO.md §7.2/7.9/7.12/7.14/12.13/13/18a/19 doc sync
+[x] 4.5 final commit + push; verify remote HEAD (see close-out note below)
+
+CLOSE-OUT NOTES
+- No migration added; Alembic head unchanged at b1f4c8d5e9a2.
+- Residual limitations recorded in docs/DECISIONS.md #242 and
+  FOR_CTO.md §18a: surrender-marker regex is evadable in principle
+  (bounded impact -- exhaustion still fires); rollback is per-patch,
+  not per-attempt; no cross-run/cross-Mission learning (Sprint 18);
+  no CEO-facing dashboard surface for correction/rollback stats.
+- Sprint 18 boundaries recorded in docs/DECISIONS.md #242.
+- Browser verification: UNVERIFIED -- Sprint 17 introduced no
+  CEO-facing UI change (same honest classification Sprint 16 used).

@@ -3877,3 +3877,196 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       parsed, so provider output formatting quirks (extra
       whitespace/case) don't turn a genuine surrender into a false
       "still working" read.
+
+240. **Phases 1-2: correction interception, `MAX_CORRECTION_ATTEMPTS = 3`,
+     and `revert_last_patch` rollback bounds.**
+    - **`MAX_CORRECTION_ATTEMPTS = 3` lives in `agent_harness/
+      orchestrator.py`** next to `MAX_DENIED_STREAK`/`MAX_MALFORMED_STREAK`
+      rather than in config/settings — it is a loop-shape constant, not an
+      operator-tunable deployment knob, matching how the two existing
+      streak bounds are already code constants, not `settings.*` fields.
+      Exhaustion is checked *before* incrementing (`orchestrator.py:203`),
+      so exactly 3 corrective turns are ever granted; the 4th termination
+      attempt while still `last_validation_status == "failed"` raises
+      `SelfCorrectionExhaustedError` instead of being silently allowed
+      through or retried a 4th time.
+    - **Correction interception is termination-triggered, not
+      validation-triggered.** The loop never forces a corrective turn the
+      moment `run_validation` reports `"failed"` — it only intercepts when
+      the Employee *itself* tries to end the turn (`result.tool_calls`
+      empty) while `loop_state.last_validation_status == "failed"` and no
+      surrender marker matched (`orchestrator.py:172,192`). An Employee
+      that reacts to its own failed check without ever attempting to stop
+      (the `SELF_CORRECTION_DEMO` mock scenario) never triggers
+      interception at all and `correction_attempts` stays `0` — this is
+      by design (§4.16's decision table), not a gap: proactive
+      self-correction is strictly better than forced correction and must
+      never be penalized or counted against the budget.
+    - **The corrective reminder text is a single server-owned constant**
+      (not templated per failure reason, not provider-supplied) appended
+      as a synthetic user-turn message so the next provider call sees it
+      as ordinary conversation context — this keeps the reminder outside
+      the trust boundary the same way `_ENGINEER_CONTRACT_TOOL_LOOP` itself
+      is server-owned, and avoids ever interpolating raw `CheckResult`
+      output (which could contain repository content) into a message that
+      influences control flow.
+    - **`revert_last_patch` target-sha resolution is entirely
+      server-computed and ancestry-checked before any destructive git
+      operation**: `handlers.py:194-199` — deny (`ToolDeniedError`, not a
+      crash) if `loop_state` has no patch history at all; otherwise target
+      is `history[-2]` (the commit *before* the last patch) if two or more
+      patches exist, else `context.branch_base_sha` (reverts the single
+      patch all the way to the pre-mission commit). `WorkspaceManager.
+      revert_last_commit` (`local_git.py`) runs `git merge-base
+      --is-ancestor target_sha branch_name` (argv-list, `shell=False`)
+      before `git reset --hard target_sha`; a failed ancestry check raises
+      `WorkspaceConflictError`, which the handler translates to
+      `ToolDeniedError` rather than letting a workspace-manager-shaped
+      exception leak through the tool boundary (`handlers.py:200-205`).
+      This means a bogus/tampered `branch_base_sha` (impossible in
+      practice since it's server-set at context construction, but tested
+      directly in `test_revert_last_patch_ancestry_violation_is_denied_
+      not_destructive`) fails closed — denied, not destructive.
+    - **Post-success bookkeeping (popping `apply_patch_commit_history`,
+      clearing `loop_state.last_validation_status`) is done by the
+      orchestrator, not the handler** (`orchestrator.py` around the
+      `revert_last_patch` dispatch branch) — the handler's job ends at
+      "did the git operation succeed," matching the same handler/
+      orchestrator ownership split `LoopState` already uses elsewhere
+      (#239): only the orchestrator advances loop-control state; handlers
+      only report structured outcomes. Clearing `last_validation_status`
+      here (rather than requiring a fresh `run_validation` call) is
+      deliberate — a successful revert is itself proof the failing patch
+      is gone, so forcing an extra validation round-trip before allowing
+      termination would burn budget for no signal.
+    - **`revert_last_patch` consumes one tool-call budget slot** like
+      every other tool — no special-cased "free" rollback. This keeps
+      Rule #13 uniform: an Employee that thrashes between patch/revert
+      still exhausts its budget the same way any other unproductive loop
+      would.
+    - **Byte-identical (no-op) patches never grow `apply_patch_commit_
+      history`.** The `apply_patch` handler only appends when `workspace_
+      manager.commit()` returns a real `CommitResult` (not the pre-
+      existing `ValueError`-on-nothing-staged no-op path, #234/#236) —
+      so `revert_last_patch` after a no-op-then-real-patch sequence still
+      reverts to the correct prior *real* commit, never a phantom entry.
+
+241. **Phase 3: mission integration deviates from #239's planned
+     two-profile mock-sandbox approach; `get_harness_summary` extension;
+     `SELF_CORRECTION_TRIGGERED` wiring.**
+    - **Deviation from #239's Phase-0 plan, recorded honestly.** #239
+      proposed giving `FakeSandbox` two differently-named profiles (one
+      pre-seeded `"failed"`, one `"passed"`) so a single mock scenario's
+      first and second `run_validation` calls would naturally differ.
+      Implementation instead kept the demo/rollback mock scenarios calling
+      `run_validation` with the *same* profile name both times (more
+      realistic — a real Employee re-runs the same check after fixing the
+      same failure, it doesn't switch checks) and added a small test-only
+      `_sequence_validation_statuses` helper in
+      `test_self_correction_integration.py` that monkeypatches `harness.
+      sandbox_runner.run_check` in place with a closure popping a scripted
+      status list. `FakeSandbox`'s stock `results` dict is keyed by
+      profile *name* and cannot express "the same profile fails once, then
+      passes" — the two-profile workaround would have made the mock
+      scenario dishonestly easy (a real Employee has no way to know in
+      advance which named profile will pass) versus the sequenced
+      approach, which drives the exact same profile through a real
+      fail-then-pass cycle. `harness.sandbox_runner` is confirmed (via
+      `conftest.py`) to be the same object instance `WorkflowEngine` holds,
+      so the in-place monkeypatch affects the real pipeline run.
+    - **`SELF_CORRECTION_EXHAUSTED`/`SELF_CORRECTION_SURRENDER` are not
+      scripted as full mock-pipeline scenarios** — confirmed and kept per
+      #239's already-recorded plan (orchestrator-level `FakeGateway` tests
+      in `test_agent_harness_orchestrator.py` cover the loop-raising
+      behavior; a new `test_workflow_engine_reason_code.py` covers the
+      `_fail_task_with_reason_code` → `TASK_FAILED.reason_code` plumbing
+      those exceptions ultimately drive directly, without needing a full
+      scripted pipeline failure). This satisfies §4.15's "deterministic
+      coverage of every path, not scenario count parity" standard without
+      duplicating coverage a full pipeline run would add nothing to.
+    - **`get_harness_summary` distinguishes real tool-dispatch rows from
+      synthetic `_loop:`-prefixed diagnostic rows** written by `audit.
+      record_loop_event` (`_loop:correction_interception`, `_loop:
+      correction_exhausted`, `_loop:employee_surrendered`, each with
+      `status="recorded"`, a new status value alongside the pre-existing
+      `"success"|"denied"|"error"`). `tool_call_count`/`tools_used`/
+      `denied_count`/`error_count`/`total_duration_seconds` are computed
+      only from real rows (unchanged semantics for pre-Sprint-17 Missions,
+      which have no `_loop:` rows at all); the four new fields
+      (`correction_attempts`, `rollback_count`, `surrendered`, `exhausted`)
+      are derived purely from the synthetic rows plus one real-row check
+      (`rollback_count` counts successful `revert_last_patch` calls, since
+      a *denied* or *errored* revert attempt didn't actually roll anything
+      back).
+    - **`SELF_CORRECTION_TRIGGERED` is published via an injected
+      `on_self_correction_triggered` callback**, not a direct `EventBus`
+      import inside `orchestrator.py` — preserves Rule #1 (the harness
+      module doesn't import `event_bus`'s internals) exactly the way
+      Sprint 16 kept `agent_harness` free of any Timeline-publishing code;
+      `workflow_engine.engine` supplies the real callback, tests supply a
+      list-appending fake. Fired exactly once per loop that ever entered
+      correction (`loop_state.first_correction_emitted` guards repeat
+      fires across multiple interceptions in the same attempt), matching
+      the coarse-grained "narrative event, not per-call noise" split
+      #237/#238 already established for the audit table.
+
+242. **Phase 4: independent security audit, regression, and Sprint 17
+     close-out.**
+    - **Independent audit (12 items, dedicated read-only agent) — all
+      PASS, zero CONCERN/FAIL.** Covered: `revert_last_patch` branch-base
+      confinement and ancestry check; single-branch scope; argv-list git
+      (`shell=False`) throughout the revert path; mission-level and
+      harness-level budgets both still enforced during correction turns;
+      surrender text bounded via `output.bound_output` before reaching any
+      DB row or SSE payload; no code path reaches a successful Mission
+      outcome while `last_validation_status == "failed"`;
+      `SELF_CORRECTION_TRIGGERED`'s payload is structured/bounded (task
+      id, agent id, attempt count — no file/patch content, no secrets);
+      `get_harness_summary` exposes only bounded aggregates; Reviewer is
+      unreachable on both new failure paths; no new role-hardcoding
+      literal introduced; no new public arbitrary-execution endpoint.
+    - **Full backend regression: 472 passed, 6 skipped** (baseline 455 +
+      17 new: 14 orchestrator correction/rollback tests + 2 registry test
+      renames that now assert the 7-tool set + 2 new files covering mock
+      mission integration and the `_fail_task_with_reason_code` reason-
+      code plumbing directly — one pre-existing registry test was renamed
+      rather than added, netting 17 new/changed rather than a flat
+      addition). Zero regressions outside Sprint 17 files. Dashboard `tsc
+      --noEmit` and `next build` both clean, all 19 routes compiling — TS
+      event schema regeneration (`SELF_CORRECTION_TRIGGERED`) was
+      additive-only (9 lines) and no dashboard code consumes
+      `HarnessSummaryResponse` yet, so no manual frontend edit was needed
+      beyond the regenerated contract file. Alembic head unchanged at
+      `b1f4c8d5e9a2` — no migration added, per DoD #29.
+    - **Residual limitations, recorded honestly rather than silently
+      accepted:**
+      - Surrender detection is a case-insensitive regex on the
+        terminating `result.text`. A provider could in principle evade it
+        by rewording (e.g. splitting the marker across formatting). Impact
+        is bounded: an Employee that doesn't surrender and doesn't fix the
+        failure still hits `MAX_CORRECTION_ATTEMPTS` and fails via
+        exhaustion instead — the Mission never reaches a false success
+        either way.
+      - Rollback is per-patch (`revert_last_patch` undoes exactly the last
+        `apply_patch` commit), not per-attempt — an Employee cannot
+        "restart from scratch" in one call; it must call the tool once per
+        patch to walk further back, each consuming a budget slot.
+      - Self-correction has no cross-run or cross-Mission learning; every
+        attempt starts with `LoopState.correction_attempts == 0` and no
+        memory of prior Missions' failure patterns (Sprint 18 territory,
+        deliberately not implemented here).
+      - `run_validation` still resolves to `could_not_run` (not a hard
+        failure, and not itself grounds for correction interception) when
+        Docker Desktop is unavailable — unchanged Sprint 6/16 sandbox-
+        availability tradeoff.
+      - No CEO-facing dashboard surface exists for correction/rollback
+        stats; `get_harness_summary`'s new fields are API-only, following
+        #237's same "supplementary audit evidence, not a CEO decision
+        input" reasoning.
+    - **Sprint 18 boundaries, explicitly deferred:** cross-run/cross-
+      Mission learning, Organizational Memory and retrieval of prior
+      Missions' failure patterns, Reviewer-driven auto-fix (auto-fix
+      triggered by Reviewer feedback stays a CEO Decision →
+      `request_changes`, unchanged), any harness-summary/correction-stats
+      dashboard widget, extending `harness == "tool_loop"` to any Role
+      beyond Engineer, any new harness tool beyond `revert_last_patch`.

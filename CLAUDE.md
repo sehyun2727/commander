@@ -1148,7 +1148,7 @@ V1.1 is built through explicit sprint briefs.
 | D     |   14 ✅ | CEO Workspace UI shell                                |
 | D     |   15 ✅ | Widget system                                         |
 | E     |   16 ✅ | Agent Harness                                         |
-| E     |     17 | Self-correction                                       |
+| E     |   17 ✅ | Self-correction                                       |
 | F     |     18 | Project Memory + Sprint Learning                      |
 | G     |     19 | Mission Tree + remaining widgets                      |
 | H     |     20 | V1.1 release                                          |

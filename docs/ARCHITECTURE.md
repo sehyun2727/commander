@@ -335,22 +335,25 @@ current state.
 
 The goal is fewer CEO interruptions, not fewer CEO rights. Misclassifying a Critical decision as Minor is a trust violation, not an optimization — the classification criteria will live in the PM's role contract and be auditable in the Timeline once built. Not implemented as of Sprint 13; no `Minor`/`Major`/`Critical` classification exists in code today (Sprint 13 built the CEO Workspace projection instead — see §4.3).
 
-### 4.5 Agent Harness  *[V1.1 — Sprint 16 ✅; self-correction Sprint 17]*
+### 4.5 Agent Harness  *[V1.1 — Sprint 16 ✅; self-correction Sprint 17 ✅]*
 
-`app/modules/agent_harness/` (Sprint 16, `docs/DECISIONS.md` #233–#237).
+`app/modules/agent_harness/` (Sprint 16, `docs/DECISIONS.md` #233–#237;
+extended Sprint 17, `docs/DECISIONS.md` #239–#242).
 A Role whose `RoleSpec.harness == "tool_loop"` (today: Engineer, on a
 `deliverable_type == "code"` Mission's produce stage) executes as a
 bounded provider/tool loop instead of one-shot FILE-block output:
 
 ```
 list_repository / read_file / search_repository / inspect_git
-              → apply_patch → run_validation → summarize
+              → apply_patch → run_validation → revert_last_patch → summarize
 ```
 
-- **Six tools, code-owned and immutable** (`registry.py`'s frozen tuple):
-  four read-only, one write (`apply_patch`, the only tool that can
-  mutate the mission repo), one execution (`run_validation`, the only
-  tool that can run a command — always via the existing Sprint 6
+- **Seven tools, code-owned and immutable** (`registry.py`'s frozen
+  tuple): four read-only, two write (`apply_patch` mutates repository
+  content; `revert_last_patch`, added Sprint 17, undoes the loop's own
+  last `apply_patch` commit — zero provider-supplied arguments, target
+  commit always server-computed), one execution (`run_validation`, the
+  only tool that can run a command — always via the existing Sprint 6
   `DockerSandbox`: `--network none`, non-root, `--cap-drop ALL`,
   timeout- and output-bounded). No `run_shell`/arbitrary-command tool
   exists or is ever offered to the provider (Rule #9/#12).
@@ -358,7 +361,10 @@ list_repository / read_file / search_repository / inspect_git
   from the schema offered to the provider:** `resolve_permitted_tools`
   intersects `harness_enabled ∧ RoleSpec.tools ∧ SkillTemplate
   .capabilities ∧ stage_kind=="produce" ∧ workspace_ready`; a provider
-  cannot self-grant a tool merely because its schema was listed.
+  cannot self-grant a tool merely because its schema was listed. This
+  intersection is unchanged in shape by Sprint 17 — `revert_last_patch`
+  is granted through the same `RoleSpec.tools`/`SkillTemplate
+  .capabilities` path as every other tool.
 - **Budget (Rule #13):** `HarnessBudget` bounds tool calls and wall
   time per attempt, checked before every provider call and every tool
   dispatch; exhaustion raises `BudgetExceededError` → the Mission is
@@ -366,14 +372,23 @@ list_repository / read_file / search_repository / inspect_git
   CEO is informed via the existing budget-exceeded path. Two
   independent streak counters (denied calls, malformed/rejected calls)
   bound how long the loop tolerates a misbehaving provider before
-  raising `ToolLoopExhaustedError` — never retry forever.
+  raising `ToolLoopExhaustedError`. A third, independent dimension
+  added Sprint 17 — `MAX_CORRECTION_ATTEMPTS = 3` — bounds how many
+  times the loop will force a corrective turn after a failed
+  validation (§4.6). Never retry forever, on any of the three
+  dimensions.
 - **Observability is a durable audit table, not a per-call Timeline
-  event** (brief-sanctioned split — `docs/DECISIONS.md` #233/#237):
-  every tool call, successful or not, is persisted to
+  event** (brief-sanctioned split — `docs/DECISIONS.md` #233/#237,
+  extended #241): every tool call, successful or not, is persisted to
   `HarnessToolCallORM` (bounded, content-free `arguments_summary`,
   bounded `output_excerpt`, never raw file bodies) independent of
-  in-memory loop state. `GET /api/tasks/{id}/harness-summary` exposes a
-  bounded aggregate (call/denial/error counts, tools used, duration) on
+  in-memory loop state. Sprint 17 reuses the same table for three
+  synthetic diagnostic rows (`_loop:correction_interception`, `_loop:
+  correction_exhausted`, `_loop:employee_surrendered`; `status
+  ="recorded"`) rather than a second table. `GET /api/tasks/{id}
+  /harness-summary` exposes a bounded aggregate (call/denial/error
+  counts, tools used, duration, plus Sprint 17's
+  `correction_attempts`/`rollback_count`/`surrendered`/`exhausted`) on
   top of that table. Stage-boundary events (`CODING_STARTED`, etc.)
   remain the CEO-visible Timeline narrative; the audit table is
   engineering/Reviewer evidence.
@@ -381,9 +396,64 @@ list_repository / read_file / search_repository / inspect_git
   alternative worker (e.g. an external coding agent) can be substituted
   without changing events, payroll, or the surrounding organization.
 
-### 4.6 Self-correction  *[V1.1 — Sprint 17]*
+### 4.6 Self-correction  *[V1.1 — Sprint 17 ✅]*
 
-A failed check no longer waits for the CEO. The Employee reacts inside its budget; if it still fails, the Reviewer's feedback routes through PM judgment (§4.4) and only reaches the CEO when Critical.
+`app/modules/agent_harness/orchestrator.py` (Sprint 17,
+`docs/DECISIONS.md` #239–#242). A failed check no longer sends the
+Mission straight to the Reviewer; the Employee reacts inside its own
+budget first.
+
+- **Termination interception, not validation-triggered correction.**
+  `run_validation`'s structured `CheckResult.status` (never text-parsed)
+  is tracked in `LoopState.last_validation_status`, a per-attempt
+  mutable companion to the frozen `ToolRunContext`. The loop only
+  forces a corrective turn when the Employee itself tries to end the
+  turn while `last_validation_status == "failed"` — an Employee that
+  reacts to its own failure proactively, without ever attempting to
+  stop, is never intercepted and never spends a correction attempt.
+- **Bounded at `MAX_CORRECTION_ATTEMPTS = 3`.** A 4th blocked
+  termination attempt raises `SelfCorrectionExhaustedError`, caught
+  explicitly by the pipeline and mapped to `TASK_FAILED` with an
+  additive `reason_code == "self_correction_exhausted"` payload field
+  (`reason` string unchanged — existing consumers are unaffected).
+- **Explicit surrender.** The Employee may end the loop early via a
+  `**Unable to Complete:** <reason>` marker (case-insensitive regex,
+  mirrors the Reviewer's `**Verdict:**` parsing style) in its
+  terminating text — accepted even with zero prior correction
+  attempts. Produces `TASK_FAILED` with `reason_code
+  == "employee_surrendered"`; the surrender text is bounded via the
+  existing `output.bound_output` before it reaches any DB row or SSE
+  payload.
+- **Both new failure paths skip the Reviewer entirely** (Mission goes
+  straight to `FAILED`, branch preserved, no auto-cleanup) and release
+  the Employee to `IDLE` via the same two-edge walk (`WORKING→FAILED
+  →IDLE`) Sprint 16 already uses for other failures.
+- **`revert_last_patch` (§4.5) is the loop's rollback option** —
+  undoes the loop's own last `apply_patch` commit rather than requiring
+  the Employee to patch over a broken change. Target commit is always
+  server-computed from `LoopState.apply_patch_commit_history` /
+  `ToolRunContext.branch_base_sha`, ancestry-checked (`git merge-base
+  --is-ancestor`) before a `git reset --hard`; a failed ancestry check
+  denies the call rather than resetting destructively. A successful
+  revert clears `last_validation_status`, so termination is no longer
+  intercepted without requiring a fresh validation round-trip.
+- **`SELF_CORRECTION_TRIGGERED`** (new `EventType`, structured/bounded
+  payload — task id, agent id, attempt count, no file or patch content)
+  publishes exactly once per loop that ever entered correction, via a
+  callback injected into `run_tool_loop` (the harness module still
+  never imports `EventBus`, Rule #1). No per-correction-turn or
+  per-rollback Timeline event exists — the audit-vs-events split (§4.5)
+  is unchanged, just extended.
+- **On success**, the Reviewer receives the same real diff + change
+  summary + check summary as any other tool-loop Mission (§4.5's
+  `_land_tool_loop_changes` path, unchanged) — correction is invisible
+  to the Reviewer except through the evidence it produced.
+- **Residual limitations, recorded honestly:** surrender detection is
+  regex-based (bounded-impact evasion — a provider that both evades the
+  marker and never fixes the failure still exhausts its correction
+  budget); rollback is per-patch, not per-attempt; no cross-run or
+  cross-Mission learning (Sprint 18); no CEO-facing dashboard surface
+  for correction/rollback stats yet.
 
 ### 4.7 CEO Workspace widget system  *[V1.1 — Sprint 15 ✅]*
 
