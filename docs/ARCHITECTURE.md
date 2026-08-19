@@ -180,8 +180,8 @@ Workflow   Agent          Event Bus     Provider        Project
    │          └──────────── events ──────────────────────────┘
    │
    └── Agent Harness ──▶ SandboxRunner ──▶ Docker (no network, capped, non-root)
-        (tool loop,        run_checks only — template-defined commands
-         budget-capped)
+        (tool loop,        run_validation only — template-defined CheckSpec
+         budget-capped)      commands (TEMPLATE.checks), never a free string
 ```
 
 Realtime is **SSE**: one endpoint per company, replays the last 50 events on connect, heartbeat every 15s, client dedups by `event.id`.
@@ -335,19 +335,51 @@ current state.
 
 The goal is fewer CEO interruptions, not fewer CEO rights. Misclassifying a Critical decision as Minor is a trust violation, not an optimization — the classification criteria will live in the PM's role contract and be auditable in the Timeline once built. Not implemented as of Sprint 13; no `Minor`/`Major`/`Critical` classification exists in code today (Sprint 13 built the CEO Workspace projection instead — see §4.3).
 
-### 4.5 Agent Harness  *[V1.1 — Sprints 16–17]*
+### 4.5 Agent Harness  *[V1.1 — Sprint 16 ✅; self-correction Sprint 17]*
 
-Worker roles whose harness is `tool-loop` execute as:
+`app/modules/agent_harness/` (Sprint 16, `docs/DECISIONS.md` #233–#237).
+A Role whose `RoleSpec.harness == "tool_loop"` (today: Engineer, on a
+`deliverable_type == "code"` Mission's produce stage) executes as a
+bounded provider/tool loop instead of one-shot FILE-block output:
 
 ```
-analyze repo → plan → modify → run_checks → react to results → commit → summarize
+list_repository / read_file / search_repository / inspect_git
+              → apply_patch → run_validation → summarize
 ```
 
-- **Repository awareness:** read files, search code, understand structure, modify only what is necessary. Never blindly overwrite.
-- **Budget (Rule #13):** max tool calls, max tokens, max wall time, max cost. Exhaustion → `blocked` + reason + CEO informed.
-- **Every tool call emits an event.** A loop the CEO cannot watch is not acceptable.
-- **`run_checks` is the only execution tool that exists** (Rule #12). The harness cannot gain a shell by any path.
-- The harness is an implementation of a stable worker interface, so an alternative worker (e.g. an external coding agent) can be substituted without changing events, payroll, or the surrounding organization.
+- **Six tools, code-owned and immutable** (`registry.py`'s frozen tuple):
+  four read-only, one write (`apply_patch`, the only tool that can
+  mutate the mission repo), one execution (`run_validation`, the only
+  tool that can run a command — always via the existing Sprint 6
+  `DockerSandbox`: `--network none`, non-root, `--cap-drop ALL`,
+  timeout- and output-bounded). No `run_shell`/arbitrary-command tool
+  exists or is ever offered to the provider (Rule #9/#12).
+- **Fail-closed authorization, re-derived on every call, not trusted
+  from the schema offered to the provider:** `resolve_permitted_tools`
+  intersects `harness_enabled ∧ RoleSpec.tools ∧ SkillTemplate
+  .capabilities ∧ stage_kind=="produce" ∧ workspace_ready`; a provider
+  cannot self-grant a tool merely because its schema was listed.
+- **Budget (Rule #13):** `HarnessBudget` bounds tool calls and wall
+  time per attempt, checked before every provider call and every tool
+  dispatch; exhaustion raises `BudgetExceededError` → the Mission is
+  `blocked` with `limit_kind`/`limit_value`/`observed_value` and the
+  CEO is informed via the existing budget-exceeded path. Two
+  independent streak counters (denied calls, malformed/rejected calls)
+  bound how long the loop tolerates a misbehaving provider before
+  raising `ToolLoopExhaustedError` — never retry forever.
+- **Observability is a durable audit table, not a per-call Timeline
+  event** (brief-sanctioned split — `docs/DECISIONS.md` #233/#237):
+  every tool call, successful or not, is persisted to
+  `HarnessToolCallORM` (bounded, content-free `arguments_summary`,
+  bounded `output_excerpt`, never raw file bodies) independent of
+  in-memory loop state. `GET /api/tasks/{id}/harness-summary` exposes a
+  bounded aggregate (call/denial/error counts, tools used, duration) on
+  top of that table. Stage-boundary events (`CODING_STARTED`, etc.)
+  remain the CEO-visible Timeline narrative; the audit table is
+  engineering/Reviewer evidence.
+- The harness is an implementation of a stable worker interface, so an
+  alternative worker (e.g. an external coding agent) can be substituted
+  without changing events, payroll, or the surrounding organization.
 
 ### 4.6 Self-correction  *[V1.1 — Sprint 17]*
 
@@ -489,7 +521,7 @@ Identified by code review at the V1.1 planning gate; **all five items closed in 
 - **Isolation, per run:** fresh container → tar-copy the landed branch files in → run one fixed command → capture output tail → destroy unconditionally, even on failure or timeout. No container is reused.
 - **Constraints:** no network (`--network none`), memory / CPU / PIDs caps, non-root user, 120s hard kill-and-reap, `--cap-drop ALL` and `--security-opt no-new-privileges` (Sprint 9). `--read-only` is deliberately not set — checks need to write under `/workspace` (build artifacts, `__pycache__`, test caches).
 - **Fails closed, never open:** Docker missing, image absent, check timed out, or CEO toggle off → no-op (`check_results: null`, zero events). It never falls back to running anything unsandboxed. Capability is probed live, never assumed.
-- **The harness changes none of this.** When agents gain tool loops (Sprint 16), the only execution tool is `run_checks`. There is no path by which an agent obtains a shell, and blocklists are never accepted as a substitute for the whitelist (Rule #12).
+- **The harness changes none of this.** Agents with a tool loop (Sprint 16) have exactly one execution tool, `run_validation`, itself limited to `TEMPLATE.checks`' named `CheckSpec` commands. There is no path by which an agent obtains a shell, and blocklists are never accepted as a substitute for the whitelist (Rule #12).
 
 ### 7.2 Authorization  *[V1.1 — Sprint 9 ✅]*
 

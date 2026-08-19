@@ -3730,3 +3730,77 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       exercising a full create→assign→tool-loop→pending_approval mission
       lifecycle each, matching the file's existing `get_diff` test
       pattern.
+
+238. **Phase 5: security audit and Sprint 16 close-out.**
+    - **Independent audit (12 items) — all PASS, zero CONCERN/FAIL.**
+      Full detail in `PROGRESS.txt` Phase 5; the only two findings worth
+      recording as decisions rather than plain verification:
+      1. `docs/ARCHITECTURE.md` §4.5 had drifted from the as-built
+         system — it was written before Phase 1–4 implementation
+         decisions were made and still said `run_checks` (the tool is
+         `run_validation`) and "every tool call emits an event" (the
+         actual, brief-sanctioned design per §"Use event records for
+         CEO-visible summaries and a durable audit record for
+         engineering evidence if current architecture separates these
+         concerns" is: stage-boundary Timeline events stay coarse-
+         grained, `HarnessToolCallORM` is the durable per-call audit
+         record, `GET .../harness-summary` (`#237`) is the bounded
+         aggregate view over it). Rewrote §4.5 to match reality rather
+         than treat the drift as acceptable — Rule #10 requires this
+         file and the architecture to stay synchronized, not just the
+         code and DECISIONS.md.
+      2. Confirmed (not merely re-asserted) that `guard_path`'s symlink
+         handling is correct by reading `validation.py`'s
+         `Path.resolve()`+`relative_to()` confinement directly: `.resolve()`
+         already follows symlinks in any *existing* path component before
+         the confinement check runs, so a symlink planted inside the repo
+         pointing outside it is already caught there; `guards.py` adds one
+         narrower check `validate_path` had no reason to make — rejecting
+         a resolved target that is itself a symlink (even one pointing
+         back inside the workspace), closing a "confused deputy" gap
+         `validate_path` (designed for the one-shot Engineer's own
+         not-yet-existing writes) never had to consider.
+    - **Fresh-DB and migration verification ran against real Postgres,
+      not just sqlite tests:** `alembic heads`/`history` confirmed one
+      linear chain ending at `b1f4c8d5e9a2`; `scripts/seed.py` was run
+      against the live Docker Postgres container, which drops the whole
+      schema, replays every migration from base, then drives 5 missions
+      through the real service layer including a full tool-loop code
+      mission and a tool-loop rework cycle — this doubles as the
+      deterministic mock Harness E2E requirement (Phase 5 item 6), since
+      it exercises `assign_task` → `_run_engineer_tool_loop` →
+      `_land_tool_loop_changes` → Reviewer → CEO-decision under
+      `COMMANDER_PROVIDER=mock` with zero provider keys, against
+      Postgres rather than the test suite's per-test sqlite file.
+    - **Residual limitations, recorded honestly rather than silently
+      accepted:**
+      - The Agent Harness only ever activates for a Role whose
+        `RoleSpec.harness == "tool_loop"` on a `deliverable_type ==
+        "code"` Mission's produce stage; every other Role/stage still
+        runs the Sprint-8-era one-shot path. This is the sprint's
+        intended scope, not an oversight.
+      - No CEO-facing dashboard surface renders `GET .../harness-
+        summary` yet (Phase 4 decision, `#237`) — a CEO can see it only
+        by calling the API directly. Accepted because `MissionDetail
+        .tsx` already shows `code_stats`/`check_results` for every code
+        Mission and nothing about the current UI is broken or
+        misleading without it; a Sprint 17+ widget could surface it
+        later if the CEO workspace's own roadmap wants richer
+        per-Mission audit evidence.
+      - `run_validation` still resolves to `could_not_run` (not a hard
+        failure) when Docker Desktop is unavailable — the same
+        Sprint-6-era sandbox-availability tradeoff as the one-shot
+        path's `_run_checks`, unchanged by this sprint.
+    - **Sprint 17 boundaries (explicitly deferred, not started):**
+      self-correction (an Employee automatically reacting to its own
+      `run_validation` failure inside its budget, rather than the
+      Mission going straight to Reviewer/CEO regardless of check
+      outcome — `docs/ARCHITECTURE.md` §4.6); any harness-summary
+      dashboard widget; extending `harness == "tool_loop"` to any Role
+      beyond Engineer.
+    - **Final regression: full backend suite green after all Phase 5
+      documentation changes** (no product code changed in Phase 5 —
+      docs-only — so the number is unchanged from Phase 4's checkpoint:
+      455 passed, 6 skipped). Dashboard `tsc --noEmit` and `next build`
+      both clean, all 19 routes compiling. Local `HEAD` verified equal
+      to `origin/master` after the final push.

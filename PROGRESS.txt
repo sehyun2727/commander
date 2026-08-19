@@ -1,8 +1,8 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 16 — Secure Agent Harness
- Overall: Phase 0-4 complete.
- Now working on: Phase 5 -- security audit, regression, and documentation
+ Overall: Phase 0-5 complete. SPRINT 16 DONE.
+ Now working on: nothing -- awaiting Sprint 17 brief
  Last update: 2026-08-19
 ================================================
 
@@ -314,4 +314,91 @@ PHASE 4 — Mission Integration and Safe Observability
         Phase 4 checkpoint
 
 PHASE 5 — Security Audit, Regression, and Documentation
-[ ] not started
+[x] 5.1 full backend suite green (see 5.6 for the final post-doc-sync
+        number)
+[x] 5.2 frontend tests: none exist/changed for this sprint -- n/a
+[x] 5.3 dashboard typecheck (tsc --noEmit) and production build both
+        clean, all 19 routes compile (no dashboard files touched this
+        sprint, ran anyway as a release gate)
+[x] 5.4 verified migration chain from Sprint 15's baseline: `alembic
+        heads` shows one linear head (b1f4c8d5e9a2, "harness tool
+        calls"); `alembic history` shows no branching
+[x] 5.5 verified fresh DB bootstrap end-to-end against live Postgres
+        (Docker was up): scripts/seed.py dropped the entire schema and
+        re-ran every migration from base through b1f4c8d5e9a2, then
+        drove the real service layer through 5 missions including one
+        full tool-loop code mission ("Build login page" -> Completed)
+        and one rework/changes-requested tool-loop cycle ("Set up CI
+        pipeline" -> changes requested -> approved -> Completed) --
+        this doubles as 5.6's deterministic mock Harness E2E, run
+        against real Postgres rather than the test suite's sqlite
+[x] 5.6 deterministic mock Harness E2E: covered by 5.5 (real Postgres,
+        zero provider keys, COMMANDER_PROVIDER=mock) plus the full
+        pytest suite's test_code_missions.py/test_agent_harness_*.py
+[x] 5.7 existing planning/specification/mission/workspace/widget
+        regressions: all green as part of the full suite (no
+        module-specific regressions introduced)
+[x] 5.8-5.19 independent security audit -- delegated to a dedicated
+        read-only investigation, then spot-verified directly (guards.py,
+        output.py, docker_sandbox.py read in full and matched exactly).
+        All 12 items PASS, zero CONCERN/FAIL:
+        8.  tool allowlisting -- frozen code-owned registry, re-derived
+            fail-closed intersection on every call (permissions.py)
+        9.  shell=False -- zero shell=True/os.system/create_subprocess_
+            shell hits anywhere in apps/api/app; all 3 subprocess sites
+            are argv-list form
+        10. path/symlink handling -- validate_path resolves via
+            Path.resolve()+relative_to() (genuine confinement, not
+            string-prefix); guards.py additionally rejects a resolved
+            target that is itself a symlink (confused-deputy defense
+            validate_path had no reason to add)
+        11. patch atomicity -- apply_patch guards every file before
+            writing any of them; a workspace_manager.commit() no-op
+            ValueError (#236) is the only benign partial-state case,
+            already handled
+        12. timeout/process-tree termination -- docker_sandbox.py's
+            120s hard timeout calls `docker kill <container>` on
+            expiry, killing the whole container (not just one PID);
+            `finally: docker rm -f` always cleans up
+        13. environment minimization -- no --env flags passed to
+            `docker create`; harness handlers never read os.environ
+        14. output bounds/redaction -- output.py's bound_output()
+            truncates by UTF-8 byte length;
+            redact_environment_like_content() masks key-shaped secret
+            lines as defense-in-depth (primary control: SecretsProvider
+            values never enter a mission workspace or harness env)
+        15. permission intersections -- resolve_permitted_tools is a
+            single fail-closed AND across all 5 terms; any missing term
+            yields an empty set
+        16. cancellation/stale-callback -- asyncio.CancelledError is a
+            BaseException, never caught by run_tool_loop's except
+            clauses; engine.py's pipeline catches it once at the top
+            level and frees the Employee back to idle
+        17. secret exposure -- audit.py's summarize_arguments never
+            persists file content; no agent_harness code path returns a
+            secret through an event/API/prompt
+        18. no public arbitrary-execution endpoint -- confirmed again
+            independently (see 4.11)
+        19. WorkflowEngine/AgentRuntime module boundaries -- engine.py
+            only imports agent_harness's public functions/dataclasses;
+            agent_harness never imports workflow_engine (Rule #1)
+[x] 5.20 inspected the complete Phase 0-5 diff for scope leakage: no
+        Sprint 17+ features (self-correction, project memory) were
+        implemented; no changes outside agent_harness/workflow_engine/
+        tasks/docs
+[x] 5.21 documentation sync: CLAUDE.md (roadmap row 16 -> "16 ✅"),
+        docs/ARCHITECTURE.md §4.5 rewritten to match the as-built
+        harness (6 named tools, run_validation not the stale
+        "run_checks", fail-closed permission intersection, budget/
+        streak bounds, audit-table-not-per-call-event observability
+        split) plus its two other stale run_checks references fixed;
+        docs/DECISIONS.md #237 (Phase 4) and #238 (Phase 5 close-out)
+        added; README.md and docs/design/UX_SPEC.md needed no changes
+        (no dev-workflow or CEO-facing UI change this sprint)
+[x] 5.22 residual limitations recorded honestly (see DECISIONS.md #238)
+[x] 5.23 Sprint 17 boundaries recorded (see DECISIONS.md #238)
+[x] 5.24 final full-suite re-run after all doc changes: 455 passed, 6
+        skipped in 308.54s -- unchanged from Phase 4 (Phase 5 was
+        docs-only, no product code changed)
+[ ] 5.25 final commit/push, then verify clean working tree and local
+        HEAD == origin/master
