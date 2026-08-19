@@ -19,18 +19,17 @@ The competitive claim is not "a better coding agent." It is the **organization l
 - **Backend:** FastAPI (Python 3.11+), async SQLAlchemy, Alembic, Postgres in prod, SQLite in tests, single async worker.
 - **Frontend:** Next.js App Router + TypeScript + Tailwind + TanStack Query, one SSE stream per Company.
 - **Providers:** Mock (default, zero keys) and Anthropic (real). Provider identity is never hardcoded above `ProviderGateway`.
-- **Status:** V1 shipped as `v1.0.0` (Sprint 8). V1.1 in development. **Sprint 17 (Self-correction) is complete** — see §18a for the addendum; §1/§2 below are otherwise the Sprint-16-era snapshot, still accurate except where §18a/§7.14/§12.13/§13/§19 override it.
+- **Status:** V1 shipped as `v1.0.0` (Sprint 8). V1.1 in development. **Sprint 18 (Project Memory) is complete** — see §18b for the addendum; §1/§2 below are otherwise the Sprint-16-era snapshot, still accurate except where §18a/§18b/§7.14/§12.13/§12.14/§13/§19 override it.
 
-Test baseline right now: **472 passed, 6 skipped** (2 of the skips are Windows symlink-privilege skips in `test_agent_harness_guards.py`, honestly recorded — not silently passed; Sprint 17 added 17 new/changed tests on top of Sprint 16's 455).
+Test baseline right now: **512 passed, 6 skipped** (2 of the skips are Windows symlink-privilege skips in `test_agent_harness_guards.py`, honestly recorded — not silently passed; Sprint 17 added 17 new/changed tests on top of Sprint 16's 455, Sprint 18 added 40 more on top of Sprint 17's 472).
 
 ---
 
 ## 2. Current State
 
-- **Branch:** `master`, clean working tree, local HEAD == origin/master.
-- **HEAD SHA:** `9cfedc9366732f0a0644e335abe532a32db1c6c8` ("chore(sprint16): record final commit hash in PROGRESS.txt checklist").
-- **Alembic head:** `b1f4c8d5e9a2_harness_tool_calls` (one linear chain, no branching).
-- **PROGRESS.txt** state: `Sprint 16 — Secure Agent Harness. Phase 0-5 complete. SPRINT 16 DONE. Now working on: nothing -- awaiting Sprint 17 brief.`
+- **Branch:** `master`, clean working tree, local HEAD == origin/master (as of Sprint 18 close-out).
+- **Alembic head:** `c2a7e1f4b6d3` (adds `memory_records`, `down_revision = 'b1f4c8d5e9a2'`; one linear chain, no branching).
+- **PROGRESS.txt** is the live checkpoint file — read it directly for the current line-item state rather than trusting a snapshot here.
 
 ### What is genuinely built
 
@@ -43,10 +42,11 @@ Test baseline right now: **472 passed, 6 skipped** (2 of the skips are Windows s
 - Sprint 14: CEO Workspace UI shell at `/company/[id]`.
 - Sprint 15: `workspace_widgets` registry (8 widgets, 2 required), per-`(user_id, project_id)` preferences with integer-`revision` optimistic concurrency.
 - **Sprint 16: Secure Agent Harness.** `app/modules/agent_harness/` — bounded tool loop for `RoleSpec.harness == "tool_loop"` Roles on `deliverable_type == "code"` Missions. Full detail in §7 below.
+- **Sprint 17: Self-correction.** Termination-interception correction loop + server-computed rollback tool. See §18a.
+- **Sprint 18: Project Memory.** `app/modules/memory/` — deterministic event-derived projection into `memory_records`, PM-explicit-only recall wired into `PlanningOrchestrator`, idempotent backfill for pre-subscriber history. No new HTTP route, no dashboard surface. See §18b.
 
 ### What is NOT built
 
-- Sprint 18 Project Memory — deferred; no `memory` module exists. (Sprint 17 self-correction shipped — see §18a.)
 - Sprint 19 Mission Tree + remaining widgets.
 - Sprint 20 V1.1 release.
 - Decision-authority Minor/Major/Critical classification — **not in code** (Sprint 13 built the CEO Workspace projection instead).
@@ -226,6 +226,7 @@ Cooperative asyncio only. `POST /api/tasks/{id}/cancel` → `WorkflowEngine.canc
 | `active_specification_locks` | Project | PK `(project_id)`; one non-terminal spec per Company | DB-race-safe |
 | `workspace_preferences` | (user_id, project_id) | Widget layout | One JSON row + integer `revision` for optimistic concurrency (`StaleRevisionError → 409`) |
 | `harness_tool_calls` | Task/Agent | Sprint 16 durable per-call audit | `arguments_summary` is content-free (bounded); `output_excerpt` is bounded via `output.bound_output`; **never** raw file bodies |
+| `memory_records` | Project | Sprint 18 event-derived Company Knowledge row | `UNIQUE(source_event_id)` is the sole dedup guarantee (shared by the live subscriber and `backfill_memory`); `category` is one of the frozen six in `memory/registry.py`; bounded `content_json`/`tags`/`keywords_text` |
 
 ### 5.2 State machines (`core/lifecycle/`)
 
@@ -463,6 +464,7 @@ See `core/events/types.py`. Notable:
 - **`kind: system | conversation`** affects rendering, not storage (Rule #8: Timeline is derived from ONE event stream).
 - Ordering: `EventORM.seq` (autoincrement PK) is authoritative order; `EventORM.id` (UUID) is the dedup key the frontend uses.
 - **Sprint 16 did NOT add a per-tool-call event** — deliberate. `HarnessToolCallORM` is the durable record; `GET .../harness-summary` is the aggregate view.
+- **Sprint 18 added `MEMORY_RECORDED`** (published once per real insert into `memory_records`, by `memory/service.record_memory` — never on a dedup-skipped duplicate) **and `MEMORY_RECALLED`** (published by `PlanningOrchestrator._maybe_recall` every time a PM turn's `recall_request` fires, including zero-match attempts, carrying `spec_id`/`requested_categories`/`match_count`/`memory_ids` — no content bodies).
 
 ---
 
@@ -569,7 +571,7 @@ Everything outside this server process's trusted template/config code is untrust
 Each entry: **Decision · Why · Affected systems · What NOT to casually change.**
 
 ### 12.1 Everything is an Event; Timeline is one stream (Rule #8)
-- **Why:** single storage model, single audit trail, Project Memory (Sprint 18) can project over one stream instead of reconciling two.
+- **Why:** single storage model, single audit trail, Project Memory (Sprint 18 — `app/modules/memory/`) projects over this one stream instead of reconciling two.
 - **Affected:** `event_bus`, `timeline`, `reports`, `realtime`, `agent_harness` (deliberately does NOT emit per-call events).
 - **Don't:** create a second event-like table for "engineering-only" facts. `HarnessToolCallORM` is intentionally an **audit** table, not a competing event stream; it is not on the Timeline.
 
@@ -633,6 +635,11 @@ Each entry: **Decision · Why · Affected systems · What NOT to casually change
 - **Affected:** `agent_harness/orchestrator.py` (interception + `MAX_CORRECTION_ATTEMPTS`), `agent_harness/handlers.py::revert_last_patch` (zero-argument schema, server-computed target), `workspace_manager/local_git.py::revert_last_commit` (ancestry check before reset).
 - **Don't:** move the failure check to fire eagerly inside `run_validation`. Don't add any argument to `revert_last_patch`'s schema, or accept a target sha/branch from provider output. Don't skip the `git merge-base --is-ancestor` check "for efficiency" — it's the only thing standing between a denied rollback and a destructive one on a tampered `branch_base_sha`.
 
+### 12.14 Project Memory recall is PM-explicit-only and deterministic-only (DECISIONS.md #245–#247)
+- **Why:** an automatic "inject relevant memory into every turn" design would make the pipeline's prompt cost unpredictable and unbudgeted (Rule #13 tension), and letting recall call an LLM for relevance scoring would make a supposedly-observable projection stage behave nondeterministically. Gating recall on an explicit PM `recall_request` field keeps it opt-in and keeps `MAX_RECALL_*` a hard, predictable cap; keeping the whole read path (projection AND recall) LLM-free keeps it testable with plain assertions.
+- **Affected:** `app/modules/memory/` (all of it — `registry.py`, `projection.py`, `service.py`, `subscriber.py`, `backfill.py`), `planning/orchestrator.py` (`_validate_recall_request_optional`, `_reject_recall_request`, `_maybe_recall`, `pending_recall_message`).
+- **Don't:** add a code path where `_maybe_recall` fires without a PM turn having set `recall_request`. Don't route any extractor or `recall()` call through `ProviderGateway` — Memory must stay a pure projection over `events`, never a second inference surface. Don't let a CTO turn's `recall_request` field survive parsing — `_reject_recall_request` must keep failing that case at parse time, not by a runtime `if role == "cto"` check (Rule #16).
+
 ---
 
 ## 13. Non-Negotiable Invariants
@@ -675,6 +682,13 @@ Sprint 17 self-correction-specific:
 - No path exists from `last_validation_status == "failed"` to a successful Mission outcome without either a corrective fix, exhaustion-failure, or surrender-failure.
 - Both new failure paths (`self_correction_exhausted`, `employee_surrendered`) skip the Reviewer entirely.
 
+Sprint 18 memory-specific:
+- `memory_records` has a DB-level `UNIQUE(source_event_id)`; that constraint — not any in-code check — is the entire dedup guarantee shared by the live subscriber and by `backfill_memory`.
+- Every extractor in `projection.py` is zero-LLM and returns `None` on any malformed/missing input rather than raising.
+- `recall()` always applies server-side caps (`MAX_RECALL_LIMIT` etc.) regardless of what the PM's `recall_request` asks for, and always scopes to the calling Company's `project_id`.
+- A CTO turn's JSON is structurally rejected if it carries a non-null `recall_request` (`_reject_recall_request`, parse-time, not a runtime role check).
+- `MEMORY_RECALLED` publishes on every recall attempt, including zero-match ones.
+
 ---
 
 ## 14. Critical Files / Where To Look
@@ -697,6 +711,11 @@ Sprint 17 self-correction-specific:
 | Employee resolver | `apps/api/app/modules/workflow_engine/employee_resolution.py` |
 | Planning orchestrator | `apps/api/app/modules/planning/orchestrator.py` |
 | Planning service (approval gate) | `apps/api/app/modules/planning/service.py` |
+| Memory category registry + constants | `apps/api/app/modules/memory/registry.py` |
+| Memory extractors (pure, zero-LLM) | `apps/api/app/modules/memory/projection.py` |
+| Memory writer + recall reader | `apps/api/app/modules/memory/service.py` |
+| Memory live EventBus subscriber | `apps/api/app/modules/memory/subscriber.py` |
+| Memory backfill (idempotent) | `apps/api/app/modules/memory/backfill.py`, `scripts/backfill_memory.py` |
 | Agent Harness | `apps/api/app/modules/agent_harness/` — **read all 11 files** |
 | Tool registry | `apps/api/app/modules/agent_harness/registry.py` |
 | Permission intersection | `apps/api/app/modules/agent_harness/permissions.py` |
@@ -717,7 +736,7 @@ Sprint 17 self-correction-specific:
 | Workspace snapshot | `apps/api/app/modules/workspace_overview/service.py` |
 | Next-action policy (pure function) | `apps/api/app/modules/workspace_overview/next_action.py` |
 | Widget registry | `apps/api/app/modules/workspace_widgets/registry.py` |
-| Migrations | `apps/api/alembic/versions/` (head: `b1f4c8d5e9a2`) |
+| Migrations | `apps/api/alembic/versions/` (head: `c2a7e1f4b6d3` — adds `memory_records`, `down_revision = 'b1f4c8d5e9a2'`) |
 
 ### 14.2 Frontend
 
@@ -737,11 +756,11 @@ Sprint 17 self-correction-specific:
 ### 14.3 Docs
 
 - `CLAUDE.md` — hard rules (18 numbered).
-- `docs/ARCHITECTURE.md` — target + as-built; §4.5 is the current Agent Harness section (rewritten in Sprint 16 Phase 5 for accuracy — DECISIONS.md #238).
-- `docs/DECISIONS.md` — 238 numbered entries as of Sprint 16; Sprint 16 spans #233–#238.
-- `docs/design/UX_SPEC.md` — CEO experience source of truth.
-- `PROGRESS.txt` — live checkpoint file, currently marked "SPRINT 16 DONE".
-- `docs/prompts/sprint-16.md` — the Sprint 16 brief. Reads like a spec, not a task list.
+- `docs/ARCHITECTURE.md` — target + as-built; §4.5 is the current Agent Harness section (rewritten in Sprint 16 Phase 5 for accuracy — DECISIONS.md #238); §5 is the current Project Memory section (rewritten as-built in Sprint 18 — DECISIONS.md #245–#247).
+- `docs/DECISIONS.md` — 247 numbered entries as of Sprint 18; Sprint 16 spans #233–#238, Sprint 17 spans #239–#242, Sprint 18 spans #243–#247.
+- `docs/design/UX_SPEC.md` — CEO experience source of truth; unchanged by Sprint 18 (§8/§12 out-of-scope — no new UI).
+- `PROGRESS.txt` — live checkpoint file.
+- `docs/prompts/sprint-16.md`, `sprint-17.md`, `sprint-18.md` — the sprint briefs. Read like specs, not task lists.
 
 ---
 
@@ -861,6 +880,38 @@ Only concrete, evidence-based issues:
 
 ---
 
+## 18b. Sprint 18 Handover — Project Memory
+
+### What Sprint 18 achieved
+
+- New module `app/modules/memory/` (`registry.py` frozen category tuple + `EventType → category` map + bounded-content/recall constants; `projection.py` pure zero-LLM extractors; `service.py` `record_memory`/`recall`; `subscriber.py` live `EventBus` subscriber wired in `main.py::lifespan`; `backfill.py` idempotent replay; `schemas.py` `MemoryRecord`/`RecallRequest`/`RecalledMemory`).
+- New table `memory_records` (migration `c2a7e1f4b6d3`, `down_revision = 'b1f4c8d5e9a2'`), `UNIQUE(source_event_id)` as the sole dedup mechanism.
+- Six categories populated from eight existing `EventType`s: `ceo_approvals` (`APPROVAL_GRANTED`/`APPROVAL_REJECTED`/`APPROVAL_CHANGES_REQUESTED`), `pm_specifications` (`SPECIFICATION_APPROVED`), `reviewer_feedback` (`REVIEW_COMPLETED`), `failed_attempts` (`TASK_FAILED`, including Sprint 17's `reason_code`), `successful_solutions` (`TASK_COMPLETED`), `prior_discussions` (`SPECIFICATION_TURN_POSTED`). `architecture_decisions` and `coding_conventions` were scoped out — no event carries them as first-class structured facts yet.
+- `PlanningOrchestrator` gained PM-explicit-only recall: `_validate_recall_request_optional` (PM turn kinds) / `_reject_recall_request` (CTO turn kinds, parse-time), `_maybe_recall` (always publishes `MEMORY_RECALLED`, even on zero matches), and a single-turn-lifetime `pending_recall_message` local threading the ranked results into the *next* turn only.
+- New event `MEMORY_RECALLED` (`spec_id`, `requested_categories`, `match_count`, `memory_ids`).
+- One-shot operator action `scripts/backfill_memory.py [--project-id ID]` for Companies whose event history predates the subscriber.
+- New `RECALL_DEMO_MARKER` mock-provider fixture scenario exercising the real recall path end-to-end.
+- No new HTTP route, no new dashboard surface (§8/§12 out of scope by design).
+- Full detail and rationale: `docs/DECISIONS.md` #243–#247.
+
+### What was validated (honestly)
+
+- Full pytest suite: green (512 passed, 6 skipped — baseline 472 + 40 new/changed).
+- Dashboard `tsc --noEmit` + `next build`: green — no dashboard code changed; the only dashboard-adjacent change was a stale-drift fix to the regenerated `MemoryRecalledPayload` TS type (zero dashboard references to the corrected fields, confirmed via grep).
+- Migration round-trip (`upgrade head` → `downgrade -1` → `upgrade head`) verified against a throwaway Postgres database, not the real dev DB.
+- Mock E2E with zero provider keys: green, including a real `MockProvider.complete`-driven recall scenario (`RECALL_DEMO_MARKER`).
+- Independent 12-item security audit (dedicated read-only `Explore` agent, not self-audit): all PASS.
+- Scope-leakage diff review (`git diff --stat` against the true pre-Sprint-18 baseline, not a stray intermediate commit): zero dashboard changes, zero new HTTP routes.
+- **Browser verification: classified as UNVERIFIED** — Sprint 18 introduced no CEO-facing UI change (§8's explicit no-UI scope), so there was nothing new to browser-verify.
+
+### What Sprint 19 should be aware of
+
+- **Memory has no CEO-facing surface yet.** Recall results are visible only inside the PM↔CTO planning transcript (as an injected message) and on the Timeline (as `MEMORY_RECALLED`). A dedicated widget or Sidebar page reading `memory_records` directly is a natural, currently-unclaimed Sprint 19+ candidate — but must go through a route, not a direct table read from the dashboard (Rule #1).
+- **Recall relevance is naive keyword/tag/category matching plus recency decay** (`1/(1+age_days/30)`) — no stemming, no vector search, no cross-Company memory. If a future sprint wants smarter recall, that's a scoped decision, not an incremental tweak to `service.recall`.
+- **`architecture_decisions` and `coding_conventions` are not in `registry.CATEGORIES` at all** — `docs/ARCHITECTURE.md` §5's original sketch named eight categories, but only six shipped because no current event carries the other two as structured facts. Adding either requires a new event/extractor pair and a `CATEGORIES` tuple change, not just a registry entry.
+
+---
+
 ## 19. CTO Warnings
 
 ### Things I would tell the next CTO personally
@@ -910,6 +961,14 @@ Only concrete, evidence-based issues:
 **`MAX_CORRECTION_ATTEMPTS` is a loop-shape constant, not a settings knob — on purpose.** It lives next to `MAX_DENIED_STREAK`/`MAX_MALFORMED_STREAK` in `orchestrator.py`, not in `config.py`. If a future sprint wants it operator-tunable, that's a deliberate scope decision to make explicitly, not a "just move the constant" refactor — see DECISIONS.md #240.
 
 **Surrender and exhaustion both bypass the Reviewer, deliberately.** `_run_engineer_tool_loop`'s exception handling routes `SelfCorrectionExhaustedError`/`EmployeeSurrenderedError` straight to `_fail_task_with_reason_code`, never through `_land_tool_loop_changes`. Don't "helpfully" let the Reviewer see a Mission that never passed its own validation — that would defeat the entire self-correction contract.
+
+**Do not let `recall()` or any `memory/projection.py` extractor call `ProviderGateway`.** Both are load-bearing on being deterministic and cheaply testable with plain assertions. If a future sprint wants LLM-scored relevance, that is a new, explicitly-scoped surface — not a quiet upgrade to the existing pure functions.
+
+**Do not make recall implicit.** `_maybe_recall` must keep firing only when the just-persisted PM turn's JSON actually carried a non-null `recall_request`. Injecting memory into every PM turn "for better context" breaks the fixed, budgeted-cost framing `MAX_RECALL_*` depends on (Rule #13) and was explicitly rejected — see DECISIONS.md #245.
+
+**`memory_records`'s dedup is the DB constraint, not application logic.** `UNIQUE(source_event_id)` is what makes both the live subscriber and `backfill_memory` safe to run against the same event twice. Don't add an in-code "already exists?" check in front of it — that would just be a second, potentially-inconsistent source of the same guarantee.
+
+**`recall()` must keep scoping to the calling Company's `project_id`.** There is no cross-Company memory by design (Rule #15's account-scoping logic extends here even though Memory itself isn't a `users`-owned table). If you ever see a recall path that takes a bare `category`/`keyword` filter without a `project_id`, that's a scoping regression, not a feature.
 
 ---
 

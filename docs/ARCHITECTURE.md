@@ -278,7 +278,8 @@ conversational counterpart (Rule #11) and a dedicated Sidebar
 "Specifications" surface (Rule #17); approval is the sole gate for
 `POST /specifications/{id}/begin-execution`, which creates and assigns a
 Mission stamped with `specification_id` for provenance — pre-Sprint-12
-Missions remain valid with `specification_id = NULL`.
+Missions remain valid with `specification_id = NULL`. Sprint 18 extends
+this same turn loop with PM-explicit-only Project Memory recall — see §5.
 
 ### 4.3 CEO Workspace backend projection  *[V1.1 — Sprint 13 ✅]*
 
@@ -507,16 +508,22 @@ only *which subset, in what order* (Rule #17, `docs/DECISIONS.md` #228).
 
 ---
 
-## 5. Project Memory  *[V1.1 — Sprint 18]*
+## 5. Project Memory  *[V1.1 — Sprint 18 ✅]*
 
-Memory is a **projection over the event stream** (Rule #14), not a new datastore.
+Memory is a **projection over the event stream** (Rule #14), not a new datastore. `app/modules/memory/` owns it: a frozen, code-owned category tuple and `EventType → category` map (`registry.py`, mirroring `workspace_widgets/registry.py`'s "no admin route can add a category" pattern), pure extractors (`projection.py`), a dedup-safe writer (`service.record_memory`), a deterministic keyword/tag ranked reader (`service.recall`), a live `EventBus` subscriber (`subscriber.py`, wired in `main.py::lifespan`), and an idempotent backfill for pre-subscriber history (`backfill.py`, `scripts/backfill_memory.py`).
 
-Recorded categories: architecture decisions · CEO approvals · PM specifications · Reviewer feedback · coding conventions · failed attempts · successful solutions · prior discussions.
+Recorded categories (six, not eight — `architecture_decisions` and `coding_conventions` were scoped out because no event in the current stream carries them as first-class structured facts; DECISIONS.md #243): `ceo_approvals` · `pm_specifications` · `reviewer_feedback` · `failed_attempts` · `successful_solutions` · `prior_discussions`, sourced respectively from `APPROVAL_GRANTED`/`APPROVAL_REJECTED`/`APPROVAL_CHANGES_REQUESTED`, `SPECIFICATION_APPROVED`, `REVIEW_COMPLETED`, `TASK_FAILED`, `TASK_COMPLETED`, and `SPECIFICATION_TURN_POSTED`.
 
-Two behaviors depend on it:
+Every projected event type is captured **exactly once** as a `MemoryRecordORM` row: `UNIQUE(source_event_id)` at the DB level is the single dedup mechanism, shared identically by the live subscriber and by `backfill_memory` (DECISIONS.md #243, #246) — there is no separate "already projected?" check to keep in sync. Extractors are pure and zero-LLM: they hydrate one extra row via a direct `select()` against the shared ORM floor (never importing another module's service layer) and return `None` on any malformed/missing input rather than raising (DECISIONS.md #244).
 
-- **Continuity** — Mission N starts by recalling what Missions 1..N-1 established, instead of re-deriving it.
-- **Sprint Learning** — when work fails, the next attempt reads the previous attempts, the Reviewer's comments, and the failure reasons *first*. This is project learning, not model fine-tuning.
+Recall is **PM-triggered only, never automatic**: a PM planning turn's JSON may carry a `recall_request`; CTO turns are structurally forbidden from carrying one (`_reject_recall_request` in `PlanningOrchestrator`, rejected at parse time, not by a runtime role check — Rule #16). A fired recall always publishes `MEMORY_RECALLED` (even on zero matches, so it stays Timeline-observable), and the ranked results — if any — are injected into exactly the *next* planning turn via a single local `pending_recall_message`, since the orchestrator has no persisted cross-turn transcript (DECISIONS.md #245). Recall is a plain deterministic read: keyword/tag/category filtering plus a recency-decay score (`1/(1+age_days/30)`), with server-enforced caps (`MAX_RECALL_LIMIT` etc.) applied unconditionally regardless of what the PM's request asks for.
+
+No new HTTP route and no new dashboard surface were added (§8 out of scope) — Memory is consumed only inside the planning turn loop and observed only through existing Timeline events.
+
+Two behaviors this unlocks, both realized as PM-side recall rather than automatic injection:
+
+- **Continuity** — a PM can recall what earlier Missions/Specifications established instead of re-deriving it, when it explicitly chooses to.
+- **Sprint Learning** — a PM can recall prior `failed_attempts`/`reviewer_feedback` for a struggling area before drafting the next attempt.
 
 Selective recall is mandatory: injecting the entire history into every prompt would blow the context window. Relevance selection is itself a design surface and must be observable (`memory.recalled` events).
 
@@ -554,7 +561,7 @@ Selective recall is mandatory: injecting the entire history into every prompt wo
 | `planning` | PM↔CTO Project Specification lifecycle (§4.2 "As built"): `PlanningOrchestrator` (bounded turn loop, turn-budget + malformed-output-retry guarded per Rule #13), `service` (start/resume/revise/approve/reject/cancel/begin-execution, all ownership-gated), `routes`. DB-backed `active_specification_locks` singleton lock, mirroring Sprint 11's hiring-lock pattern. | ✅ Sprint 12 |
 | `workspace_overview` | CEO Workspace read-only snapshot projection + `next_action` precedence policy (§4.3 "As built"). One route: `GET /projects/{id}/workspace/overview`. No new table, no mutation route, no server-side cache. | ✅ Sprint 13 |
 | `workspace_widgets` | CEO Workspace widget catalog + per-(user, company) layout preferences (§4.7 "As built"). Frozen 8-widget registry, one JSON-column preference row per `(user_id, project_id)`, integer-`revision` optimistic concurrency. Four routes under `/projects/{id}/workspace/widgets` and `/projects/{id}/workspace/preferences`. Presentation-only — never a second source of business truth. | ✅ Sprint 15 |
-| `memory` | — | 🔲 **Does not exist** — Sprint 18 |
+| `memory` | Deterministic event-derived projection (§5 "As built"): frozen category registry, pure extractors, dedup-safe `record_memory` writer, keyword/tag/recency-ranked `recall` reader, live `EventBus` subscriber, idempotent `backfill_memory` for pre-subscriber history. Recall is PM-explicit-only, wired into `PlanningOrchestrator`; no HTTP route, no dashboard surface. | ✅ Sprint 18 |
 
 ### 6.2 Lifecycles
 

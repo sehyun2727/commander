@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 18 — Project Memory (deterministic, PM-triggered recall)
- Overall: Phase 3 complete (512 passed / 6 skipped), committing/pushing.
- Now working on: Phase 3 commit/push, then Phase 4 (regression, security
- audit, documentation sync, close-out).
+ Overall: Phase 4 documentation sync complete (items 1-10). Remaining:
+ final commit/push + clean-tree/HEAD verification (items 11-13).
+ Now working on: Phase 4 items 11-13 (final commit, push, verify).
  Last update: 2026-08-19
 ================================================
 
@@ -236,13 +236,61 @@ PHASE 3 — backfill + Sprint 17 signal projection + mock recall scenario
         regressions -- Phase 3 commit + push next
 
 PHASE 4 — Regression, security audit, documentation, close-out
-[ ] 4.1 full backend suite green (baseline 472 + new)
-[ ] 4.2 dashboard tsc --noEmit + next build clean, all 19 routes -- no UI
+[x] 4.1 full backend suite green: 512 passed / 6 skipped (472 baseline +
+        40 Sprint 18 new/changed), zero regressions outside Sprint 18 files
+[x] 4.2 dashboard tsc --noEmit + next build clean, all 19 routes -- no UI
         changes beyond the regenerated TS event contract
-[ ] 4.3 independent security audit (dedicated read-only agent, not self-audit)
-[ ] 4.4 CLAUDE.md roadmap row 18 sync / docs/ARCHITECTURE.md §5 rewritten
-        to as-built / docs/DECISIONS.md #244+ / FOR_CTO.md §5,§6,§8,§12,
-        §13,§14,§18,§19 doc sync
-[ ] 4.5 final commit + push; verify remote HEAD
+        (MemoryRecalledPayload drift fix, zero dashboard references)
+[x] 4.3 migration chain verified via alembic heads/history + a real
+        upgrade/downgrade/upgrade round-trip against a throwaway Postgres
+        DB (commander_migration_check, created/dropped via docker exec) --
+        deliberately not the real dev DB, to avoid risking in-progress
+        dev-DB state on a destructive-adjacent operation
+[x] 4.4 mock E2E with zero provider keys covering the new recall scenario
+        (RECALL_DEMO_MARKER, test_recall_demo_marker_runs_recall_end_to_end_via_real_mock_provider)
+        -- green
+[x] 4.5 existing planning / specification / mission / workspace / widget /
+        harness / self-correction regressions -- all green as part of the
+        full 512-passed suite run in 4.1
+[x] 4.6 independent security audit (dedicated read-only Explore agent, not
+        self-audit) against the brief's 12-item checklist: 12/12 PASS with
+        file:line evidence (extractor purity, zero LLM calls in
+        projection/recall, project_id scoping enforced in recall(),
+        DB-level UNIQUE(source_event_id), bounded/redacted excerpts,
+        minimal event payloads, no public HTTP endpoint, subscriber
+        exception isolation, server-enforced caps unconditional, CTO turns
+        structurally rejected from recall, no Rule #16 violations)
+[x] 4.7 full diff scope-leakage review (git diff --stat against the true
+        pre-Sprint-18 baseline 5017b13, not a stray intermediate commit):
+        26 files, 3394 insertions/122 deletions, zero dashboard changes,
+        zero new HTTP routes, zero RAG/vector/cross-Company/Employee-tool
+        scope leakage
+[x] 4.8 documentation sync: CLAUDE.md roadmap row 18 -> "18 (checkmark)";
+        docs/ARCHITECTURE.md §5 rewritten to as-built Memory + §6.1 module
+        table `memory` row + §4.2 cross-reference; docs/DECISIONS.md new
+        entries #245-#248 (Phase 2 recall-gating/message-threading/
+        malformed-request decisions, Phase 3 backfill-idempotency/
+        RECALL_DEMO_MARKER/TS-drift-fix decisions, Phase 4 verification-
+        technique notes, close-out residual-limitations + Sprint 19
+        boundary entry); README.md and docs/design/UX_SPEC.md confirmed
+        unchanged (no CEO-facing change landed); FOR_CTO.md synced: §2
+        (Current State snapshot updated to Sprint 18), §5.1 (memory_records
+        domain table row), §8.3 (MEMORY_RECORDED/MEMORY_RECALLED event
+        family notes), §12.14 (new architectural decision entry), §13
+        (Sprint-18-specific invariant bullet list), §14.1 (memory module
+        critical-files rows + migration head), §14.3 (doc index refresh),
+        §18b (new Sprint 18 Handover section), §19 (5 new CTO warnings)
+[x] 4.9 residual limitations recorded honestly in DECISIONS.md #248: naive
+        keyword/tag substring match (no stemming/fuzzy/semantic), no
+        cross-Company memory, no vector recall/RAG, no CEO-facing surface,
+        only 6 of 8 originally-sketched categories populated, backfill is
+        operator-run not automatic
+[x] 4.10 Sprint 19 boundary recorded in DECISIONS.md #248: no Mission Tree
+        work, no memory-consuming widget, no workspace_widgets/registry.py
+        change, no new workspace route -- anything Sprint 19 does with
+        Memory is that sprint's own scoped brief
+[ ] 4.11 final commit + push
+[ ] 4.12 verify clean working tree
+[ ] 4.13 verify local HEAD == origin/master
 
 CLOSE-OUT NOTES (fill in at Phase 4)

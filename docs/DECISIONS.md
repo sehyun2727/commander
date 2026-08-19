@@ -4214,3 +4214,171 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       append-only and nothing deletes `ApprovalORM`, but defensive
       nonetheless) makes the extractor return `None`, following the same
       malformed-payload contract as every other extractor failure mode.
+
+### #245 — Sprint 18 Phase 2: recall gating, cross-turn message threading, malformed-request handling
+
+- **Context:** §7 requires that recall fire only when the PM explicitly asks
+  for it, never as an implicit side effect of every PM turn, and never from
+  a CTO turn. The orchestrator (`app/modules/planning/orchestrator.py`) has
+  no persisted list of chat messages between turns -- each turn is a single
+  fresh `gateway.complete(...)` call assembled from `opts` -- so "inject the
+  recall results into the next turn" had no existing carrier.
+- **Decision: `recall_request` is validated per turn-kind, not globally.**
+  `_validate_recall_request_optional` (allows `null` or an object) is
+  applied to every PM turn kind (`pm_analysis`, `pm_draft_or_followup`,
+  `pm_draft`, `pm_revision_draft`); `_reject_recall_request` is applied to
+  every CTO turn kind and raises `ValueError` if the JSON contains a
+  non-null `recall_request` at all. This makes "CTO cannot recall" a
+  structural parse-time rejection, not a runtime `if role == "cto": skip`
+  branch, keeping Rule #16 clean (CLAUDE.md #16 -- role-specific behavior
+  must come from turn-kind/workflow semantics, not a hardcoded role check).
+- **Decision: recall fires only when the just-persisted turn is a PM turn
+  and its parsed JSON has `recall_request is not None`.** `_run`'s main
+  loop calls `_maybe_recall(...)` immediately after `_persist_turn`, gated
+  on `role_key == TEMPLATE.planning_pm_role_key` -- resolved from the
+  template's role data, not a literal `"pm"` string comparison. A PM turn
+  that omits `recall_request` (or sets it `null`) never triggers a
+  recall; there is no "recall by default" behavior.
+- **Decision: `pending_recall_message: str | None` is a single local
+  variable in `_run`'s loop, not a persisted field.** It is set by
+  `_maybe_recall`'s return value right after a PM turn, then consumed
+  exactly once by shifting it into `turn_recall_message` at the top of the
+  *next* loop iteration (`turn_recall_message, pending_recall_message =
+  pending_recall_message, None`), and passed into `_run_turn(...,
+  recall_message=turn_recall_message)`. This means recall results are only
+  ever visible to the turn immediately following the PM's request -- they
+  are not re-injected into every subsequent turn, matching the fixed-cost
+  framing of the recall budget (§7, `MAX_RECALL_*`). Rejected alternative:
+  threading recall results through `SpecificationTurnORM` history and
+  re-reading it every turn -- unnecessary complexity for a value with a
+  one-turn lifetime, and every other turn already reconstructs its context
+  from `opts` rather than a running transcript.
+- **Decision: malformed `recall_request` payloads are coerced, not
+  rejected, inside `_maybe_recall`.** `RecallRequest.model_validate(raw)`
+  runs when `raw` is a dict; a non-dict truthy value (defensive case --
+  the provider contract should never emit this, but nothing upstream
+  guarantees it) falls back to `RecallRequest()` (i.e. "recall with
+  default/no filters") rather than failing the whole planning turn. This
+  matches the "never crash the pipeline on a bad memory-adjacent value"
+  posture already established for the extractors in #244 (return `None`,
+  do not raise). `MEMORY_RECALLED` is always published even on zero
+  matches (§7 item 6), so a PM's recall attempt is always visible on the
+  Timeline regardless of whether anything came back; only the *message*
+  fed to the next turn is conditional on `results` being non-empty.
+
+### #246 — Sprint 18 Phase 3: backfill idempotency, `RECALL_DEMO_MARKER`, and a TS-schema drift fix
+
+- **Context:** §10 Phase 3 / Definition of Done #17 requires an idempotent
+  one-shot backfill for Companies whose event history predates the memory
+  subscriber's installation (`app/modules/memory/subscriber.py`), runnable
+  as an operator action.
+- **Decision: `backfill_memory` replays events through the exact same
+  `record_memory` path the live subscriber uses**, rather than a
+  separate bulk-insert path. Idempotency is therefore inherited for free
+  from `record_memory`'s existing `UNIQUE(source_event_id)` dedup
+  guarantee (established in #243) -- there is no backfill-specific
+  "already projected?" check to keep in sync with the live subscriber's
+  behavior. The function returns the count of *events considered*, not
+  rows inserted, so re-running it against an already-backfilled Company
+  reports the same number with zero net-new rows -- documented explicitly
+  in the docstring and asserted by
+  `test_backfill_is_idempotent_on_rerun`.
+- **Decision: `backfill_memory(session_factory, event_bus, *, project_id:
+  str | None = None)` scopes to one Company when given an id, or every
+  Company when `None`**, exposed as `scripts/backfill_memory.py
+  [--project-id ID]`. Chosen over a bare "no filter" API because the
+  operator action described in §10 is explicitly per-incident ("this
+  Company existed before the subscriber went live"), and an unscoped-only
+  tool would force an operator to backfill every Company just to fix one.
+- **Decision: `RECALL_DEMO_MARKER = "RECALL_DEMO"` added to
+  `mock_provider.py`** as a fixture convention alongside the existing
+  `CTO_FOLLOWUP_MARKER`-style markers, so the recall path (PM emitting a
+  populated `recall_request`) can be exercised end-to-end through the
+  *real* `MockProvider.complete` in a test, rather than only through a
+  hand-constructed `data` dict passed directly to `_maybe_recall`. This
+  is why `test_recall_demo_marker_runs_recall_end_to_end_via_real_mock_provider`
+  wraps `MockProvider.complete` (observes real calls) instead of
+  replacing it with a stub -- the point of the test is that the actual
+  mock-mode text-generation path produces a `recall_request` and the
+  orchestrator's real turn loop threads it through, satisfying CLAUDE.md
+  Rule #6 (mock mode is a first-class verification path, not a
+  degraded stand-in).
+- **Found and fixed during Phase 3, not new scope:** regenerating
+  `packages/event-schemas/ts/index.ts` via
+  `scripts/generate_ts_schemas.py` (required after any event contract
+  change per CLAUDE.md §9.1) surfaced that the *existing* generated
+  `MemoryRecalledPayload` TS type was already stale relative to
+  `app/core/events/contracts.py`'s actual `MemoryRecalledPayload` (`spec_id:
+  str | None` / `requested_categories: list[str]`, established in #243)
+  -- the checked-in TS had `specification_id: string` and an optional
+  `requested_categories`. This predates Phase 3 and was not something
+  Phase 3 changed; it was a lingering drift from #243's own schema
+  landing without a regeneration pass. Fixed by taking the regeneration
+  output as authoritative (`packages/event-schemas/ts/index.ts` must never
+  be hand-edited, so this is a "run the generator, accept its output" fix,
+  not a manual patch). Confirmed zero dashboard references to either field
+  name via grep before accepting the change, so the fix carries no
+  frontend blast radius -- consistent with §8's "no new UI" constraint,
+  since this is a schema-accuracy fix rather than a feature addition.
+
+### #247 — Sprint 18 Phase 4: verification technique notes
+
+- **Decision: the migration round-trip check (`upgrade head` →
+  `downgrade -1` → `upgrade head`) ran against a throwaway Postgres
+  database (`commander_migration_check`, created and dropped via `docker
+  exec commander-postgres-1 psql`) rather than the real local dev
+  database.** This is a risk-avoidance judgment call under CLAUDE.md
+  §7.1 ("choose the most reasonable engineering decision... continue")
+  rather than a brief requirement either way -- a downgrade/upgrade
+  round-trip is exactly the kind of operation where a mistake against the
+  dev DB is expensive to recover from, and a disposable database gives
+  the same verification signal (does `alembic downgrade -1` correctly
+  reverse the `memory_records` migration, does re-upgrading restore head
+  `c2a7e1f4b6d3` cleanly) with zero risk to any other in-progress work in
+  the dev DB.
+- **Security audit (§10 Phase 4 item 6) was dispatched to an independent
+  `Explore` subagent** with the brief's 12-item checklist verbatim,
+  rather than self-reviewed, specifically so the review would not inherit
+  any blind spots from the same reasoning that wrote the extractors and
+  recall path in Phases 1-2. Result: 12/12 PASS with file:line evidence
+  (extractor purity, zero LLM calls anywhere in projection/recall, `recall()`
+  enforces `project_id` scoping, DB-level `UNIQUE(source_event_id)`,
+  bounded/redacted excerpts, minimal event payloads, no public HTTP
+  endpoint for memory, subscriber exceptions isolated from the publishing
+  transaction, `MAX_RECALL_*` caps applied unconditionally server-side,
+  CTO turns structurally rejected from requesting recall per #245, no Rule
+  #16 role-hardcoding violations introduced).
+
+### #248 — Sprint 18 close-out: residual limitations and Sprint 19 boundary
+
+- **Residual limitations, recorded honestly rather than silently accepted:**
+  - Recall's keyword match is a naive substring/tag/category filter over a
+    fixed-stopword tokenizer — no stemming, no fuzzy match, no semantic
+    similarity. This is a deliberate Sprint 18 scope boundary (§4.9's
+    ranking formula is keyword-overlap + tag-overlap + recency-decay, not
+    embeddings), not an oversight.
+  - No cross-Company memory. `recall()` always scopes to one `project_id`;
+    there is no mechanism, and none is planned, for one Company's history
+    to inform another's.
+  - No vector recall / RAG pipeline. Every projected fact is a bounded,
+    structured `MemoryRecordORM` row read via SQL filters — there is no
+    embedding store and no similarity search anywhere in `app/modules/memory/`.
+  - No CEO-facing surface. Recall results are visible only inside the
+    PM↔CTO planning transcript (as an injected message, consumed once) and
+    on the Timeline (as `MEMORY_RECALLED`). A Company Knowledge widget or
+    Sidebar page is explicitly future work, tied to whenever `docs/design/
+    UX_SPEC.md` §3 is revisited for it (CLAUDE.md §8/§12 scoped Sprint 18
+    to "no new UI").
+  - Only six of the eight categories originally sketched in
+    `docs/ARCHITECTURE.md` §5 are populated (`architecture_decisions` and
+    `coding_conventions` have no current structured event source — #246).
+  - Backfill is an operator-run script (`scripts/backfill_memory.py`), not
+    an automatic on-boot reconciliation — a Company that goes a long time
+    without an operator running it stays without projected history for
+    events predating the subscriber, until someone runs it.
+- **Sprint 19 boundary:** Sprint 18 does not touch Mission Tree, does not
+  add any widget consuming `memory_records`, does not change
+  `workspace_widgets/registry.py`, and does not add any route under
+  `/projects/{id}/workspace/*`. Anything Sprint 19 does with Memory (e.g.
+  a "Company Knowledge" widget, or richer recall ranking) is new scope for
+  that sprint's own brief, not an extension folded in here.
