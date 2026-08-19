@@ -29,6 +29,14 @@ class DiffResponse(BaseModel):
     truncated: bool
 
 
+class HarnessSummaryResponse(BaseModel):
+    tool_call_count: int
+    tools_used: list[str]
+    denied_count: int
+    error_count: int
+    total_duration_seconds: float
+
+
 class TaskResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

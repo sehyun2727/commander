@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 16 — Secure Agent Harness
- Overall: Phase 0-3 complete.
- Now working on: Phase 4 -- mission integration and safe observability
- Last update: 2026-08-18
+ Overall: Phase 0-4 complete.
+ Now working on: Phase 5 -- security audit, regression, and documentation
+ Last update: 2026-08-19
 ================================================
 
 PHASE 0 — Baseline, Repository Inspection, and Architecture Decisions
@@ -244,7 +244,74 @@ PHASE 3 — Harness and AgentRuntime Integration
 [x] 3.10 commit/push Phase 3 checkpoint
 
 PHASE 4 — Mission Integration and Safe Observability
-[ ] not started
+[x] 4.1 harness integrated into authorized code-mission produce stage
+        (Phase 3, engine.py:858 branches on role_spec.harness=="tool_loop"
+        AND task.deliverable_type=="code" -- Rule #16 compliant)
+[x] 4.2 verified specification approval gate is untouched: the tool loop
+        runs entirely inside the existing produce stage of an already-
+        assigned, already-approved Mission; nothing in Phase 3/4 changes
+        how a Specification becomes an assignable Mission
+[x] 4.3 verified central Employee resolution is untouched: assign_task's
+        idle-first Role->Employee resolution (tasks/service.py) still runs
+        before the pipeline starts; the tool loop only changes what
+        happens once an agent is already assigned
+[x] 4.4 verified per-Employee model/skill configuration still applies:
+        _run_engineer_tool_loop still resolves model_ref via
+        _agent_model_override(agent) and passes context.skill_template
+        into permission resolution, same as the one-shot path
+[x] 4.5 verified validation failure blocks success: run_checks' output is
+        folded into the Reviewer's context exactly like the pre-existing
+        one-shot path (engine.py:890-897) -- checks are Reviewer evidence,
+        not a hard gate, consistent with V1's established design; not a
+        Sprint 16 regression
+[x] 4.6 verified Reviewer receives real diff/evidence: same
+        change_summary + diff_text + check_summary context assembly
+        (engine.py:886-897) drives the review stage for both harness and
+        one-shot paths
+[x] 4.7 verified cancellation/failure frees the Employee: already
+        exercised end-to-end by test_reliability.py's
+        test_cancel_running_mission_transitions_to_cancelled_and_frees_agent
+        (now runs the tool-loop path since deliverable_type defaults to
+        "code" -- DECISIONS.md #236)
+[x] 4.8 added a safe, bounded harness summary observability surface:
+        tasks/service.py:get_harness_summary aggregates
+        HarnessToolCallORM rows into {tool_call_count, tools_used,
+        denied_count, error_count, total_duration_seconds} (counts and
+        tool names only -- never arguments_summary/output_excerpt
+        content); new GET /api/tasks/{task_id}/harness-summary route
+        follows the existing GET .../diff derived-data pattern exactly
+        (resource_owned_by 404 check, service returns None -> 404); no
+        new TaskORM column/migration needed since this is computed on
+        read from the existing audit table (Rule #14 spirit)
+[x] 4.9 dashboard: no change made. MissionDetail.tsx already surfaces
+        code_stats and check_results prominently for code missions; the
+        harness summary is supplementary audit evidence, not something
+        the current UI is missing or would render confusingly without --
+        sprint-16.md's own Phase 4 wording ("only if current UI requires
+        it") does not apply here
+[x] 4.10 verified visible error states: ToolLoopExhaustedError and
+        BudgetExceededError both flow through the same paths the sprint
+        already wired in Phase 1/3 -- BudgetExceededError is caught
+        explicitly (engine.py:969) and blocks the Mission with a
+        BUDGET_EXCEEDED event carrying limit_kind/limit_value/observed;
+        ToolLoopExhaustedError falls through the generic except Exception
+        (engine.py:972) into _fail_task, which publishes TASK_FAILED with
+        reason=str(exc) -- visible on the Timeline exactly like any other
+        stage failure (Rule #3/#18)
+[x] 4.11 verified no public arbitrary-tool endpoint exists: no FastAPI
+        route imports dispatch_tool_call or run_tool_loop; the only public
+        surface is the new read-only harness-summary endpoint
+[x] 4.12 dashboard typecheck/build: skipped, no dashboard files changed
+[x] 4.13 mock mission E2E with zero keys: already covered -- the entire
+        suite runs under COMMANDER_PROVIDER=mock with zero provider keys,
+        and the two new get_harness_summary tests exercise a full
+        create->assign->tool-loop->pending_approval mission lifecycle
+[x] 4.14 new tests: test_workspace_service.py +2
+        (test_get_harness_summary_reflects_tool_calls_for_a_code_mission,
+        test_get_harness_summary_is_none_when_harness_never_ran)
+[x] 4.15 full suite regression green: 455 passed, 6 skipped in 305.97s
+        (up from 453 -- the 2 new get_harness_summary tests); commit/push
+        Phase 4 checkpoint
 
 PHASE 5 — Security Audit, Regression, and Documentation
 [ ] not started

@@ -17,6 +17,7 @@ from ...deps import (
 from . import service
 from .schemas import (
     DiffResponse,
+    HarnessSummaryResponse,
     MessageCreateRequest,
     TaskAssignRequest,
     TaskCancelRequest,
@@ -84,6 +85,20 @@ async def get_diff(
         raise HTTPException(status_code=404, detail="No diff available for this mission")
     diff_text, truncated = result
     return DiffResponse(diff_text=diff_text, truncated=truncated)
+
+
+@router.get("/tasks/{task_id}/harness-summary", response_model=HarnessSummaryResponse)
+async def get_harness_summary(
+    task_id: str,
+    session_factory=Depends(get_session_factory),
+    user: UserORM = Depends(get_current_user),
+):
+    if not await resource_owned_by(session_factory, TaskORM, task_id, user.id):
+        raise HTTPException(status_code=404, detail="Mission not found")
+    result = await service.get_harness_summary(session_factory, task_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="No harness activity for this mission")
+    return result
 
 
 @router.post("/tasks/{task_id}/assign", response_model=TaskResponse)

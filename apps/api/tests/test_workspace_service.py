@@ -102,3 +102,56 @@ async def test_get_diff_is_none_for_document_missions(harness):
 
     diff = await tasks_service.get_diff(harness.session_factory, harness.workspace_manager, task.id)
     assert diff is None
+
+
+@pytest.mark.asyncio
+async def test_get_harness_summary_reflects_tool_calls_for_a_code_mission(harness):
+    """Sprint 16 Phase 4: a code mission runs through the Agent Harness's
+    tool loop (deliverable_type="code" defaults ENGINEER.harness to
+    "tool_loop"), so the summary should reflect the mock's deterministic
+    read/patch/validate sequence -- counts and tool names only, no raw
+    argument/output content."""
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
+    task = await tasks_service.create_task(
+        harness.session_factory,
+        harness.event_bus,
+        project.id,
+        "Build landing page",
+        "hero + tagline",
+        "normal",
+        deliverable_type="code",
+    )
+    await tasks_service.assign_task(
+        harness.session_factory, harness.event_bus, harness.agent_runtime, harness.workflow_engine, task.id, None
+    )
+    await _wait_for_pending_approval(harness, task.id)
+
+    summary = await tasks_service.get_harness_summary(harness.session_factory, task.id)
+    assert summary is not None
+    assert summary["tool_call_count"] > 0
+    assert "apply_patch" in summary["tools_used"]
+    assert summary["error_count"] == 0
+    assert summary["total_duration_seconds"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_get_harness_summary_is_none_when_harness_never_ran(harness):
+    project = await projects_service.create_project(harness.session_factory, harness.event_bus, harness.agent_runtime, name="Acme AI", provider="mock"
+    , owner_id=harness.user.id)
+    task = await tasks_service.create_task(
+        harness.session_factory,
+        harness.event_bus,
+        project.id,
+        "Write the README",
+        "explain the project",
+        "normal",
+        deliverable_type="document",
+    )
+    await tasks_service.assign_task(
+        harness.session_factory, harness.event_bus, harness.agent_runtime, harness.workflow_engine, task.id, None
+    )
+    await _wait_for_pending_approval(harness, task.id)
+
+    summary = await tasks_service.get_harness_summary(harness.session_factory, task.id)
+    assert summary is None

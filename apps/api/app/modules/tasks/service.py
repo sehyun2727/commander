@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from ...core.contracts import AgentProfile
-from ...core.db_models import AgentORM, ProjectORM, TaskORM
+from ...core.db_models import AgentORM, HarnessToolCallORM, ProjectORM, TaskORM
 from ...core.events import Actor, EventType, build_event
 from ...core.events.base import Event
 from ...core.interfaces.agent_runtime import AgentRuntime
@@ -98,6 +98,30 @@ async def get_diff(session_factory, workspace_manager, task_id: str) -> tuple[st
     if task is None or task.branch_name is None:
         return None
     return await workspace_manager.diff(task.project_id, task.branch_name)
+
+
+async def get_harness_summary(session_factory, task_id: str) -> dict | None:
+    """A bounded, aggregate view over `HarnessToolCallORM` rows for one
+    mission (Sprint 16 Phase 4, "safe observability") -- counts and tool
+    names only, never `arguments_summary`/`output_excerpt` content, so a
+    Reviewer/CEO-facing surface can show "what the Employee did" without
+    becoming a second copy of the raw audit log. Returns `None` for a
+    mission the Harness never touched (e.g. a one-shot Engineer mission,
+    or a mission still in progress with zero tool calls so far)."""
+    async with session_factory() as session:
+        result = await session.execute(
+            select(HarnessToolCallORM).where(HarnessToolCallORM.task_id == task_id)
+        )
+        rows = result.scalars().all()
+    if not rows:
+        return None
+    return {
+        "tool_call_count": len(rows),
+        "tools_used": sorted({row.tool_name for row in rows}),
+        "denied_count": sum(1 for row in rows if row.status == "denied"),
+        "error_count": sum(1 for row in rows if row.status == "error"),
+        "total_duration_seconds": sum(row.duration_seconds for row in rows),
+    }
 
 
 async def assign_task(

@@ -3682,3 +3682,51 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       one of those pre-existing tests now runs the tool-loop path by
       default. Full suite confirmed green after both fixes and the new
       test file (453 passed, 6 skipped).
+
+237. **Phase 4: safe harness observability surface, plus verification
+     that the rest of Phase 4's checklist was already satisfied by
+     Phase 1/3 design.**
+    - **New `GET /api/tasks/{task_id}/harness-summary` endpoint**
+      (`tasks/routes.py`) follows the existing `GET .../diff` pattern
+      exactly (`resource_owned_by` → 404, service returns `None` → 404)
+      rather than a new `TaskORM` column. `tasks/service.get_harness_summary`
+      queries `HarnessToolCallORM` directly by `task_id` and returns a
+      bounded aggregate — `tool_call_count`, `tools_used` (distinct tool
+      names), `denied_count`, `error_count`, `total_duration_seconds` —
+      never `arguments_summary`/`output_excerpt` content. Querying
+      `HarnessToolCallORM` from `tasks/service.py` is not a Rule #1
+      violation: the ORM class lives in `core/db_models.py`, the shared
+      persistence layer every module already imports from (`agent_harness/
+      audit.py` itself imports the same way), not another module's
+      private internals. No migration needed — this is computed on read
+      from the existing Phase 2 audit table (Rule #14 spirit: don't
+      duplicate a second source of truth for the same facts).
+    - **No dashboard change.** `MissionDetail.tsx` already surfaces
+      `code_stats`/`check_results` prominently for code missions; the
+      harness summary is supplementary audit evidence the current UI does
+      not need to function or to avoid confusing the CEO. Sprint 16 §Phase
+      4's own wording ("add minimal dashboard display only if current UI
+      requires it") does not trigger here.
+    - **Verified, not re-implemented, the remaining Phase 4 checklist
+      items** by reading `engine.py`'s produce-stage branch and its
+      exception handling directly: the specification-approval gate,
+      central Employee resolution, and per-Employee model/skill config are
+      all upstream of/outside the Phase 3 tool-loop branch and untouched;
+      `run_checks`' output has always been Reviewer evidence rather than a
+      hard gate (pre-existing V1 design, both harness and one-shot paths
+      share `engine.py:890-897`); cancellation/failure cleanup is already
+      exercised by `test_reliability.py` (tool-loop path by default per
+      `#236`); `BudgetExceededError` is caught explicitly and blocks the
+      Mission with a `BUDGET_EXCEEDED` event, while `ToolLoopExhaustedError`
+      falls through the generic pipeline `except Exception` into
+      `_fail_task`, which publishes `TASK_FAILED` with `reason=str(exc)` —
+      visible on the Timeline exactly like any other stage failure (Rule
+      #3/#18); no FastAPI route reaches `dispatch_tool_call`/
+      `run_tool_loop` directly, so the new read-only summary endpoint
+      remains the only public harness-adjacent surface.
+    - New tests: `test_workspace_service.py` gained
+      `test_get_harness_summary_reflects_tool_calls_for_a_code_mission`
+      and `test_get_harness_summary_is_none_when_harness_never_ran`,
+      exercising a full create→assign→tool-loop→pending_approval mission
+      lifecycle each, matching the file's existing `get_diff` test
+      pattern.
