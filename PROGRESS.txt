@@ -400,5 +400,5 @@ PHASE 5 — Security Audit, Regression, and Documentation
 [x] 5.24 final full-suite re-run after all doc changes: 455 passed, 6
         skipped in 308.54s -- unchanged from Phase 4 (Phase 5 was
         docs-only, no product code changed)
-[ ] 5.25 final commit/push, then verify clean working tree and local
-        HEAD == origin/master
+[x] 5.25 final commit/push (689788d), clean working tree, local HEAD
+        == origin/master confirmed
