@@ -2,10 +2,11 @@
  COMMANDER — SPRINT PROGRESS
  Sprint: 19 — OpenRouter provider, correlation ID / structured logging,
  load smoke, real-LLM E2E, deployment docs, V1.1 release readiness
- Overall: Phase 0 in progress.
- Now working on: Phase 0 architecture decisions (OpenRouter default
- model registry, log formatter shape) -- Phase 1 (OpenRouterProvider)
- next.
+ Overall: Sprint 19 complete (Phases 0-4 done). See CLOSE-OUT NOTES at
+ the end of this file. The v1.1.0 tag is the CEO's own call, not part
+ of this sprint's close-out.
+ Now working on: nothing -- Sprint 19 closed out; awaiting CEO
+ hands-on verification and the CEO's own v1.1.0 tag decision.
  Last update: 2026-08-19
 ================================================
 
@@ -473,14 +474,101 @@ PHASE 3 — Load smoke + real-LLM E2E + deployment doc
 [x] 3.6 commit + push
 
 PHASE 4 — Security audit + docs + close-out
-[ ] 4.1 full backend suite + dashboard typecheck/build green
-[ ] 4.2 independent security audit (dedicated agent, §10 checklist)
-[ ] 4.3 docs/DEPLOYMENT.md, .env.production.example, docs/KNOWN_ISSUES.md,
-        CHANGELOG.md
-[ ] 4.4 README.md, CLAUDE.md, ARCHITECTURE.md, DECISIONS.md #249+
-        close-out, FOR_CTO.md sync
-[ ] 4.5 final commit + push -- Sprint 19 done (NO v1.1.0 tag -- CEO's
+[x] 4.1 full backend suite green (553 passed / 6 skipped, re-verified
+        after the logging fix below, 0 regressions); dashboard typecheck
+        clean; dashboard production build clean (all routes compiled).
+[x] 4.2 independent security audit (dedicated agent) against sprint-19.md
+        §2's 7 security requirements. 6/7 PASS outright. 1 real finding:
+        apps/api/app/core/logging.py's secret-key redaction matched
+        extra={} keys by EXACT string equality against a small blocklist
+        (password/token/key/secret/authorization/cookie) -- common
+        real-world secret field names (api_key, auth_token,
+        password_hash) did not match and would have logged in the clear.
+        No live call site does this today, so no active leak, but the
+        guard didn't do what it claimed. FIXED: substring match instead
+        of exact match (docs/DECISIONS.md #251); tests/test_logging.py
+        updated to assert the previously-unredacted variants are now
+        redacted. This supersedes the Phase 2 "exact-match, not
+        substring" design note -- Rule #7 outranks the earlier
+        convenience choice. Full suite re-verified green after the fix.
+[x] 4.3 docs/DEPLOYMENT.md, .env.production.example, docs/KNOWN_ISSUES.md
+        done in Phase 3 (3.5). CHANGELOG.md: new, v1.1.0 entry.
+[x] 4.4 README.md, CLAUDE.md, ARCHITECTURE.md, DECISIONS.md #249-251
+        close-out, FOR_CTO.md sync.
+[x] 4.5 final commit + push -- Sprint 19 done (NO v1.1.0 tag -- CEO's
         own responsibility per explicit instruction)
-[ ] 4.6 verify local HEAD == origin/master, working tree clean
+[x] 4.6 verify local HEAD == origin/master, working tree clean
 
 CLOSE-OUT NOTES (fill in at Phase 4)
+
+Sprint 19 is done. What shipped:
+  - OpenRouterProvider: a from-scratch ProviderGateway implementation
+    (not an AnthropicProvider subclass) -- COMMANDER_PROVIDER now accepts
+    mock | anthropic | openrouter, same SecretsProvider/boot-check/model-
+    override plumbing across all three (DECISIONS.md #249).
+  - Structured JSON logging (app/core/logging.py) with per-request
+    correlation IDs (plain ASGI middleware, not BaseHTTPMiddleware --
+    DECISIONS.md #250) and per-Mission task_id/agent_id/project_id
+    contextvars. Secret-shaped field redaction is substring-match, not
+    exact-match -- fixed mid-Phase-4 after the independent security audit
+    found the exact-match version would leak real field names like
+    api_key/auth_token/password_hash (DECISIONS.md #251).
+  - scripts/load_smoke.py: 4 scenarios, all PASS, documented as the
+    verified operating envelope in docs/KNOWN_ISSUES.md. Building it
+    surfaced and fixed two real concurrent-Mission races in
+    agent_runtime/workflow_engine (DECISIONS.md #250).
+  - docs/DEPLOYMENT.md + .env.production.example (new) -- first
+    end-to-end deployment walkthrough, dry-run verified against a real
+    Postgres 16 container; Alembic downgrade/upgrade round-trip also
+    verified against real Postgres, not just SQLite.
+  - docs/KNOWN_ISSUES.md (new), CHANGELOG.md (new) -- consolidated
+    tradeoffs, verified envelope, and the v1.1.0 release-note draft.
+  - Independent security audit (dedicated subagent, 7-point checklist):
+    6/7 PASS, 1 real finding (the redaction bug above), fixed and
+    re-verified.
+
+What was validated (honestly), per CLAUDE.md Rule #16.7:
+  - "unit test passed": yes -- 553 passed / 6 skipped, backend suite,
+    twice this session (after Phase 3 docs, and again after the Phase 4
+    logging fix). Zero regressions either run.
+  - "typecheck / build passed": yes -- dashboard tsc --noEmit clean;
+    dashboard `next build` clean, 19 routes.
+  - "API endpoint passed": yes -- OpenRouter free-tier Specification
+    lifecycle exercised for real (multiple runs; findings in
+    docs/KNOWN_ISSUES.md §7); dry-run deployment boot verified against
+    real Postgres.
+  - "browser behavior verified": NOT claimed this sprint -- no UI-level
+    change shipped in Sprint 19 that required it; CLAUDE.md's browser-
+    verification requirement is scoped to UI/E2E work, which this sprint
+    was not.
+  - "real-LLM E2E passed": PARTIALLY. OpenRouter free-tier models were
+    exercised for real and their failure modes (malformed JSON,
+    clarification_required, 429) were observed and handled correctly per
+    Rule #18. The two specific paid release-evidence runs sprint-19.md
+    asked for -- `make verify-llm` (Anthropic direct) and
+    `make verify-llm-openrouter --model anthropic/claude-sonnet-4.5`
+    (Claude via OpenRouter) -- are UNVERIFIED IN THIS ENVIRONMENT: no
+    ANTHROPIC_API_KEY is configured, and the OPENROUTER_API_KEY account
+    is unfunded (confirmed via a real, correctly-surfaced 402). This is a
+    credentials gap, not a code gap -- the same call path was exercised
+    successfully end-to-end via free-tier OpenRouter models. See
+    docs/KNOWN_ISSUES.md §7's "release-evidence runs" subsection and
+    FOR_CTO.md §18d for the full honest accounting.
+
+What was deliberately NOT done:
+  - The v1.1.0 git tag was NOT created. Per the CEO's standing
+    instruction, that tag/release commit is the CEO's own call, made
+    after personal hands-on browser verification. This close-out commit
+    states only that Sprint 19 is done.
+  - CLAUDE.md/README.md status lines were deliberately worded to avoid
+    declaring "V1.1 released" as a flat fact, even though sprint-19.md
+    §4.11 suggested that language -- that declaration is reserved for the
+    CEO. See CLAUDE.md's status header and DECISIONS.md's Sprint 19
+    close-out entry.
+
+Next steps for whoever picks this up next (CEO or a future sprint):
+  - Fund the OPENROUTER_API_KEY account (or configure ANTHROPIC_API_KEY)
+    and re-run make verify-llm / make verify-llm-openrouter to close the
+    one remaining Definition-of-Done gap.
+  - After the CEO's own hands-on browser verification, the CEO tags
+    v1.1.0 personally.

@@ -12,7 +12,7 @@
 >
 > This philosophy outranks any individual feature.
 
-**Status: V1 released (`v1.0.0`, Sprint 8). V1.1 in development.**
+**Status: V1 released (`v1.0.0`, Sprint 8). Sprint 19 (V1.1 shipping work — OpenRouter provider, observability, load smoke, deployment docs, security audit) is complete. The `v1.1.0` tag/release commit is the CEO's own call after hands-on verification — see `docs/DECISIONS.md`'s Sprint 19 close-out entry.**
 
 This file describes the project's **stable architecture, invariants, terminology, and working rules**.
 
@@ -1150,10 +1150,20 @@ V1.1 is built through explicit sprint briefs.
 | E     |   16 ✅ | Agent Harness                                         |
 | E     |   17 ✅ | Self-correction                                       |
 | F     |   18 ✅ | Project Memory + Sprint Learning                      |
-| G     |     19 | Mission Tree + remaining widgets                      |
-| H     |     20 | V1.1 release                                          |
+| G     |   19 ✅ | V1.1 shipping: OpenRouter provider, observability, load smoke, deployment docs, security audit |
 
 V1.1 is complete only when the architecture, product surface, and real LLM flow all work together.
+
+Sprint 19 superseded the originally-planned "Mission Tree + remaining
+widgets" / "V1.1 release" split (rows G/H above in earlier drafts of this
+table) with the actual release-readiness sprint: a third `ProviderGateway`
+(`OpenRouterProvider`, proving Rule #4 in production), structured JSON
+logging with per-request/per-Mission correlation IDs, `scripts/load_smoke.py`
+load-smoke evidence, `docs/DEPLOYMENT.md` + `.env.production.example`,
+`docs/KNOWN_ISSUES.md`, and an independent security audit — see
+`docs/DECISIONS.md` #249–#251. Mission Tree and any remaining widget work
+are V1.2 candidates (see `docs/DECISIONS.md`'s Sprint 19 close-out entry),
+not dropped, just resequenced after release.
 
 ---
 

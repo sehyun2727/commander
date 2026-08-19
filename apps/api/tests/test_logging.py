@@ -73,14 +73,23 @@ def test_formatter_omits_task_agent_project_id_when_not_set():
 
 
 def test_formatter_redacts_secret_shaped_extra_keys():
-    record = _make_record(password="hunter2", Authorization="Bearer xyz", api_token="sk-live-abc")
+    record = _make_record(
+        password="hunter2",
+        Authorization="Bearer xyz",
+        api_token="sk-live-abc",
+        api_key="sk-live-def",
+        password_hash="$2b$...",
+    )
     obj = json.loads(JSONFormatter().format(record))
     assert obj["password"] == "[redacted]"
     assert obj["Authorization"] == "[redacted]"
-    # "api_token" isn't an exact match against the blocklist (only "token"
-    # is), so it passes through untouched -- this is an exact-key match,
-    # not a substring scan.
-    assert obj["api_token"] == "sk-live-abc"
+    # Substring match (Sprint 19 security-audit fix, DECISIONS.md #251):
+    # real secret fields are rarely named exactly "token"/"key" -- common
+    # real-world shapes like "api_token"/"api_key"/"password_hash" must be
+    # caught too, not just the bare blocklist terms.
+    assert obj["api_token"] == "[redacted]"
+    assert obj["api_key"] == "[redacted]"
+    assert obj["password_hash"] == "[redacted]"
 
 
 def test_formatter_keeps_non_secret_extra_keys():

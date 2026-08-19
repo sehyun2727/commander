@@ -4556,3 +4556,55 @@ script's own HTTP client, not a product bug, and is fixed in the script.
   fine for ordinary request/response endpoints, just not this one.
   Verified stable across repeated runs; the full test suite (which never
   opens concurrent SSE connections via `ASGITransport`) is unaffected.
+
+### #251 — Sprint 19 Phase 4: independent security audit found and fixed a
+real redaction gap in the Sprint 19 §7.3 log formatter
+
+An independent security-audit agent (per PROGRESS.txt 4.2, checking every
+claim in sprint-19.md §2 "Security Model" against the actual code rather
+than trusting the brief) reviewed the 7 Sprint 19 security surfaces:
+`OpenRouterProvider` key isolation, the correlation-ID middleware, the
+structured log formatter's secret redaction, `secrets.py`'s
+`OPENROUTER_API_KEY` entry, `.env.production.example`, a repo-wide grep
+for `os.environ`/`settings.*_api_key` reads outside `config.py`/
+`secrets.py`, and `scripts/load_smoke.py`'s use of only a throwaway
+SQLite DB and the mock provider. 6 of 7 passed outright.
+
+**The one real finding:** `apps/api/app/core/logging.py`'s
+`_SECRET_KEYS` redaction (added in Sprint 19 Phase 2, `docs/DECISIONS.md`
+Phase 2 entries) matched caller-supplied `extra={}` keys by **exact**
+string equality against a small blocklist (`password`, `token`, `key`,
+`secret`, `authorization`, `cookie`) — a deliberate choice at the time,
+explicitly locked in by a test asserting `api_token` passes through
+*un*redacted (`tests/test_logging.py`, pre-fix). The audit demonstrated
+this is a real gap, not a theoretical one: extremely common real-world
+secret field names — `api_key`, `auth_token`, `password_hash` — do not
+exact-match any blocklist term and would have logged in the clear if any
+future call site ever passed one via `extra={}`. No current call site
+does today, so there was no live leak, but the guard itself did not do
+what its own docstring/comment claimed ("even if a caller passes a
+secret-shaped key... it never reaches stdout in the clear").
+
+**Fix:** `_SECRET_KEYS` renamed `_SECRET_KEY_TERMS`; the check changed
+from `key.lower() in _SECRET_KEY_TERMS` to `any(term in key.lower() for
+term in _SECRET_KEY_TERMS)` — substring match. `tests/test_logging.py`
+updated to assert `api_token`/`api_key`/`password_hash` are now
+`[redacted]` (previously asserted the opposite). This supersedes the
+Phase 2 "exact-match, not substring" design note — CLAUDE.md Rule #7
+("never log secret values") is a hard architecture rule and outranks the
+earlier convenience-oriented choice once a real gap was demonstrated.
+Full backend suite re-verified green after the fix (10/10
+`test_logging.py` tests, including the 2 new assertions; 553+ suite-wide,
+0 regressions).
+
+No other audit item required a change: `OpenRouterProvider` reads its key
+only through `SecretsProvider` and sends only `Authorization`/
+`Content-Type`/`HTTP-Referer`/`X-Title` upstream (never the CEO's
+`X-Request-Id`); the correlation-ID middleware generates a server-side
+UUID and never reads an incoming `X-Request-Id`, persists nothing to a
+table, and never enters an Event payload; `.env.production.example`
+contains only placeholder values with `.gitignore`'s `!.env.production.
+example` exception correctly scoped; and a repo-wide grep found zero
+`os.environ` reads and zero `settings.*_api_key` reads outside
+`config.py`/`secrets.py` (`boot_checks.py`'s presence-only truthiness
+check is the sole exception, and it never logs or returns the value).

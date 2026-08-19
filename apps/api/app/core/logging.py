@@ -26,7 +26,9 @@ project_id_var: ContextVar[str | None] = ContextVar("project_id", default=None)
 
 # Defensive redaction: even if a caller passes a secret-shaped key via
 # `logger.info(..., extra={...})`, it never reaches stdout in the clear.
-_SECRET_KEYS = frozenset({"password", "token", "key", "secret", "authorization", "cookie"})
+# Substring match (not exact) so variants like `api_key`, `auth_token`,
+# `password_hash` are caught too, not just the bare terms themselves.
+_SECRET_KEY_TERMS = ("password", "token", "key", "secret", "authorization", "cookie")
 
 _CONTEXTVARS = (
     (request_id_var, "request_id"),
@@ -58,7 +60,8 @@ class JSONFormatter(logging.Formatter):
         for key, value in record.__dict__.items():
             if key in _STANDARD_RECORD_KEYS:
                 continue
-            obj[key] = "[redacted]" if key.lower() in _SECRET_KEYS else value
+            lowered = key.lower()
+            obj[key] = "[redacted]" if any(term in lowered for term in _SECRET_KEY_TERMS) else value
         return json.dumps(obj, ensure_ascii=False, default=str)
 
 

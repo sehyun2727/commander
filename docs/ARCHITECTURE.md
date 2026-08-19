@@ -685,3 +685,9 @@ Criterion for template #2: the software company sustains real usage quality firs
 Any architecture change must update **ARCHITECTURE.md and CLAUDE.md in the same commit**, and UX_SPEC.md too when the change is CEO-facing. Desync is an architecture violation.
 
 These three documents must never contradict each other. When they do, `ARCHITECTURE.md` governs system structure, `UX_SPEC.md` governs the CEO's experience, and `CLAUDE.md` governs day-to-day implementation rules — reconcile in that order of scope and fix all three in one commit.
+
+---
+
+## 11. Deployment *(Sprint 19)*
+
+`docs/DEPLOYMENT.md` is the full operator-facing reference: prerequisites, a first-deployment walkthrough (`make install` → `make db-up` → `make db-upgrade` → `make dev`, or the production run recipe), a systemd/nohup production run recipe for the single FastAPI process + single Next.js process (no ops stack beyond Postgres — Rule #15/§9's single-worker assumption still applies, `--workers 1` is deliberate), an optional nginx TLS-termination example, `pg_dump`/`tar` backup-restore instructions, and the v1.0.0 → v1.1 upgrade path (the Sprint 9 auth schema jump — `fa793dce62cb_accounts_and_sessions` — needs a manual `owner_id` attribution step afterward, since no migration can know the correct CEO for pre-auth data). `.env.production.example` is its companion template. `docs/KNOWN_ISSUES.md` is the load-smoke-verified operating envelope and every accepted tradeoff in one place — read before sizing a deployment.

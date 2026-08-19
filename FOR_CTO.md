@@ -427,6 +427,23 @@ Both new exceptions get their own `except` clause (not folded into `ToolLoopExha
 - **Both failure paths skip the Reviewer** entirely and release the Employee to `IDLE` via the same two-edge walk (§19) Sprint 16 already uses.
 - **Mock coverage**: `SELF_CORRECTION_DEMO`/`SELF_CORRECTION_ROLLBACK` are real full-pipeline `mock_provider.py` scenarios (marker substring in the initial user message), paired with a test-only `_sequence_validation_statuses` helper (`test_self_correction_integration.py`) that monkeypatches `harness.sandbox_runner.run_check` in place, since the stock `FakeSandbox` keys results by profile *name* and can't express "same profile fails once, then passes." `SELF_CORRECTION_EXHAUSTED`/`SELF_CORRECTION_SURRENDER` are deliberately **not** scripted as full mock-pipeline scenarios — covered instead by orchestrator-level `FakeGateway` tests (`test_agent_harness_orchestrator.py`) plus a dedicated `test_workflow_engine_reason_code.py` for the `_fail_task_with_reason_code` plumbing (DECISIONS.md #239/#241).
 
+### 7.15 OpenRouter provider + structured logging (Sprint 19)
+
+**`OpenRouterProvider`** (`provider_gateway/openrouter_provider.py`, 226 lines) implements `ProviderGateway` **from scratch**, not as an `AnthropicProvider` subclass — OpenRouter always speaks the OpenAI `/v1/chat/completions` wire format regardless of the upstream model it routes to, not Anthropic's `/v1/messages` (DECISIONS.md #249 / sprint-19.md §4.2).
+
+- `_to_openai_messages` translates Commander's `(system, messages)` shape to OpenAI's `messages` list, including the Anthropic-shaped `tool_use`/`tool_result` content blocks the Agent Harness's tool loop produces — the same tool loop runs unmodified over either provider.
+- The API key is read only via `SecretsProvider.get("OPENROUTER_API_KEY")` — same choke point discipline as `ANTHROPIC_API_KEY`. Outbound headers are exactly `Authorization`, `Content-Type`, `HTTP-Referer`, `X-Title` (the latter two are fixed, deterministic attribution strings, never client input) — the CEO's `X-Request-Id` is never forwarded upstream.
+- `_legible_error` mirrors `AnthropicProvider._legible_error`: a `401`/`403` becomes a plain-language `RuntimeError`; everything else (`429`/`5xx`, which the gateway's existing retry/backoff already handles, and other `4xx`) is left as the original `httpx.HTTPStatusError` for the gateway to classify normally. A `402 Payment Required` (unfunded account) is one of the "other 4xx" — surfaces as a clean `FAILED` Mission state, never a hang or raw traceback (verified against a real unfunded account during Sprint 19 Phase 3).
+- `model_registry/registry.py` gained an `openrouter` map; `openai/gpt-oss-20b:free` is the default free-tier model (chosen in DECISIONS.md #249 for being both free and tool-call-capable — most free-tier models are not).
+- `boot_checks.py` gained the same fail-fast-at-startup branch Anthropic already had: `COMMANDER_PROVIDER=openrouter` with no key anywhere fails before accepting traffic, not confusingly on the first Mission.
+
+**Structured JSON logging** (`app/core/logging.py`, new file, ~75 lines) — one `JSONFormatter`, installed via `install_logging()` at the top of `main.py::lifespan`, replacing the root logger's handlers. No new logging dependency (no `structlog`, no `python-json-logger`) — Commander owns this code.
+
+- Two independent ID scopes, not one unified correlation ID: `request_id_var` lives for one HTTP request (set by `CorrelationIdMiddleware`, `main.py`); `task_id_var`/`agent_id_var`/`project_id_var` live for one background Mission pipeline (set by `workflow_engine.py` around `_spawn`/`_run_role`/`_run_engineer_tool_loop`). Contextvars propagate through `asyncio.create_task` automatically — no plumbing needed at each `logger.info(...)` call site.
+- `CorrelationIdMiddleware` is plain ASGI (`__call__(self, scope, receive, send)`), **not** `@app.middleware("http")`/`BaseHTTPMiddleware` — see the load-smoke finding below for why. It generates a server-side UUID and **never** trusts an incoming `X-Request-Id` header (Rule #7-adjacent: a client-forged header could otherwise make unrelated requests appear correlated in the logs). The ID is response-header-only and contextvar-only — never persisted to a table, never in an Event payload.
+- Secret-shaped `extra={}` keys are redacted before serialization — see the substring-match fix in DECISIONS.md #251 (a Sprint 19 Phase 4 security audit found the original exact-match blocklist missed common real-world names like `api_key`/`auth_token`/`password_hash`).
+- **Load-smoke finding, not a logging bug:** building `scripts/load_smoke.py`'s concurrent-SSE scenario surfaced that `httpx.ASGITransport` cannot support the realtime SSE endpoint at all (buffers the entire ASGI response before returning, incompatible with a heartbeat-until-disconnect stream) — reproducible with a single connection, unrelated to concurrency or middleware. Two real hardenings landed while chasing this red herring and are worth keeping: `CorrelationIdMiddleware` converted from `BaseHTTPMiddleware` to plain ASGI (documented issues bridging concurrent long-lived streaming responses through its internal task/memory-stream), and a redundant `request.is_disconnected()` poll removed from `realtime/routes.py` (it raced `sse_starlette`'s own `_listen_for_disconnect` task for the same one-shot ASGI `receive()` channel). The actual fix lives in the test script, not product code: `scripts/load_smoke.py` scenario 2 now drives a real `uvicorn.Server` on loopback instead of `ASGITransport`. Full detail: DECISIONS.md #250.
+
 ### 7.13 Provider tool-use plumbing
 
 - `core/interfaces/provider_gateway.py`: `CompletionResult` gained `tool_calls: tuple[ToolCallData, ...] = ()` and `stop_reason: str = "end_turn"`. Purely additive; existing callers unaffected.
@@ -640,6 +657,16 @@ Each entry: **Decision · Why · Affected systems · What NOT to casually change
 - **Affected:** `app/modules/memory/` (all of it — `registry.py`, `projection.py`, `service.py`, `subscriber.py`, `backfill.py`), `planning/orchestrator.py` (`_validate_recall_request_optional`, `_reject_recall_request`, `_maybe_recall`, `pending_recall_message`).
 - **Don't:** add a code path where `_maybe_recall` fires without a PM turn having set `recall_request`. Don't route any extractor or `recall()` call through `ProviderGateway` — Memory must stay a pure projection over `events`, never a second inference surface. Don't let a CTO turn's `recall_request` field survive parsing — `_reject_recall_request` must keep failing that case at parse time, not by a runtime `if role == "cto"` check (Rule #16).
 
+### 12.15 `OpenRouterProvider` is a fresh `ProviderGateway` implementation, not an `AnthropicProvider` subclass (DECISIONS.md #249)
+- **Why:** OpenRouter always speaks the OpenAI `/v1/chat/completions` wire format regardless of which upstream model it's routing to — subclassing `AnthropicProvider` would mean overriding almost every method just to swap the wire format, which is more fragile than a from-scratch sibling implementation of the same `ProviderGateway` port.
+- **Affected:** `provider_gateway/openrouter_provider.py` (new), `model_registry/registry.py` (`openrouter` map), `config.py` (`commander_provider` literal extended, `openrouter_api_key` field), `secrets.py` (`OPENROUTER_API_KEY` in `_ENV_DEFAULTS`), `boot_checks.py` (OpenRouter branch).
+- **Don't:** read `settings.openrouter_api_key` anywhere outside `secrets.py` (except `boot_checks.py`'s presence-only truthiness check). Don't forward the CEO's `X-Request-Id` header to OpenRouter — only `Authorization`/`Content-Type`/`HTTP-Referer`/`X-Title` are sent, and the latter two are fixed strings, never client input.
+
+### 12.16 Correlation ID middleware is plain ASGI, not `BaseHTTPMiddleware` (DECISIONS.md #250)
+- **Why:** `@app.middleware("http")` decorator sugar produces a `BaseHTTPMiddleware` instance, which bridges every response body through its own internal task + memory stream — this has documented issues with long-lived streaming responses under concurrent load. A plain ASGI middleware class (`__init__(self, app)` / `async def __call__(self, scope, receive, send)`) passes `receive`/`send` straight through, so it composes safely with any number of concurrent SSE connections.
+- **Affected:** `main.py`'s `CorrelationIdMiddleware`.
+- **Don't:** revert this to `@app.middleware("http")` sugar "for readability" — it was specifically converted away from that shape while diagnosing a load-smoke SSE hang (which turned out to have a different root cause entirely — `httpx.ASGITransport`, a test-harness limitation, not this middleware — but the ASGI conversion is a real, independent hardening worth keeping).
+
 ---
 
 ## 13. Non-Negotiable Invariants
@@ -737,6 +764,11 @@ Sprint 18 memory-specific:
 | Next-action policy (pure function) | `apps/api/app/modules/workspace_overview/next_action.py` |
 | Widget registry | `apps/api/app/modules/workspace_widgets/registry.py` |
 | Migrations | `apps/api/alembic/versions/` (head: `c2a7e1f4b6d3` — adds `memory_records`, `down_revision = 'b1f4c8d5e9a2'`) |
+| OpenRouterProvider | `apps/api/app/modules/provider_gateway/openrouter_provider.py` |
+| Structured JSON log formatter + contextvars | `apps/api/app/core/logging.py` |
+| Correlation ID middleware | `apps/api/app/main.py` (`CorrelationIdMiddleware`) |
+| Load smoke (4 scenarios) | `scripts/load_smoke.py` |
+| Real-LLM verification (multi-provider) | `scripts/verify_real_llm.py` (`--provider anthropic\|openrouter`) |
 
 ### 14.2 Frontend
 
@@ -757,10 +789,13 @@ Sprint 18 memory-specific:
 
 - `CLAUDE.md` — hard rules (18 numbered).
 - `docs/ARCHITECTURE.md` — target + as-built; §4.5 is the current Agent Harness section (rewritten in Sprint 16 Phase 5 for accuracy — DECISIONS.md #238); §5 is the current Project Memory section (rewritten as-built in Sprint 18 — DECISIONS.md #245–#247).
-- `docs/DECISIONS.md` — 247 numbered entries as of Sprint 18; Sprint 16 spans #233–#238, Sprint 17 spans #239–#242, Sprint 18 spans #243–#247.
-- `docs/design/UX_SPEC.md` — CEO experience source of truth; unchanged by Sprint 18 (§8/§12 out-of-scope — no new UI).
+- `docs/DECISIONS.md` — 251 numbered entries as of Sprint 19; Sprint 16 spans #233–#238, Sprint 17 spans #239–#242, Sprint 18 spans #243–#247, Sprint 19 spans #249–#251.
+- `docs/design/UX_SPEC.md` — CEO experience source of truth; unchanged by Sprint 18 or Sprint 19 (both explicitly no-new-UI sprints).
+- `docs/DEPLOYMENT.md` — new in Sprint 19; the sole operational reference (first deployment, production run recipe, backup/restore, v1.0.0→v1.1 upgrade path).
+- `docs/KNOWN_ISSUES.md` — new in Sprint 19; every accepted tradeoff, every deferred scope boundary, and the load-smoke-verified operating envelope in one place.
+- `CHANGELOG.md` — new in Sprint 19; the v1.1.0 feature summary across Sprints 9–19.
 - `PROGRESS.txt` — live checkpoint file.
-- `docs/prompts/sprint-16.md`, `sprint-17.md`, `sprint-18.md` — the sprint briefs. Read like specs, not task lists.
+- `docs/prompts/sprint-16.md`, `sprint-17.md`, `sprint-18.md`, `sprint-19.md` — the sprint briefs. Read like specs, not task lists.
 
 ---
 
@@ -912,6 +947,36 @@ Only concrete, evidence-based issues:
 
 ---
 
+## 18d. Sprint 19 Handover — V1.1 Shipping: Verification, Observability, Release
+
+### What Sprint 19 achieved
+
+- **`OpenRouterProvider`** (`provider_gateway/openrouter_provider.py`, new) — a third first-party `ProviderGateway`, built from scratch rather than an `AnthropicProvider` subclass (OpenRouter always speaks the OpenAI wire format regardless of upstream model — DECISIONS.md #249). `COMMANDER_PROVIDER` now accepts `mock | anthropic | openrouter`; existing three-tier model resolution (Employee → CEO per-role → registry default) works uniformly across all three.
+- **Structured JSON logging** (`core/logging.py`, new) — one `JSONFormatter`, per-request `request_id` (server-issued UUID via `CorrelationIdMiddleware`, never trusts a client header) and per-Mission `task_id`/`agent_id`/`project_id` contextvars set at `workflow_engine.py`'s `_spawn`/`_run_role`/`_run_engineer_tool_loop` boundaries. No new logging dependency.
+- **`scripts/load_smoke.py`** (new) — 4 scenarios (10 sequential Missions in 1 Company; 3 Companies × 3 concurrent Missions each with live SSE; hot-path query counts; Memory recall at 1,000 records) forming the documented operating envelope in `docs/KNOWN_ISSUES.md` §6. Building scenario 2 surfaced and fixed two real concurrent-Mission races: `DBAgentRuntime._claim_agent` (a bounded poll/retry wrapper around the `IDLE→ASSIGNED` transition, so a busy single-Employee-per-Role founding roster is waited out rather than crashing) and `AgentRuntime.transition()` rewritten as an atomic compare-and-swap `UPDATE ... WHERE state=:current` instead of a non-atomic read-then-write. Full detail: DECISIONS.md #250.
+- **`docs/DEPLOYMENT.md` + `.env.production.example`** (new) — first-deployment walkthrough, production run recipe (systemd/nohup, `--workers 1` deliberate), optional nginx TLS example, `pg_dump`/`tar` backup-restore, and the v1.0.0→v1.1 upgrade path (Sprint 9 auth schema migration + manual `owner_id` attribution, since no migration can know the correct CEO for pre-auth data). Dry-run walkthrough and an Alembic `downgrade -1` → `upgrade head` round trip both verified clean against this repo's real Postgres 16 container.
+- **`docs/KNOWN_ISSUES.md`** (new) — every CLAUDE.md §15 accepted tradeoff, every Sprint 15–18 deferral, the load-smoke operating envelope, provider-variance notes (free-tier reliability varies; Rule #18 held under real `429`/`402` failures), and the v1.0→v1.1 upgrade caveats, consolidated in one place.
+- **`CHANGELOG.md`** (new) — the v1.1.0 feature summary across Sprints 9–19, including the two breaking changes (Sprint 9 auth schema, Sprint 10 `role_key` rename).
+- **Independent security audit** (dedicated agent, not self-audit) against sprint-19.md §2's 7 security requirements. 6/7 passed outright; 1 real finding, fixed same-sprint — see DECISIONS.md #251.
+
+### What was validated (honestly)
+
+- Full pytest suite: green, 553 passed / 6 skipped (re-verified twice — once after the concurrent-Mission-race fixes, once after the security-audit logging fix — zero regressions either time).
+- Dashboard `tsc --noEmit` + `next build`: both green, all routes compiled.
+- `scripts/load_smoke.py`: all 4 scenarios PASS, stable across repeated runs.
+- Alembic round trip (`downgrade -1` → `upgrade head`) verified against this repo's real Postgres 16 container, not just SQLite.
+- Real-LLM E2E: the free-tier OpenRouter smoke test (`openai/gpt-oss-20b:free`) was run several times — provider wiring confirmed working; free-tier reliability confirmed to vary (malformed tool-call JSON, occasional `clarification_required`, reproduced `429` rate limiting); Rule #18 held under every real failure observed.
+- **Both paid release-evidence runs (Anthropic direct, Claude-via-OpenRouter) are UNVERIFIED IN THIS ENVIRONMENT** — no `ANTHROPIC_API_KEY` configured, and the configured `OPENROUTER_API_KEY` account has no funded credits (confirmed via a real `402 Payment Required`). Recorded honestly in `docs/KNOWN_ISSUES.md` §7 rather than faked (CLAUDE.md §16.7). **This is the one concrete gap the next operator/CTO should close** — supply a funded key for either or both providers and re-run `make verify-llm` / `make verify-llm-openrouter --model anthropic/claude-sonnet-4.5` before treating those specific claims as verified.
+- Browser/UI verification: Sprint 19 introduced no new CEO-facing UI (§4.10's explicit no-new-UI scope) — nothing new to browser-verify from this sprint's own changes. The CEO's own hands-on verification of the whole app (existing UI, this sprint's backend changes underneath it) is the standing gate before any `v1.1.0` tag — see below.
+
+### What the next CTO/operator should be aware of
+
+- **The `v1.1.0` git tag was deliberately NOT created this sprint.** Per explicit standing instruction from the CEO, Sprint 19's own completion is committed and pushed, but the release tag itself is the CEO's personal call after hands-on browser verification. Do not assume `v1.1.0` exists just because Sprint 19's checklist is complete — check `git tag` directly.
+- **The two release-evidence gaps above are credentials-only, not code gaps.** Both provider code paths are exercised end-to-end by the free-tier OpenRouter smoke test (same script, same `OpenRouterProvider` code path, different model/account funding). Closing the gap is an operator action (fund a key), not an engineering task.
+- **`httpx.ASGITransport`'s SSE limitation is a permanent testing-technique constraint, not a bug to watch for regressing.** Any future test that opens a `client.stream(...)` SSE connection against the app via `ASGITransport` will hang unconditionally, regardless of app code — use a real `uvicorn.Server` on loopback instead, per `scripts/load_smoke.py` scenario 2's pattern.
+
+---
+
 ## 19. CTO Warnings
 
 ### Things I would tell the next CTO personally
@@ -969,6 +1034,14 @@ Only concrete, evidence-based issues:
 **`memory_records`'s dedup is the DB constraint, not application logic.** `UNIQUE(source_event_id)` is what makes both the live subscriber and `backfill_memory` safe to run against the same event twice. Don't add an in-code "already exists?" check in front of it — that would just be a second, potentially-inconsistent source of the same guarantee.
 
 **`recall()` must keep scoping to the calling Company's `project_id`.** There is no cross-Company memory by design (Rule #15's account-scoping logic extends here even though Memory itself isn't a `users`-owned table). If you ever see a recall path that takes a bare `category`/`keyword` filter without a `project_id`, that's a scoping regression, not a feature.
+
+**Do not read `settings.openrouter_api_key` (or any provider key) from anywhere outside `secrets.py`.** `OpenRouterProvider` goes through `SecretsProvider` exactly like `AnthropicProvider` does — that's what makes it a real proof of Rule #4, not a special case. A shortcut read anywhere else (a route handler, a log line, a debug print) is a Rule #7 violation waiting to happen, not a harmless convenience.
+
+**Do not revert the log formatter's secret-key redaction back to exact-match.** `apps/api/app/core/logging.py`'s `_SECRET_KEY_TERMS` check is deliberately a substring match, not `key.lower() in _SECRET_KEYS`. The exact-match version was the Phase 2 design and it was wrong — the Sprint 19 independent security audit showed it would let real field names like `api_key`, `auth_token`, `password_hash` through in the clear. See DECISIONS.md #251 for why this supersedes the earlier decision. If you're adding a new secret-shaped field name, extend `_SECRET_KEY_TERMS`; don't narrow the match style.
+
+**Any future test that opens a concurrent SSE connection through `httpx.ASGITransport` will hang unconditionally — this is not a regression to chase.** `ASGITransport` buffers the entire ASGI response before returning, which is structurally incompatible with a never-terminating SSE stream. `scripts/load_smoke.py` scenario 2 works around this by running a real `uvicorn.Server` on loopback instead. Don't spend time debugging a hung `ASGITransport`-based SSE test — switch the test to a real server.
+
+**Do not create or push the `v1.1.0` git tag.** That decision belongs to the CEO alone, made after hands-on browser verification — see DECISIONS.md's Sprint 19 close-out entry. Sprint 19 being "done" in `PROGRESS.txt`/git history is not the same claim as "V1.1 is released," and the two must not be conflated in any commit, tag, or status line.
 
 ---
 
