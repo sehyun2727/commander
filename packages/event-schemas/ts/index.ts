@@ -55,6 +55,8 @@ export enum EventType {
   SPECIFICATION_REJECTED = "specification.rejected",
   SPECIFICATION_CANCELLED = "specification.cancelled",
   SPECIFICATION_FAILED = "specification.failed",
+  MEMORY_RECORDED = "memory.recorded",
+  MEMORY_RECALLED = "memory.recalled",
 }
 
 export enum AgentState {
@@ -290,6 +292,7 @@ export interface ReviewStartedPayload {
 export interface ReviewCompletedPayload {
   task_id: string;
   outcome: string;
+  sections: Record<string, string>;
 }
 
 export interface BugFoundPayload {
@@ -406,6 +409,21 @@ export interface SpecificationFailedPayload {
   reason: string;
 }
 
+export interface MemoryRecordedPayload {
+  memory_id: string;
+  category: string;
+  source_event_id: string;
+  source_task_id?: string | null;
+  source_specification_id?: string | null;
+}
+
+export interface MemoryRecalledPayload {
+  specification_id: string;
+  requested_categories?: string[] | null;
+  match_count: number;
+  memory_ids: string[];
+}
+
 export interface Event {
   id: string;
   project_id: string;
@@ -470,6 +488,8 @@ export interface EventPayloadMap {
   "specification.rejected": SpecificationRejectedPayload;
   "specification.cancelled": SpecificationCancelledPayload;
   "specification.failed": SpecificationFailedPayload;
+  "memory.recorded": MemoryRecordedPayload;
+  "memory.recalled": MemoryRecalledPayload;
 }
 
 export const TASK_STATE_STATUS_WORD: Record<TaskState, StatusWord> = {

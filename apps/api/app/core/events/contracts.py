@@ -200,6 +200,13 @@ class ReviewStartedPayload(Payload):
 class ReviewCompletedPayload(Payload):
     task_id: str
     outcome: str  # "approved" | "changes_requested"
+    # Sprint 18 §4.1 (DECISIONS.md #243): the Reviewer's leniently-parsed
+    # Problem/Recommendation/Risk/Impact sections, carried directly on the
+    # event so a `reviewer_feedback` Memory extractor never has to query
+    # ApprovalORM (which is created and committed *after* this event
+    # publishes, in engine.py -- see #243). Additive, defaults empty, every
+    # pre-Sprint-18 payload still validates unchanged.
+    sections: dict[str, str] = {}
 
 
 class BugFoundPayload(Payload):
@@ -341,6 +348,33 @@ class SpecificationFailedPayload(Payload):
     reason: str
 
 
+# --- Project Memory — Sprint 18 -----------------------------------------------
+
+class MemoryRecordedPayload(Payload):
+    """One deterministic Memory projection wrote a new record. Deliberately
+    content-free (no title/content_json/tags/keywords_text) -- the Timeline
+    should be able to say a memory was recorded and where it came from
+    without becoming a second copy of the record itself (DECISIONS.md #243,
+    mirrors AgentSelfCorrectionTriggeredPayload's Sprint 17 shape)."""
+
+    memory_id: str
+    category: str
+    source_event_id: str
+    source_task_id: str | None = None
+    source_specification_id: str | None = None
+
+
+class MemoryRecalledPayload(Payload):
+    """The PM explicitly requested recall during PM<->CTO planning. No
+    preview text, no keyword echo, no record content -- just enough to
+    audit that recall happened, for what, and how many records matched."""
+
+    specification_id: str
+    requested_categories: list[str] | None = None
+    match_count: int
+    memory_ids: list[str]
+
+
 PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.PROJECT_CREATED: ProjectCreatedPayload,
     EventType.PROJECT_ARCHIVED: ProjectArchivedPayload,
@@ -394,6 +428,8 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.SPECIFICATION_REJECTED: SpecificationRejectedPayload,
     EventType.SPECIFICATION_CANCELLED: SpecificationCancelledPayload,
     EventType.SPECIFICATION_FAILED: SpecificationFailedPayload,
+    EventType.MEMORY_RECORDED: MemoryRecordedPayload,
+    EventType.MEMORY_RECALLED: MemoryRecalledPayload,
 }
 
 _CONVERSATION_TYPES = {EventType.CONVERSATION_MESSAGE, EventType.CONVERSATION_MESSAGE_DELTA}

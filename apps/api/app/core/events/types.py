@@ -82,3 +82,7 @@ class EventType(str, Enum):
     SPECIFICATION_REJECTED = "specification.rejected"
     SPECIFICATION_CANCELLED = "specification.cancelled"
     SPECIFICATION_FAILED = "specification.failed"
+
+    # Project Memory — Sprint 18: deterministic event projection + PM-explicit recall
+    MEMORY_RECORDED = "memory.recorded"
+    MEMORY_RECALLED = "memory.recalled"

@@ -953,7 +953,7 @@ class CommanderWorkflowEngine(WorkflowEngine):
                             type=EventType.REVIEW_COMPLETED,
                             project_id=project_id,
                             actor=Actor(role="employee", id=agent.id, name=agent.name),
-                            payload={"task_id": task_id, "outcome": outcome},
+                            payload={"task_id": task_id, "outcome": outcome, "sections": sections},
                             reason=f"{role_title} verdict: {outcome}",
                         )
                     )

@@ -4070,3 +4070,95 @@ pipeline/contract layer is what turns that into CEO-legible summaries.
       `request_changes`, unchanged), any harness-summary/correction-stats
       dashboard widget, extending `harness == "tool_loop"` to any Role
       beyond Engineer, any new harness tool beyond `revert_last_patch`.
+
+### Sprint 18 — Project Memory (deterministic, PM-triggered recall)
+
+243. **Phase 0: baseline confirmation and design decisions.**
+    - **Baseline confirmed exactly as the brief stated:** HEAD ==
+      origin/master == `5017b13`, working tree clean except the new
+      `docs/prompts/sprint-18.md`, Alembic head `b1f4c8d5e9a2`. Full
+      backend regression re-run: 472 passed / 6 skipped (unchanged from
+      Sprint 17 close-out). Dashboard `tsc --noEmit` and `next build` both
+      clean, all 19 routes compiling (unchanged route count).
+    - **`ReviewCompletedPayload` gains an additive `sections: dict[str,
+      str] = {}` field**, populated from the same `sections` dict
+      `engine.py`'s produce/review stage already computes for the
+      `ApprovalORM` row it creates one line later. Reason: `REVIEW_COMPLETED`
+      is published *before* the corresponding `ApprovalORM` row is
+      committed (`engine.py` publishes the narrative event, then opens a
+      fresh session to create the Approval row) — a `reviewer_feedback`
+      Memory extractor that tried to query `ApprovalORM` by `task_id`
+      inside the event subscriber would race the write and could read
+      nothing. Carrying `sections` directly on the event payload instead
+      (mirroring Sprint 17's `TaskFailedPayload.reason_code` precedent —
+      additive, defaults empty, every pre-Sprint-18 payload still
+      validates unchanged) makes the Problem/Recommendation/Risk/Impact
+      breakdown a true fact of the event stream rather than something
+      Memory has to reach into another module's table to reconstruct,
+      which is also a closer fit for Rule #14 ("if a fact is not
+      represented in the event stream, it cannot become authoritative
+      company memory"). No existing consumer of `REVIEW_COMPLETED` reads
+      `sections` today, so this is purely additive. Every other projected
+      event type (`APPROVAL_GRANTED/REJECTED/CHANGES_REQUESTED`,
+      `SPECIFICATION_APPROVED`, `TASK_COMPLETED`, `TASK_FAILED`,
+      `SPECIFICATION_TURN_POSTED`) was checked for the same hazard and is
+      safe: in every other case the row a direct-ORM-query extractor needs
+      (`ApprovalORM`, `SpecificationVersionORM`, `TaskORM`) is already
+      committed strictly before the event publishes.
+    - **Recency-decay formula: `1.0 / (1.0 + age_days / HALF_LIFE_DAYS)`
+      with `HALF_LIFE_DAYS = 30`**, not `exp(-age_days / 30)`. Both satisfy
+      the brief's "monotonic, never zero/negative" requirement; the
+      rational form was chosen because it is exact (no floating-point
+      transcendental function), trivially reproducible across Python
+      versions/platforms, and easy to hand-verify in a unit test with
+      exact fractions (`age_days=30` → exactly `0.5`). Recorded once here;
+      must not be swapped mid-implementation per the brief.
+    - **Tokenizer: pure `str.lower().split()`, filtered to alphanumeric
+      tokens, deduped, minus a fixed in-code stopword list** (`the, a,
+      and, of, to, for, in, on, is, it`) — no NLP/stemming library, no new
+      dependency. Applied identically to tag derivation and to
+      `keywords_text` construction, so recall's substring match and
+      projection's tag derivation always agree on what "a word" is.
+    - **`MAX_RECALL_*` constants adopted exactly as the brief's defaults**
+      (`MAX_RECALL_LIMIT=10`, `MAX_RECALL_LOOKBACK_DAYS=365`,
+      `MAX_TAG_COUNT=16`, `MAX_TAG_LENGTH=64`, `MAX_KEYWORD_COUNT=16`,
+      `MAX_KEYWORD_LENGTH=64`) — nothing in the codebase inspection
+      suggested a reason to deviate.
+    - **`memory_records` table / migration**: new table only (no backfill
+      migration data, matching `b1f4c8d5e9a2`'s own "new table only" shape
+      and revision-chain convention — `down_revision = 'b1f4c8d5e9a2'`),
+      columns exactly as the brief's §4.4 shape (`id`, `project_id`,
+      `category`, `source_event_id` UNIQUE, `source_task_id` nullable,
+      `source_specification_id` nullable, `title`, `content_json` JSON,
+      `tags` JSON list, `keywords_text` Text, `created_at`), indexes on
+      `project_id`, `category`, `source_task_id`,
+      `source_specification_id`, `created_at`. `ApprovalORM`/
+      `SpecificationVersionORM`/`TaskORM` are queried directly by primary
+      key inside the memory module's own session (never through
+      `approvals`/`planning`/`tasks` service functions) — the same
+      "shared persistence floor, not a module import" exception
+      `core/db_models.py`'s own docstring already grants (Rule #1 is about
+      module-to-module coupling, not access to the persistence floor).
+    - **Confirmed the six source `EventType`s from brief §4.1 all already
+      exist** in `core/events/types.py`/`contracts.py`:
+      `APPROVAL_GRANTED`/`APPROVAL_REJECTED`/`APPROVAL_CHANGES_REQUESTED`
+      → `ceo_approvals`; `SPECIFICATION_APPROVED` → `pm_specifications`;
+      `REVIEW_COMPLETED` → `reviewer_feedback`; `TASK_FAILED` →
+      `failed_attempts` (Sprint 17's `reason_code` field included
+      verbatim when present); `TASK_COMPLETED` → `successful_solutions`;
+      `SPECIFICATION_TURN_POSTED` → `prior_discussions`. No new
+      `EventType` needed for projection inputs — only the two new output
+      events (`MEMORY_RECORDED`, `MEMORY_RECALLED`) are additions.
+      `CONVERSATION_MESSAGE`/`CONVERSATION_MESSAGE_DELTA` confirmed absent
+      from this list and must stay that way (Rule #8).
+    - **Subscriber wiring point confirmed**: `app/main.py::lifespan`,
+      immediately after `event_bus = InProcessEventBus(session_factory)`
+      is constructed (line ~85) and before `app.state.event_bus =
+      event_bus` — the same point Sprint-9-era subscribers would wire in,
+      via a new `install_memory_subscribers(event_bus, session_factory)`
+      call, one `event_bus.subscribe(EventType.X, handler)` per projected
+      type. Handlers never raise (`InProcessEventBus.publish` already
+      logs-and-swallows a subscriber exception per `bus.py:60-63`, so a
+      malformed-payload extractor returning `None` and logging INFO,
+      rather than raising, is the correct shape, not a defensive
+      redundancy).
