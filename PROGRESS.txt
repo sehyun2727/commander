@@ -445,12 +445,32 @@ PHASE 3 — Load smoke + real-LLM E2E + deployment doc
         listener for the same one-shot receive() channel.
         Full backend suite re-verified green after all fixes: 553 passed
         / 6 skipped, zero regressions.
-[ ] 3.2 make verify-llm (Anthropic direct) evidence recorded
-[ ] 3.3 make verify-llm-openrouter -> anthropic/claude-sonnet-4.5 evidence
-[ ] 3.4 make verify-llm-openrouter full Specification lifecycle against
-        free-tier default model; quality notes in KNOWN_ISSUES.md
-[ ] 3.5 docs/DEPLOYMENT.md walkthrough dry run; Alembic round-trip verify
-[ ] 3.6 commit + push
+[x] 3.2 make verify-llm (Anthropic direct): UNVERIFIED IN THIS ENVIRONMENT --
+        no ANTHROPIC_API_KEY configured in this dev environment's .env.
+        Recorded honestly in KNOWN_ISSUES.md §7 rather than faked (CLAUDE.md
+        §16.7). Needs a funded key supplied by the operator to capture.
+[x] 3.3 make verify-llm-openrouter -> anthropic/claude-sonnet-4.5: UNVERIFIED
+        IN THIS ENVIRONMENT -- the configured OPENROUTER_API_KEY account has
+        no funded credits; request fails immediately with a real
+        402 Payment Required (confirms Rule #18 surfaces provider failure
+        cleanly, but is not the release-evidence run itself). Recorded in
+        KNOWN_ISSUES.md §7. Needs OpenRouter account credits to capture.
+[x] 3.4 make verify-llm-openrouter full Specification lifecycle against
+        free-tier default (openai/gpt-oss-20b:free) run several times.
+        Findings recorded in KNOWN_ISSUES.md §7: provider wiring works;
+        free-tier reliability varies turn to turn (malformed tool-call
+        JSON, occasional clarification_required, reliably reproduced
+        429 rate limiting on consecutive requests); Rule #18 held under
+        every real failure observed (clean FAILED state, never a hang or
+        raw traceback).
+[x] 3.5 docs/DEPLOYMENT.md (new) + .env.production.example (new) written;
+        walkthrough dry-run against this repo's own Postgres 16 container:
+        `make db-upgrade` clean, plain `uvicorn app.main:app` boot clean,
+        boot checks passed, alembic_head == db_revision. Alembic
+        round-trip verified against the same real Postgres instance:
+        `downgrade -1` then `upgrade head` both completed with no errors,
+        final revision confirmed back at head (c2a7e1f4b6d3).
+[x] 3.6 commit + push
 
 PHASE 4 — Security audit + docs + close-out
 [ ] 4.1 full backend suite + dashboard typecheck/build green

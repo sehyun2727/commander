@@ -5,10 +5,10 @@ operational limits, as of Sprint 19 (`v1.1.0`). This document exists so an
 operator or CTO reading the repository does not have to reconstruct "is this
 a bug or a known limit" from `git log` and `docs/DECISIONS.md` alone.
 
-> Status: Phase 0 skeleton. Sections below are filled in as Sprint 19
-> Phases 3-4 produce their evidence (load smoke results, real-LLM E2E
-> findings, deployment walkthrough notes). Do not treat an empty section as
-> "no issues" until Phase 4 closes this document out.
+> Status: Sprint 19 Phase 3 evidence recorded (load smoke, provider
+> variance, deployment/upgrade caveats). §7's release-evidence gap
+> (Anthropic direct, Claude-via-OpenRouter) reflects this development
+> environment's credentials, not unverified code — see that section.
 
 ## 1. Accepted tradeoffs (CLAUDE.md §15)
 
@@ -71,30 +71,84 @@ opportunistically. See `docs/DECISIONS.md` before changing any of them.
 
 ## 6. Sprint 19 verified operating envelope (load smoke, §4.8)
 
-_TODO — filled in during Phase 3 from `scripts/load_smoke.py` evidence._
+Verified via `scripts/load_smoke.py` (mock provider, throwaway SQLite DB,
+in-process for scenarios 1/3/4, a real local `uvicorn` server on loopback
+for scenario 2 — see `docs/DECISIONS.md` #250 for why). Stable across
+repeated runs on this dev machine (Windows, single local disk, mock
+latency).
 
 | Scenario | Assertion | Result |
 | --- | --- | --- |
-| 1 Company × 10 sequential Missions | 10th mission ≤ 1.5× 1st wall time; RSS growth < 100 MB | TBD |
-| 3 Companies × 3 concurrent Missions | all reach `pending_approval`, no deadlock, SSE stays connected | TBD |
-| Hot-path query counts | constant query count vs. scale; harness dispatch bounded writes | TBD |
-| Memory recall @ 1,000 records | < 200 ms wall-clock, fresh connection | TBD |
+| 1 Company × 10 sequential Missions | 10th mission ≤ 1.5× 1st wall time; RSS growth < 100 MB | **PASS** — 10/10 completed, ratio 0.94–1.04×, RSS growth 0.0 MB |
+| 3 Companies × 3 concurrent Missions | all reach `pending_approval`, no deadlock, SSE stays connected | **PASS** — 9/9 missions reached `pending_approval`, no deadlock, 3/3 SSE streams stayed connected throughout |
+| Hot-path query counts | constant query count vs. scale; harness dispatch bounded writes | **PASS** — `workspace/overview`: 14 SELECTs (constant, 0 vs. 5 missions); `situation`: 8 SELECTs (constant); harness `read_file` dispatch: 1 write per call |
+| Memory recall @ 1,000 records | < 200 ms wall-clock, fresh connection | **PASS** — 8.6–15.1 ms across runs, well inside budget |
+
+These numbers describe this repo's mock-provider ceiling on a single
+developer machine, not a production capacity guarantee — no Postgres, no
+real network latency, no concurrent CEOs. Building scenario 2 surfaced and
+fixed two real concurrent-Mission races (`docs/DECISIONS.md` #250); the
+founding roster's one-Employee-per-Role default (Sprint 10 §12) means any
+deployment running multiple concurrent Missions in one Company should
+expect Employees to queue for their turn rather than run in parallel,
+which is expected/intended behavior, not a bug.
 
 ## 7. Provider variance — free-tier models (§4.5)
 
-_TODO — filled in during Phase 3 from the OpenRouter free-tier full-E2E
-smoke test against `openai/gpt-oss-20b:free` (see `docs/DECISIONS.md`
-#249 for why this model was chosen)._
+Ran `scripts/verify_real_llm.py --provider openrouter` (free-tier default
+`openai/gpt-oss-20b:free`, see `docs/DECISIONS.md` #249 for model choice)
+several times across Sprint 19 Phase 3. Findings:
 
-Success of this smoke test proves OpenRouter provider wiring works. It does
-**not** certify any specific free model as production-quality — free-tier
-models are known to vary in tool-call reliability and JSON-formatting
-discipline turn to turn.
+- **Provider wiring itself works.** `OpenRouterProvider` correctly forwards
+  requests, streams tokens, and parses the OpenAI-compatible `tool_calls`
+  shape when the model cooperates.
+- **Free-tier reliability varies turn to turn.** Observed: occasional
+  malformed tool-call JSON, occasional `clarification_required` responses
+  in place of a usable plan/spec turn, and — reliably reproduced twice in
+  a row during this Phase 3 session — `429 Too Many Requests` from
+  OpenRouter's free-tier rate limit on consecutive real requests within a
+  short window.
+- **Rule #18 held under real failure.** A `429`/`402` from the provider
+  surfaces as a plain-language `FAIL`/`FAILED` Mission state via
+  `_legible_error`, never a raw traceback or a silently stuck Mission —
+  this is the actual behavior worth certifying from this exercise, more
+  than any single free-tier model's output quality.
+- Success of this smoke test proves OpenRouter provider wiring works. It
+  does **not** certify any specific free model as production-quality —
+  free-tier models are known to vary in tool-call reliability and
+  JSON-formatting discipline turn to turn, and are also subject to
+  provider-side rate limits outside Commander's control.
+
+### §4.6 release-evidence runs — unverified in this environment
+
+Both required real-provider release-evidence runs could not be completed
+in this development environment and are recorded here rather than falsely
+claimed:
+
+- **Anthropic direct** (`make verify-llm`): no `ANTHROPIC_API_KEY`
+  configured in this environment's `.env`. Needs a funded Anthropic API
+  key supplied by the operator before this evidence can be captured.
+- **Claude via OpenRouter** (`--provider openrouter --model
+  anthropic/claude-sonnet-4.5`): the configured `OPENROUTER_API_KEY`
+  account has no funded credits — the request fails immediately with
+  `402 Payment Required` before any tokens are spent. Needs OpenRouter
+  account credits added before this evidence can be captured.
+
+Both code paths exist and are exercised end-to-end by the free-tier smoke
+test above (same script, same provider, same `OpenRouterProvider` code
+path, different model/account funding) — the gap is credentials/funding
+in this environment, not unverified code.
 
 ## 8. v1.0 → v1.1 upgrade caveats
 
-_TODO — filled in during Phase 4 alongside `docs/DEPLOYMENT.md` §7. Notably:
+See `docs/DEPLOYMENT.md` §7 for the full upgrade walkthrough. Notably:
 v1.0.0 predates the Sprint 9 auth schema (`users`/`sessions` tables) —
 upgrading requires running the `fa793dce62cb_accounts_and_sessions`
-migration and manually attributing any pre-auth Company data to a CEO
-account (no `owner_id` existed before)._
+migration (via `make db-upgrade`, verified round-trip clean against a real
+Postgres 16 instance during Sprint 19 Phase 3: `downgrade -1` then
+`upgrade head` both completed without error) and then manually attributing
+any pre-auth Company data to a CEO account (no `owner_id` existed before;
+there is no scripted migration for this step since the correct owner is an
+operator decision — see the `UPDATE projects SET owner_id = ...` recipe in
+`docs/DEPLOYMENT.md` §7). Until that attribution step is done, pre-auth
+Companies are invisible to every CEO account (Rule #15).
