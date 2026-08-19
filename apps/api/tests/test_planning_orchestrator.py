@@ -1,19 +1,29 @@
 """Sprint 12 Phase 2: the PM<->CTO planning orchestrator (brief §9), exercised
 against the mock provider's deterministic fixture markers (see
 app/modules/provider_gateway/mock_provider.py) rather than a real LLM.
+
+Sprint 18 Phase 2 adds the `recall_request` planning integration tests near
+the bottom of this file -- they monkeypatch `MockProvider.complete` directly
+(the same pattern `test_malformed_provider_output_fails_after_bounded_retry`
+already uses) for turn-by-turn control over the PM/CTO JSON, since the mock
+provider's own deterministic fixture text has no `recall_request` scenario
+until Phase 3's demo marker lands.
 """
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from app.core.db_models import ActiveSpecificationLockORM, AgentORM, SpecificationTurnORM
+from app.core.db_models import ActiveSpecificationLockORM, AgentORM, MemoryRecordORM, SpecificationTurnORM
 from app.core.errors import (
     ActivePlanningExistsError,
     CTOVacantError,
     MalformedProviderOutputError,
     PlanningTurnBudgetExhaustedError,
 )
+from app.core.interfaces.provider_gateway import CompletionResult
 from app.core.lifecycle.agent_states import AgentState
 from app.core.lifecycle.specification_states import SpecificationStatus
 from app.modules.agent_runtime.service import hire_employee
@@ -24,6 +34,7 @@ from app.modules.provider_gateway.mock_provider import (
     BLOCKING_FEASIBILITY_MARKER,
     CTO_FOLLOWUP_MARKER,
     NEEDS_CLARIFICATION_MARKER,
+    MockProvider,
 )
 
 
@@ -39,6 +50,44 @@ async def _hire_cto(harness, project_id: str, name: str = "Ada") -> AgentORM:
 
 def _orchestrator(harness) -> PlanningOrchestrator:
     return PlanningOrchestrator(harness.session_factory, harness.event_bus, harness.agent_runtime, harness.secrets)
+
+
+async def _plant_memory_record(harness, project_id: str, *, category: str, tags: list[str], title: str) -> None:
+    import uuid
+
+    row = MemoryRecordORM(
+        project_id=project_id,
+        category=category,
+        source_event_id=str(uuid.uuid4()),
+        title=title,
+        content_json={"preview": title},
+        tags=tags,
+        keywords_text=" ".join(tags),
+    )
+    async with harness.session_factory() as session:
+        session.add(row)
+        await session.commit()
+
+
+_MOCK_SPEC_FIELDS = {
+    "title": "Add auth support",
+    "problem_statement": "Users cannot authenticate.",
+    "goals": ["Add login"],
+    "non_goals": [],
+    "requirements": ["Support email/password login"],
+    "acceptance_criteria": ["A user can log in"],
+    "technical_approach": "Add a session-based auth flow.",
+    "architecture_components": [],
+    "data_migration_impact": "None.",
+    "security_considerations": "Hash passwords.",
+    "observability_requirements": "Log login attempts.",
+    "test_plan": "Unit test the login flow.",
+    "risks": [],
+    "dependencies": [],
+    "assumptions": [],
+    "unresolved_questions": [],
+    "implementation_stages": ["Build login form", "Wire session storage"],
+}
 
 
 @pytest.mark.asyncio
@@ -260,3 +309,160 @@ async def test_revision_round_produces_a_second_version(harness):
 
     versions = await planning_service.list_versions(harness.session_factory, spec.id)
     assert len(versions) == 2
+
+
+# --- Sprint 18 Phase 2: recall_request planning integration -----------------
+
+
+@pytest.mark.asyncio
+async def test_planning_run_without_recall_request_is_unchanged(harness):
+    """Sprint 12/17 baseline behavior: a PM turn that never emits
+    `recall_request` never triggers a recall, never publishes
+    `memory.recalled` (sprint-18.md §7 item 6's counterpart -- "nothing
+    happens" when the field is absent)."""
+    project = await _make_project(harness)
+    await _hire_cto(harness, project.id)
+
+    spec = await _orchestrator(harness).start(project.id, "Add a health check endpoint")
+
+    assert spec.status == SpecificationStatus.READY_FOR_REVIEW.value
+    events = await harness.event_bus.recent(project.id, limit=50)
+    assert not [e for e in events if e.type == "memory.recalled"]
+
+
+@pytest.mark.asyncio
+async def test_pm_recall_request_injects_message_and_publishes_event(harness, monkeypatch):
+    project = await _make_project(harness)
+    await _hire_cto(harness, project.id)
+    await _plant_memory_record(
+        harness, project.id, category="failed_attempts", tags=["auth"], title="Auth mission failed before"
+    )
+
+    calls: list[dict] = []
+
+    async def _complete(self, model_ref, system, messages, **opts):
+        calls.append({"kind": opts.get("planning_turn_kind"), "messages": messages})
+        kind = opts.get("planning_turn_kind")
+        if kind == "pm_analysis":
+            text = json.dumps(
+                {
+                    "needs_clarification": False,
+                    "analysis_summary": "Looks straightforward.",
+                    "recall_request": {"categories": ["failed_attempts"], "tags": ["auth"]},
+                }
+            )
+        elif kind == "cto_review":
+            text = json.dumps({"blocking": False, "architecture_notes": "Fine.", "risks": []})
+        elif kind == "pm_draft_or_followup":
+            text = json.dumps(
+                {"ready_to_draft": True, "follow_up_question": None, "specification": _MOCK_SPEC_FIELDS}
+            )
+        else:
+            raise AssertionError(f"unexpected turn kind {kind!r}")
+        return CompletionResult(text=text, model=model_ref, provider="mock", input_tokens=1, output_tokens=1)
+
+    monkeypatch.setattr(MockProvider, "complete", _complete)
+
+    spec = await _orchestrator(harness).start(project.id, "Add auth support")
+
+    assert spec.status == SpecificationStatus.READY_FOR_REVIEW.value
+
+    cto_call = next(c for c in calls if c["kind"] == "cto_review")
+    assert len(cto_call["messages"]) == 2
+    assert "Memory recall results" in cto_call["messages"][0]["content"]
+    assert "Auth mission failed before" in cto_call["messages"][0]["content"]
+
+    draft_call = next(c for c in calls if c["kind"] == "pm_draft_or_followup")
+    assert len(draft_call["messages"]) == 1  # consumed exactly once, not re-injected on later turns
+
+    events = await harness.event_bus.recent(project.id, limit=50)
+    recalled = [e for e in events if e.type == "memory.recalled"]
+    assert len(recalled) == 1
+    assert recalled[0].payload["match_count"] == 1
+    assert recalled[0].payload["requested_categories"] == ["failed_attempts"]
+    assert recalled[0].actor.role == "employee"
+
+
+@pytest.mark.asyncio
+async def test_pm_recall_request_with_zero_matches_publishes_event_without_message(harness, monkeypatch):
+    project = await _make_project(harness)
+    await _hire_cto(harness, project.id)
+    # No memory records planted -- the recall_request will match nothing.
+
+    calls: list[dict] = []
+
+    async def _complete(self, model_ref, system, messages, **opts):
+        calls.append({"kind": opts.get("planning_turn_kind"), "messages": messages})
+        kind = opts.get("planning_turn_kind")
+        if kind == "pm_analysis":
+            text = json.dumps(
+                {
+                    "needs_clarification": False,
+                    "analysis_summary": "Looks straightforward.",
+                    "recall_request": {"categories": ["failed_attempts"]},
+                }
+            )
+        elif kind == "cto_review":
+            text = json.dumps({"blocking": False, "architecture_notes": "Fine.", "risks": []})
+        elif kind == "pm_draft_or_followup":
+            text = json.dumps(
+                {"ready_to_draft": True, "follow_up_question": None, "specification": _MOCK_SPEC_FIELDS}
+            )
+        else:
+            raise AssertionError(f"unexpected turn kind {kind!r}")
+        return CompletionResult(text=text, model=model_ref, provider="mock", input_tokens=1, output_tokens=1)
+
+    monkeypatch.setattr(MockProvider, "complete", _complete)
+
+    spec = await _orchestrator(harness).start(project.id, "Add auth support")
+
+    assert spec.status == SpecificationStatus.READY_FOR_REVIEW.value
+
+    cto_call = next(c for c in calls if c["kind"] == "cto_review")
+    assert len(cto_call["messages"]) == 1  # no empty "no results" block injected
+
+    events = await harness.event_bus.recent(project.id, limit=50)
+    recalled = [e for e in events if e.type == "memory.recalled"]
+    assert len(recalled) == 1
+    assert recalled[0].payload["match_count"] == 0
+    assert recalled[0].payload["memory_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_cto_turn_with_recall_request_fails_validation(harness, monkeypatch):
+    """Only PM turn kinds may carry `recall_request` (sprint-18.md §7) -- a
+    CTO turn that includes it is malformed output and takes the existing
+    bounded-retry-then-fail path, same as any other schema violation."""
+    project = await _make_project(harness)
+    await _hire_cto(harness, project.id)
+
+    calls = {"n": 0}
+
+    async def _complete(self, model_ref, system, messages, **opts):
+        kind = opts.get("planning_turn_kind")
+        if kind == "pm_analysis":
+            text = json.dumps({"needs_clarification": False, "analysis_summary": "Fine."})
+        elif kind == "cto_review":
+            calls["n"] += 1
+            text = json.dumps(
+                {
+                    "blocking": False,
+                    "architecture_notes": "Fine.",
+                    "risks": [],
+                    "recall_request": {"categories": ["failed_attempts"]},
+                }
+            )
+        else:
+            raise AssertionError(f"unexpected turn kind {kind!r}")
+        return CompletionResult(text=text, model=model_ref, provider="mock", input_tokens=1, output_tokens=1)
+
+    monkeypatch.setattr(MockProvider, "complete", _complete)
+
+    spec = await _orchestrator(harness).start(project.id, "Add a health check endpoint")
+
+    assert spec.status == SpecificationStatus.FAILED.value
+    assert spec.stop_reason == "malformed_provider_output"
+    assert calls["n"] == 2  # MAX_MALFORMED_ATTEMPTS
+
+    events = await harness.event_bus.recent(project.id, limit=50)
+    assert not [e for e in events if e.type == "memory.recalled"]

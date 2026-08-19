@@ -127,7 +127,23 @@ _PM_PLANNING_CONTRACT = (
     "the schema described in the user message -- no prose outside the "
     "JSON, no markdown code fences. Never invent business requirements "
     "the CEO did not provide; when scope, security, cost, or acceptance "
-    "criteria are materially unclear, say so plainly instead of guessing."
+    "criteria are materially unclear, say so plainly instead of guessing. "
+    "You may optionally include a 'recall_request' field in your JSON "
+    "response (any turn) to search Company Knowledge -- deterministic "
+    "records of past approvals, specifications, reviewer feedback, failed "
+    "attempts, successful solutions, and prior discussions -- before "
+    "continuing: "
+    '{"recall_request": {"categories": [string, ...] | null, '
+    '"tags": [string, ...], "keywords": [string, ...], '
+    '"since_days": integer, "limit": integer}}. '
+    "All sub-fields are optional. Omitting 'categories' or setting it to "
+    "null searches all six categories; setting it to an empty list [] "
+    "explicitly searches none. Omit 'recall_request' entirely, or set it "
+    "to null, when you do not need to search past company history -- this "
+    "is the default and is exactly what earlier planning sessions already "
+    "did. Results, if any, are handed back to you as a system-formatted "
+    "message before your next turn; you never see raw record contents "
+    "beyond a short preview."
 )
 
 _CTO_PLANNING_CONTRACT = (

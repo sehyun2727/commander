@@ -58,6 +58,9 @@ from ...core.lifecycle.state_machine import transition
 from ...core.secrets import SecretsProvider
 from ...templates import TEMPLATE
 from .. import prompt_builder
+from ..memory import CATEGORIES as MEMORY_CATEGORIES
+from ..memory import RecallRequest, RecalledMemory
+from ..memory import recall as memory_recall
 from ..model_registry import RECOMMENDED_PROVIDER
 from ..provider_gateway import build_gateway
 from ..workflow_engine import resolve_employee_for_role
@@ -155,11 +158,35 @@ def _validate_specification(spec: Any) -> None:
         _require_list(spec, key)
 
 
+def _validate_recall_request_optional(data: dict) -> None:
+    """Sprint 18 §4.8/§7: `recall_request` is optional on every PM turn
+    kind. Absence and explicit `null` are both "no recall" (§7) -- only
+    reject a structurally wrong value (e.g. a string/list/bool) here, since
+    a malformed *sub-field* (bad `tags` type, oversized `limit`, ...) is
+    `RecallRequest`'s own job to coerce away leniently (schemas.py), never
+    a reason to fail the whole planning turn."""
+    if "recall_request" not in data:
+        return
+    value = data["recall_request"]
+    if value is not None and not isinstance(value, dict):
+        raise ValueError("'recall_request' must be an object or null")
+
+
+def _reject_recall_request(data: dict) -> None:
+    """Sprint 18 §7: only PM turn kinds may emit `recall_request` -- the
+    CTO's contract is never extended (§4.8), so a CTO response carrying a
+    non-null value here is malformed output and takes the existing
+    bounded-retry-then-fail path, the same as any other schema violation."""
+    if data.get("recall_request") is not None:
+        raise ValueError("'recall_request' is not permitted on CTO turns")
+
+
 def _validate_pm_analysis(data: dict) -> None:
     _require_bool(data, "needs_clarification")
     _require_str(data, "analysis_summary")
     if data["needs_clarification"] and not [q for q in data.get("questions") or [] if str(q).strip()]:
         raise ValueError("needs_clarification=true requires at least one question")
+    _validate_recall_request_optional(data)
 
 
 def _validate_cto_review(data: dict) -> None:
@@ -168,6 +195,7 @@ def _validate_cto_review(data: dict) -> None:
     _require_list(data, "risks")
     if data["blocking"]:
         _require_str(data, "blocking_reason")
+    _reject_recall_request(data)
 
 
 def _validate_pm_draft_or_followup(data: dict) -> None:
@@ -176,14 +204,17 @@ def _validate_pm_draft_or_followup(data: dict) -> None:
         _validate_specification(data.get("specification"))
     else:
         _require_str(data, "follow_up_question")
+    _validate_recall_request_optional(data)
 
 
 def _validate_cto_followup_answer(data: dict) -> None:
     _require_str(data, "answer")
+    _reject_recall_request(data)
 
 
 def _validate_pm_draft(data: dict) -> None:
     _validate_specification(data.get("specification"))
+    _validate_recall_request_optional(data)
 
 
 _VALIDATORS: dict[str, Callable[[dict], None]] = {
@@ -269,6 +300,26 @@ _USER_MESSAGE_BUILDERS: dict[str, Callable[[dict], str]] = {
     "pm_draft": _pm_draft_message,
     "pm_revision_draft": _pm_revision_draft_message,
 }
+
+
+def _format_recall_message(results: list[RecalledMemory]) -> str:
+    """Sprint 18 §7 item 3 -- a small, server-formatted JSON block, never
+    raw record content beyond each result's own bounded `preview`. Injected
+    as one extra user-role message ahead of the PM's next turn."""
+    items = [
+        {
+            "id": r.id,
+            "category": r.category,
+            "title": r.title,
+            "tags": r.tags,
+            "created_at": r.created_at.isoformat(),
+            "preview": r.preview,
+        }
+        for r in results
+    ]
+    return "Memory recall results (deterministic, keyword+tag+recency match):\n" + json.dumps(
+        {"results": items}, indent=2
+    )
 
 
 def _turn_text_for(kind: str, data: dict) -> str:
@@ -571,6 +622,13 @@ class PlanningOrchestrator:
         follow_up_question = ""
         follow_up_answer = ""
         first_iteration = True
+        # Sprint 18 §7: set by `_maybe_recall` right after a PM turn whose
+        # JSON carried a `recall_request`, consumed exactly once by the
+        # *next* turn's `_call_turn` call, then cleared -- there is no
+        # persisted cross-turn message list in this orchestrator (each turn
+        # is a fresh one-shot `gateway.complete` call), so this local is the
+        # entire lifetime of "the next user message".
+        pending_recall_message: str | None = None
 
         while True:
             if await self._count_employee_turns(specification_id) >= MAX_PLANNING_TURNS:
@@ -598,8 +656,11 @@ class PlanningOrchestrator:
             if kind == "pm_revision_draft":
                 opts["revision_feedback"] = revision_feedback
 
+            turn_recall_message, pending_recall_message = pending_recall_message, None
             try:
-                data = await self._run_turn(agent, role_key, kind, model_ref, opts, gateway)
+                data = await self._run_turn(
+                    agent, role_key, kind, model_ref, opts, gateway, recall_message=turn_recall_message
+                )
             except MalformedProviderOutputError as exc:
                 await self._fail(specification_id, project_id, agents_by_role, "malformed_provider_output", exc)
                 return
@@ -612,6 +673,9 @@ class PlanningOrchestrator:
 
             await self._persist_turn(specification_id, project_id, agent, role_key, kind, data)
             first_iteration = False
+
+            if role_key == TEMPLATE.planning_pm_role_key:
+                pending_recall_message = await self._maybe_recall(specification_id, project_id, agent, data)
 
             if kind == "pm_analysis":
                 if data["needs_clarification"]:
@@ -654,6 +718,7 @@ class PlanningOrchestrator:
         model_ref: str,
         opts: dict[str, Any],
         gateway: ProviderGateway,
+        recall_message: str | None = None,
     ) -> dict:
         """Cycle the resolved Employee through Assigned->Planning->Working->
         WaitingReview->Completed->Idle around one structured-output call,
@@ -664,7 +729,7 @@ class PlanningOrchestrator:
             await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing planning context")
             await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing structured planning output")
 
-            data = await self._call_turn(gateway, model_ref, agent, role_key, kind, opts)
+            data = await self._call_turn(gateway, model_ref, agent, role_key, kind, opts, recall_message=recall_message)
 
             await self._agent_runtime.transition(agent.id, AgentState.WAITING_REVIEW, "Planning output ready")
             await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Turn handed off")
@@ -685,6 +750,7 @@ class PlanningOrchestrator:
         role_key: str,
         kind: str,
         opts: dict[str, Any],
+        recall_message: str | None = None,
     ) -> dict:
         system = prompt_builder.build(
             AgentProfile.model_validate(agent.profile), role_key, contract_override=TEMPLATE.planning_contracts[role_key]
@@ -692,11 +758,21 @@ class PlanningOrchestrator:
         user_content = _USER_MESSAGE_BUILDERS[kind](opts)
         validator = _VALIDATORS[kind]
 
+        # Sprint 18 §7 item 4: the recall result message (if any) is
+        # prepended as its own user-role message ahead of this turn's usual
+        # one, rather than concatenated into `user_content` -- keeps the
+        # server-owned recall block visually/structurally distinct from the
+        # turn-kind-specific prompt built by `_USER_MESSAGE_BUILDERS`.
+        messages: list[dict[str, str]] = []
+        if recall_message is not None:
+            messages.append({"role": "user", "content": recall_message})
+        messages.append({"role": "user", "content": user_content})
+
         for attempt in range(1, MAX_MALFORMED_ATTEMPTS + 1):
             result = await gateway.complete(
                 model_ref,
                 system,
-                [{"role": "user", "content": user_content}],
+                messages,
                 agent_override=_agent_model_override(agent),
                 planning_turn_kind=kind,
                 **opts,
@@ -755,6 +831,45 @@ class PlanningOrchestrator:
                 reason=text[:200],
             )
         )
+
+    async def _maybe_recall(
+        self, specification_id: str, project_id: str, agent: AgentORM, data: dict
+    ) -> str | None:
+        """Sprint 18 §7: fires only when the just-persisted PM turn's JSON
+        carried a non-null `recall_request` (`_reject_recall_request`
+        already keeps this off every CTO turn kind, so `data` is always a
+        PM turn's output when this is called). Deterministic, zero-LLM:
+        `memory.recall` is a plain read against `memory_records`. Always
+        publishes `MEMORY_RECALLED` -- even on zero matches, so a PM asking
+        recall and getting nothing is still observable on the Timeline --
+        but only returns a message for the next turn when there is
+        something worth injecting (§7 item 6)."""
+        raw = data.get("recall_request")
+        if raw is None:
+            return None
+        request = RecallRequest.model_validate(raw) if isinstance(raw, dict) else RecallRequest()
+        results = await memory_recall(self._session_factory, project_id, request)
+        requested_categories = (
+            list(request.categories) if request.categories is not None else list(MEMORY_CATEGORIES)
+        )
+
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.MEMORY_RECALLED,
+                project_id=project_id,
+                actor=Actor(role="employee", id=agent.id, name=agent.name),
+                payload={
+                    "spec_id": specification_id,
+                    "requested_categories": requested_categories,
+                    "match_count": len(results),
+                    "memory_ids": [r.id for r in results],
+                },
+                reason=f"PM recalled {len(results)} memory record(s)",
+            )
+        )
+        if not results:
+            return None
+        return _format_recall_message(results)
 
     async def _persist_ceo_answer_turn(self, specification_id: str, project_id: str, answers: list[str]) -> None:
         text = "\n".join(f"- {a}" for a in answers)

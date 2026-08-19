@@ -130,20 +130,27 @@ async def recall(session_factory, project_id: str, request: RecallRequest) -> li
         rows = result.scalars().all()
 
     now = datetime.now(timezone.utc)
-    scored: list[tuple[float, MemoryRecordORM]] = []
+    scored: list[tuple[float, datetime, MemoryRecordORM]] = []
     for row in rows:
         row_tags = set(row.tags or [])
         tag_matches = sum(1 for t in tags if t in row_tags)
         keywords_text = row.keywords_text or ""
         keyword_matches = sum(1 for k in keywords if k in keywords_text)
-        age_days = (now - row.created_at).total_seconds() / 86400.0
+        # SQLite (tests) hands back a naive datetime even though the column
+        # is DateTime(timezone=True); Postgres (prod) always returns one
+        # with tzinfo. Normalize rather than let the two backends disagree
+        # (same pattern as workflow_engine/engine.py's budget-elapsed check).
+        row_created_at = row.created_at
+        if row_created_at.tzinfo is None:
+            row_created_at = row_created_at.replace(tzinfo=timezone.utc)
+        age_days = (now - row_created_at).total_seconds() / 86400.0
         decay = recency_decay(age_days)
         score = (tag_matches + keyword_matches) * decay if (tags or keywords) else decay
         if score <= 0:
             continue
-        scored.append((score, row))
+        scored.append((score, row_created_at, row))
 
-    scored.sort(key=lambda pair: (-pair[0], -pair[1].created_at.timestamp(), pair[1].id))
+    scored.sort(key=lambda triple: (-triple[0], -triple[1].timestamp(), triple[2].id))
 
     return [
         RecalledMemory(
@@ -154,5 +161,5 @@ async def recall(session_factory, project_id: str, request: RecallRequest) -> li
             created_at=row.created_at,
             preview=str((row.content_json or {}).get("preview", ""))[:300],
         )
-        for _, row in scored[:limit]
+        for _, _, row in scored[:limit]
     ]

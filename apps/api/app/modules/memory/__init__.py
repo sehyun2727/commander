@@ -8,11 +8,13 @@ event stream, never a second source of truth). No dedicated
 subscriber wiring call below.
 """
 
+from .registry import CATEGORIES
 from .schemas import MemoryRecord, RecallRequest, RecalledMemory
 from .service import record_memory, recall
 from .subscriber import install_memory_subscribers
 
 __all__ = [
+    "CATEGORIES",
     "MemoryRecord",
     "RecallRequest",
     "RecalledMemory",

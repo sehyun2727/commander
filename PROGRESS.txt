@@ -1,8 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 18 — Project Memory (deterministic, PM-triggered recall)
- Overall: Phase 1 complete, committing.
- Now working on: Phase 1 commit/push, then Phase 2 (recall + planning integration).
+ Overall: Phase 2 complete (507 passed / 6 skipped), committing/pushing.
+ Now working on: Phase 2 commit/push, then Phase 3 (backfill + Sprint 17
+ signal verification + mock recall-demo scenario).
  Last update: 2026-08-19
 ================================================
 
@@ -118,19 +119,62 @@ PHASE 1 — memory_records table, ORM, migration, projection module, subscriber 
         437.94s) -- Phase 1 commit + push next
 
 PHASE 2 — recall service + PM contract extension + planning integration
-[ ] 2.1 app/modules/memory/service.py: recall() with deterministic ranking
-[ ] 2.2 MAX_RECALL_* caps enforced server-side (silent truncation)
-[ ] 2.3 templates/software_company.py: _PM_PLANNING_CONTRACT gains
-        recall_request field description (PM turn kinds only, not CTO)
-[ ] 2.4 planning/orchestrator.py: parse optional recall_request from PM
+[x] 2.1 app/modules/memory/service.py: recall() with deterministic ranking
+        -- implemented ahead of schedule in Phase 1; this session fixed a
+        real bug it shipped with (naive-vs-aware datetime subtraction blew
+        up under SQLite, which -- unlike Postgres -- hands back a tz-naive
+        `created_at` even though the column is DateTime(timezone=True));
+        normalized with the same tzinfo-is-None guard workflow_engine/
+        engine.py already uses for its budget-elapsed check, in both the
+        per-row age_days computation and the tie-break sort key
+[x] 2.2 MAX_RECALL_* caps enforced server-side (silent truncation) --
+        verified via test_memory_recall.py::test_recall_limit_is_capped_server_side
+        (limit=1000 request -> exactly MAX_RECALL_LIMIT=10 results)
+[x] 2.3 templates/software_company.py: _PM_PLANNING_CONTRACT gains
+        recall_request field description (PM turn kinds only, not CTO) --
+        documents the JSON shape, that all sub-fields are optional, and the
+        categories=null (search all six) vs categories=[] (search none)
+        distinction per §4.11; _CTO_PLANNING_CONTRACT untouched
+[x] 2.4 planning/orchestrator.py: parse optional recall_request from PM
         turn output, call memory.service.recall(), inject bounded
         message before next gateway.complete() call, publish MEMORY_RECALLED
-[ ] 2.5 CTO turn kinds explicitly reject a present recall_request field
-        via the existing malformed-attempt retry path
-[ ] 2.6 tests: recall_request absent (unchanged Sprint 12 behavior),
+        -- new `_maybe_recall()` method called from `_run`'s while loop
+        right after `_persist_turn` whenever `role_key ==
+        TEMPLATE.planning_pm_role_key`; the formatted message is threaded
+        through a `pending_recall_message` local (this orchestrator has no
+        persisted cross-turn message list -- every turn is one fresh
+        one-shot `gateway.complete` call) into `_run_turn`/`_call_turn`,
+        which prepend it as an extra user-role message ahead of the turn's
+        normal one, consumed exactly once regardless of whether the next
+        turn is PM or CTO
+[x] 2.5 CTO turn kinds explicitly reject a present recall_request field
+        via the existing malformed-attempt retry path -- new
+        `_reject_recall_request()` called from `_validate_cto_review`/
+        `_validate_cto_followup_answer`; new
+        `_validate_recall_request_optional()` (structural-type check only,
+        never raises on a malformed *sub-field* -- that is RecallRequest's
+        own lenient-coercion job) called from every PM validator
+[x] 2.6 tests: recall_request absent (unchanged Sprint 12 behavior),
         recall_request present + matches, empty categories, malformed
-        types, CTO-turn-with-recall_request rejected
-[ ] 2.7 Phase 2 commit + push
+        types, CTO-turn-with-recall_request rejected -- 11 new recall()
+        unit tests (tests/test_memory_recall.py: empty memory, tag/keyword
+        ranking, recency-only ranking, tie-break on created_at then id,
+        MAX_RECALL_LIMIT enforcement, categories=None vs [] vs explicit
+        set, since_days cutoff, malformed sub-field coercion, project
+        scoping) + 4 new planning-integration tests appended to
+        tests/test_planning_orchestrator.py (recall_request absent stays
+        silent, present-with-matches injects a message into the very next
+        turn and publishes memory.recalled, zero-matches still publishes
+        the event but injects no message, CTO turn carrying recall_request
+        fails validation and the Specification ends FAILED/
+        malformed_provider_output) -- all via the existing
+        monkeypatch(MockProvider.complete) pattern, since the mock
+        provider's deterministic fixture text has no recall_request
+        scenario until Phase 3's demo marker
+[x] 2.7 full backend suite re-run after Phase 2: 507 passed / 6 skipped
+        (baseline 492 + 11 new test_memory_recall.py + 4 new
+        test_planning_orchestrator.py recall-integration tests), zero
+        regressions -- Phase 2 commit + push next
 
 PHASE 3 — backfill + Sprint 17 signal projection + mock recall scenario
 [ ] 3.1 app/modules/memory/backfill.py: backfill_memory()
