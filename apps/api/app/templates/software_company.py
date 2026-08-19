@@ -228,6 +228,7 @@ ENGINEER = RoleSpec(
         "inspect_git",
         "apply_patch",
         "run_validation",
+        "revert_last_patch",
     ),
     permissions=("produce_deliverable",),
     founding=True,

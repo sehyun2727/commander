@@ -18,7 +18,7 @@ def test_tools_by_key_matches_tools_tuple():
         assert tool.key == key
 
 
-def test_expected_six_tool_set():
+def test_expected_seven_tool_set():
     assert {tool.key for tool in TOOLS} == {
         "list_repository",
         "read_file",
@@ -26,11 +26,12 @@ def test_expected_six_tool_set():
         "inspect_git",
         "apply_patch",
         "run_validation",
+        "revert_last_patch",
     }
 
 
-def test_only_apply_patch_mutates():
-    assert WRITE_TOOL_KEYS == {"apply_patch"}
+def test_only_mutating_write_tools_mutate():
+    assert WRITE_TOOL_KEYS == {"apply_patch", "revert_last_patch"}
 
 
 def test_every_tool_requires_repository_tools_capability():

@@ -66,6 +66,10 @@ class RunValidationArgs(ToolArguments):
     profile: str = Field(max_length=MAX_PROFILE_NAME_LENGTH)
 
 
+class RevertLastPatchArgs(ToolArguments):
+    pass
+
+
 TOOL_ARGUMENT_SCHEMAS: dict[str, type[ToolArguments]] = {
     "list_repository": ListRepositoryArgs,
     "read_file": ReadFileArgs,
@@ -73,6 +77,7 @@ TOOL_ARGUMENT_SCHEMAS: dict[str, type[ToolArguments]] = {
     "inspect_git": InspectGitArgs,
     "apply_patch": ApplyPatchArgs,
     "run_validation": RunValidationArgs,
+    "revert_last_patch": RevertLastPatchArgs,
 }
 
 

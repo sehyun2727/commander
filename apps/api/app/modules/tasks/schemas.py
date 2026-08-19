@@ -35,6 +35,10 @@ class HarnessSummaryResponse(BaseModel):
     denied_count: int
     error_count: int
     total_duration_seconds: float
+    correction_attempts: int
+    rollback_count: int
+    surrendered: bool
+    exhausted: bool
 
 
 class TaskResponse(BaseModel):

@@ -24,6 +24,7 @@ def _make_context(tmp_path: Path) -> ToolRunContext:
         harness_enabled=True,
         workspace_ready=True,
         budget=HarnessBudget(stage="engineer"),
+        branch_base_sha="0" * 40,
     )
 
 

@@ -17,13 +17,20 @@ import asyncio
 import dataclasses
 
 import pytest
+from sqlalchemy import select
 
-from app.core.errors import BudgetExceededError, ToolLoopExhaustedError
+from app.core.db_models import HarnessToolCallORM
+from app.core.errors import (
+    BudgetExceededError,
+    SelfCorrectionExhaustedError,
+    ToolLoopExhaustedError,
+)
 from app.core.interfaces.provider_gateway import CompletionResult, ProviderGateway, ToolCallData
 from app.modules.agent_harness.budget import HarnessBudget
-from app.modules.agent_harness.context import ToolRunContext
-from app.modules.agent_harness.orchestrator import run_tool_loop
+from app.modules.agent_harness.context import LoopState, ToolRunContext
+from app.modules.agent_harness.orchestrator import MAX_CORRECTION_ATTEMPTS, run_tool_loop
 from app.modules.projects import service as projects_service
+from app.modules.sandbox import FakeSandbox
 from app.modules.skill_templates.registry import GENERALIST
 from app.templates.software_company import ENGINEER
 
@@ -33,6 +40,18 @@ WORKABLE_ROLE = dataclasses.replace(
 )
 WORKABLE_TEMPLATE = dataclasses.replace(GENERALIST, capabilities=("repository_tools",))
 UNGRANTED_ROLE = dataclasses.replace(ENGINEER, tools=())
+WORKABLE_ROLE_WITH_REVERT = dataclasses.replace(
+    ENGINEER,
+    tools=(
+        "list_repository",
+        "read_file",
+        "search_repository",
+        "inspect_git",
+        "apply_patch",
+        "run_validation",
+        "revert_last_patch",
+    ),
+)
 
 
 class FakeGateway(ProviderGateway):
@@ -72,7 +91,7 @@ async def _seed_workspace(harness, project_id: str) -> str:
     return branch_name
 
 
-def _context(harness, project, branch_name, *, role=WORKABLE_ROLE, skill_template=WORKABLE_TEMPLATE, budget=None) -> ToolRunContext:
+def _context(harness, project, branch_name, *, role=WORKABLE_ROLE, skill_template=WORKABLE_TEMPLATE, budget=None, branch_base_sha=None) -> ToolRunContext:
     return ToolRunContext(
         project_id=project.id,
         task_id="task-1",
@@ -85,6 +104,7 @@ def _context(harness, project, branch_name, *, role=WORKABLE_ROLE, skill_templat
         harness_enabled=True,
         workspace_ready=True,
         budget=budget or HarnessBudget(stage="engineer"),
+        branch_base_sha=branch_base_sha or "0" * 40,
     )
 
 
@@ -100,7 +120,7 @@ def _final(text: str = "done") -> CompletionResult:
     return CompletionResult(text=text, model="mock", provider="mock", stop_reason="end_turn")
 
 
-async def _run(harness, context, gateway, *, permitted_tools=None) -> object:
+async def _run(harness, context, gateway, *, permitted_tools=None, loop_state=None, on_self_correction_triggered=None) -> object:
     return await run_tool_loop(
         context=context,
         gateway=gateway,
@@ -111,6 +131,8 @@ async def _run(harness, context, gateway, *, permitted_tools=None) -> object:
         system="sys",
         initial_user_message="Mission: build",
         permitted_tools=permitted_tools if permitted_tools is not None else frozenset(WORKABLE_ROLE.tools),
+        loop_state=loop_state if loop_state is not None else LoopState(),
+        on_self_correction_triggered=on_self_correction_triggered,
     )
 
 
@@ -270,3 +292,353 @@ async def test_cancellation_propagates_uncaught(harness):
 
     with pytest.raises(asyncio.CancelledError):
         await _run(harness, context, gateway)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 17 §4.16/§10 -- correction lifecycle (interception, exhaustion,
+# surrender) and §10 rollback tool behavior.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_failed_validation_termination_is_intercepted_then_surrender_accepted(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    context = _context(harness, project, branch_name)
+    sandbox = FakeSandbox(default_status="failed")
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "run_validation", {"profile": "pytest"}),
+            _final("done"),  # termination attempt while failed -- intercepted
+            _final("**Unable to Complete:** cannot get the check to pass"),
+        ]
+    )
+    loop_state = LoopState()
+    triggered = []
+
+    async def _on_trigger() -> None:
+        triggered.append(1)
+
+    result = await run_tool_loop(
+        context=context,
+        gateway=gateway,
+        workspace_manager=harness.workspace_manager,
+        sandbox_runner=sandbox,
+        session_factory=harness.session_factory,
+        model_ref="mock",
+        system="sys",
+        initial_user_message="Mission: build",
+        permitted_tools=frozenset(WORKABLE_ROLE.tools),
+        loop_state=loop_state,
+        on_self_correction_triggered=_on_trigger,
+    )
+
+    assert result.stop_reason == "employee_surrendered"
+    assert loop_state.correction_attempts == 1
+    assert triggered == [1]
+    assert gateway.calls == 3
+
+
+@pytest.mark.asyncio
+async def test_correction_callback_fires_only_once_across_multiple_interceptions(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    context = _context(harness, project, branch_name)
+    sandbox = FakeSandbox(default_status="failed")
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "run_validation", {"profile": "pytest"}),
+            _final("done"),
+            _final("done"),
+            _final("**Unable to Complete:** giving up"),
+        ]
+    )
+    loop_state = LoopState()
+    triggered = []
+
+    async def _on_trigger() -> None:
+        triggered.append(1)
+
+    result = await run_tool_loop(
+        context=context,
+        gateway=gateway,
+        workspace_manager=harness.workspace_manager,
+        sandbox_runner=sandbox,
+        session_factory=harness.session_factory,
+        model_ref="mock",
+        system="sys",
+        initial_user_message="Mission: build",
+        permitted_tools=frozenset(WORKABLE_ROLE.tools),
+        loop_state=loop_state,
+        on_self_correction_triggered=_on_trigger,
+    )
+
+    assert result.stop_reason == "employee_surrendered"
+    assert loop_state.correction_attempts == 2
+    assert len(triggered) == 1
+
+
+@pytest.mark.asyncio
+async def test_correction_exhaustion_raises_after_max_attempts(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    context = _context(harness, project, branch_name)
+    sandbox = FakeSandbox(default_status="failed")
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "run_validation", {"profile": "pytest"}),
+            _final("done"),
+            _final("done"),
+            _final("done"),
+            _final("done"),
+        ]
+    )
+    loop_state = LoopState()
+
+    with pytest.raises(SelfCorrectionExhaustedError):
+        await run_tool_loop(
+            context=context,
+            gateway=gateway,
+            workspace_manager=harness.workspace_manager,
+            sandbox_runner=sandbox,
+            session_factory=harness.session_factory,
+            model_ref="mock",
+            system="sys",
+            initial_user_message="Mission: build",
+            permitted_tools=frozenset(WORKABLE_ROLE.tools),
+            loop_state=loop_state,
+        )
+
+    assert loop_state.correction_attempts == MAX_CORRECTION_ATTEMPTS
+    assert gateway.calls == 5
+
+
+@pytest.mark.asyncio
+async def test_surrender_marker_is_accepted_without_prior_failure(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    context = _context(harness, project, branch_name)
+    gateway = FakeGateway([_final("**Unable to Complete:** the task is underspecified")])
+
+    result = await _run(harness, context, gateway)
+
+    assert result.stop_reason == "employee_surrendered"
+
+
+@pytest.mark.asyncio
+async def test_normal_termination_unaffected_when_no_validation_ever_ran(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    context = _context(harness, project, branch_name)
+    gateway = FakeGateway([_final("**Change Summary:** trivial doc edit")])
+    loop_state = LoopState()
+
+    result = await _run(harness, context, gateway, loop_state=loop_state)
+
+    assert result.stop_reason == "end_turn"
+    assert loop_state.correction_attempts == 0
+
+
+@pytest.mark.asyncio
+async def test_loop_events_recorded_as_synthetic_audit_rows(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    context = _context(harness, project, branch_name)
+    sandbox = FakeSandbox(default_status="failed")
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "run_validation", {"profile": "pytest"}),
+            _final("done"),
+            _final("**Unable to Complete:** giving up"),
+        ]
+    )
+    loop_state = LoopState()
+
+    await run_tool_loop(
+        context=context,
+        gateway=gateway,
+        workspace_manager=harness.workspace_manager,
+        sandbox_runner=sandbox,
+        session_factory=harness.session_factory,
+        model_ref="mock",
+        system="sys",
+        initial_user_message="Mission: build",
+        permitted_tools=frozenset(WORKABLE_ROLE.tools),
+        loop_state=loop_state,
+    )
+
+    async with harness.session_factory() as session:
+        rows = (
+            await session.execute(
+                select(HarnessToolCallORM).where(HarnessToolCallORM.task_id == context.task_id)
+            )
+        ).scalars().all()
+
+    loop_kinds = {row.tool_name for row in rows if row.tool_name.startswith("_loop:")}
+    assert loop_kinds == {"_loop:correction_interception", "_loop:employee_surrendered"}
+    assert all(row.status == "recorded" for row in rows if row.tool_name.startswith("_loop:"))
+
+
+@pytest.mark.asyncio
+async def test_revert_last_patch_denied_when_no_patch_history(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    context = _context(harness, project, branch_name, role=WORKABLE_ROLE_WITH_REVERT)
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "revert_last_patch", {}),
+            _final("done"),
+        ]
+    )
+
+    result = await _run(harness, context, gateway, permitted_tools=frozenset(WORKABLE_ROLE_WITH_REVERT.tools))
+
+    assert result.final_text == "done"
+    assert result.tool_call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_revert_last_patch_reverts_single_patch_to_branch_base(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    branch_base_sha = await harness.workspace_manager.head_sha(project.id, branch_name)
+    context = _context(harness, project, branch_name, role=WORKABLE_ROLE_WITH_REVERT, branch_base_sha=branch_base_sha)
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "apply_patch", {"files": [{"path": "src/new.py", "content": "x = 1\n"}]}),
+            _tool_use("call-2", "revert_last_patch", {}),
+            _final("done"),
+        ]
+    )
+
+    result = await _run(harness, context, gateway, permitted_tools=frozenset(WORKABLE_ROLE_WITH_REVERT.tools))
+
+    assert result.final_text == "done"
+    entries = await harness.workspace_manager.list_tree(project.id, ref=branch_name)
+    assert not any(entry.path == "src/new.py" for entry in entries)
+    assert await harness.workspace_manager.head_sha(project.id, branch_name) == branch_base_sha
+
+
+@pytest.mark.asyncio
+async def test_revert_last_patch_reverts_second_patch_to_first(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    branch_base_sha = await harness.workspace_manager.head_sha(project.id, branch_name)
+    context = _context(harness, project, branch_name, role=WORKABLE_ROLE_WITH_REVERT, branch_base_sha=branch_base_sha)
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "apply_patch", {"files": [{"path": "src/a.py", "content": "a = 1\n"}]}),
+            _tool_use("call-2", "apply_patch", {"files": [{"path": "src/b.py", "content": "b = 1\n"}]}),
+            _tool_use("call-3", "revert_last_patch", {}),
+            _final("done"),
+        ]
+    )
+
+    result = await _run(harness, context, gateway, permitted_tools=frozenset(WORKABLE_ROLE_WITH_REVERT.tools))
+
+    assert result.final_text == "done"
+    entries = await harness.workspace_manager.list_tree(project.id, ref=branch_name)
+    paths = {entry.path for entry in entries}
+    assert "src/a.py" in paths
+    assert "src/b.py" not in paths
+    assert await harness.workspace_manager.head_sha(project.id, branch_name) != branch_base_sha
+
+
+@pytest.mark.asyncio
+async def test_revert_last_patch_ignores_noop_patch_history(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    branch_base_sha = await harness.workspace_manager.head_sha(project.id, branch_name)
+    context = _context(harness, project, branch_name, role=WORKABLE_ROLE_WITH_REVERT, branch_base_sha=branch_base_sha)
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "apply_patch", {"files": [{"path": "src/a.py", "content": "a = 1\n"}]}),
+            # byte-identical resubmit -- write_files still reports bytes written but
+            # commit() is a no-op, so this must never grow apply_patch_commit_history.
+            _tool_use("call-2", "apply_patch", {"files": [{"path": "src/a.py", "content": "a = 1\n"}]}),
+            _tool_use("call-3", "revert_last_patch", {}),
+            _final("done"),
+        ]
+    )
+
+    result = await _run(harness, context, gateway, permitted_tools=frozenset(WORKABLE_ROLE_WITH_REVERT.tools))
+
+    assert result.final_text == "done"
+    assert await harness.workspace_manager.head_sha(project.id, branch_name) == branch_base_sha
+
+
+@pytest.mark.asyncio
+async def test_revert_last_patch_clears_last_validation_status_and_allows_termination(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    branch_base_sha = await harness.workspace_manager.head_sha(project.id, branch_name)
+    context = _context(harness, project, branch_name, role=WORKABLE_ROLE_WITH_REVERT, branch_base_sha=branch_base_sha)
+    sandbox = FakeSandbox(default_status="failed")
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "apply_patch", {"files": [{"path": "src/a.py", "content": "a = 1\n"}]}),
+            _tool_use("call-2", "run_validation", {"profile": "pytest"}),
+            _tool_use("call-3", "revert_last_patch", {}),
+            _final("done"),
+        ]
+    )
+    loop_state = LoopState()
+
+    result = await run_tool_loop(
+        context=context,
+        gateway=gateway,
+        workspace_manager=harness.workspace_manager,
+        sandbox_runner=sandbox,
+        session_factory=harness.session_factory,
+        model_ref="mock",
+        system="sys",
+        initial_user_message="Mission: build",
+        permitted_tools=frozenset(WORKABLE_ROLE_WITH_REVERT.tools),
+        loop_state=loop_state,
+    )
+
+    assert result.stop_reason == "end_turn"
+    assert loop_state.last_validation_status is None
+    assert loop_state.correction_attempts == 0
+
+
+@pytest.mark.asyncio
+async def test_revert_last_patch_denied_by_role_permission(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    context = _context(harness, project, branch_name, role=UNGRANTED_ROLE)
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "revert_last_patch", {}),
+            _tool_use("call-2", "revert_last_patch", {}),
+            _tool_use("call-3", "revert_last_patch", {}),
+        ]
+    )
+
+    with pytest.raises(ToolLoopExhaustedError):
+        await _run(harness, context, gateway, permitted_tools=frozenset({"revert_last_patch"}))
+
+
+@pytest.mark.asyncio
+async def test_revert_last_patch_ancestry_violation_is_denied_not_destructive(harness):
+    project = await _make_project(harness)
+    branch_name = await _seed_workspace(harness, project.id)
+    # An unrelated/invalid sha as the rollback floor -- simulates a corrupted
+    # or malicious target; revert_last_commit's ancestry check must refuse
+    # rather than perform a destructive reset.
+    context = _context(
+        harness, project, branch_name, role=WORKABLE_ROLE_WITH_REVERT, branch_base_sha="f" * 40
+    )
+    gateway = FakeGateway(
+        [
+            _tool_use("call-1", "apply_patch", {"files": [{"path": "src/a.py", "content": "a = 1\n"}]}),
+            _tool_use("call-2", "revert_last_patch", {}),
+            _final("done"),
+        ]
+    )
+    result = await _run(harness, context, gateway, permitted_tools=frozenset(WORKABLE_ROLE_WITH_REVERT.tools))
+
+    assert result.final_text == "done"
+    entries = await harness.workspace_manager.list_tree(project.id, ref=branch_name)
+    # the apply_patch file is still present -- the revert was denied, not applied
+    assert any(entry.path == "src/a.py" for entry in entries)

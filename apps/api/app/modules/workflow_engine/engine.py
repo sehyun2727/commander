@@ -25,7 +25,12 @@ from sqlalchemy import select
 
 from ...core.contracts import AgentProfile
 from ...core.db_models import AgentORM, ApprovalORM, TaskORM
-from ...core.errors import BudgetExceededError, WorkspaceConflictError
+from ...core.errors import (
+    BudgetExceededError,
+    EmployeeSurrenderedError,
+    SelfCorrectionExhaustedError,
+    WorkspaceConflictError,
+)
 from ...core.events import Actor, EventType, build_event
 from ...core.interfaces.agent_runtime import AgentRuntime
 from ...core.interfaces.event_bus import EventBus
@@ -42,8 +47,9 @@ from ...templates import TEMPLATE, StageSpec, first_stage_index
 from ...templates.software_company import RoleSpec
 from .. import prompt_builder
 from ..agent_harness.budget import HarnessBudget
-from ..agent_harness.context import ToolRunContext
-from ..agent_harness.orchestrator import run_tool_loop
+from ..agent_harness.context import LoopState, ToolRunContext
+from ..agent_harness.orchestrator import MAX_CORRECTION_ATTEMPTS, run_tool_loop
+from ..agent_harness.output import bound_output
 from ..agent_harness.permissions import resolve_permitted_tools
 from ..costs import record_usage, usage_for_task
 from ..model_registry import RECOMMENDED_PROVIDER
@@ -482,6 +488,10 @@ class CommanderWorkflowEngine(WorkflowEngine):
                     )
                 )
             await self._workspace_manager.create_branch(project_id, branch_name)
+            # Sprint 17 §4.7/§8 (DECISIONS.md #239): captured once, right
+            # after the branch exists and before any `apply_patch` commit --
+            # `revert_last_patch`'s rollback floor for this attempt.
+            branch_base_sha = await self._workspace_manager.head_sha(project_id, branch_name)
 
             await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing output")
 
@@ -507,7 +517,9 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 harness_enabled=harness_enabled,
                 workspace_ready=True,
                 budget=HarnessBudget(stage=role_spec.key),
+                branch_base_sha=branch_base_sha,
             )
+            loop_state = LoopState()
 
             extra = f"\n\nCEO feedback to address: {ceo_comment}" if ceo_comment else ""
             plan_block = f"\n\nPlan from the PM:\n{context}" if context else ""
@@ -519,6 +531,21 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 contract_override=TEMPLATE.tool_loop_contracts.get(role_spec.key),
             )
 
+            async def _on_self_correction_triggered() -> None:
+                await self._event_bus.publish(
+                    build_event(
+                        type=EventType.SELF_CORRECTION_TRIGGERED,
+                        project_id=project_id,
+                        actor=Actor(role="employee", id=agent.id, name=agent.name),
+                        payload={
+                            "task_id": task.id,
+                            "agent_id": agent.id,
+                            "attempts_permitted": MAX_CORRECTION_ATTEMPTS,
+                        },
+                        reason="Engineer entered self-correction after a failed validation",
+                    )
+                )
+
             result = await run_tool_loop(
                 context=tool_context,
                 gateway=gateway,
@@ -529,8 +556,19 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 system=system,
                 initial_user_message=initial_user_message,
                 permitted_tools=permitted_tools,
+                loop_state=loop_state,
                 agent_override=_agent_model_override(agent),
+                on_self_correction_triggered=_on_self_correction_triggered,
             )
+            if result.stop_reason == "employee_surrendered":
+                # Sprint 17 §4.5/§4.10 (DECISIONS.md #239): a legitimate,
+                # visible stop -- not a crash, not budget exhaustion. Raised
+                # here so `_run_pipeline`'s uniform raise -> catch -> fail-
+                # with-reason-code dispatch handles it exactly like every
+                # other structured tool-loop failure.
+                bounded_text, _ = bound_output(result.final_text or "")
+                raise EmployeeSurrenderedError(bounded_text)
+
             await self._say(project_id, agent, task.id, result.final_text)
 
             await _pause()
@@ -969,6 +1007,12 @@ class CommanderWorkflowEngine(WorkflowEngine):
         except BudgetExceededError as exc:
             logger.info("mission %s blocked: %s", task_id, exc)
             await self._block_task_on_budget(task_id, exc)
+        except SelfCorrectionExhaustedError as exc:
+            logger.info("mission %s failed: self-correction exhausted: %s", task_id, exc)
+            await self._fail_task_with_reason_code(task_id, "self_correction_exhausted", str(exc))
+        except EmployeeSurrenderedError as exc:
+            logger.info("mission %s failed: employee surrendered: %s", task_id, exc)
+            await self._fail_task_with_reason_code(task_id, "employee_surrendered", str(exc))
         except Exception as exc:  # noqa: BLE001 - convert any pipeline failure into TaskFailed
             logger.exception("workflow pipeline failed for task %s", task_id)
             await self._fail_task(task_id, str(exc))
@@ -1024,6 +1068,30 @@ class CommanderWorkflowEngine(WorkflowEngine):
                 project_id=project_id,
                 actor=SYSTEM_ACTOR,
                 payload={"task_id": task_id},
+                reason=reason,
+            )
+        )
+
+    async def _fail_task_with_reason_code(self, task_id: str, reason_code: str, reason: str) -> None:
+        """Sprint 17 §4.10/§8 (DECISIONS.md #239): same transition as
+        `_fail_task`, additionally carrying a structured `reason_code` on
+        the `TASK_FAILED` payload -- additive, so every pre-Sprint-17
+        consumer of this payload still validates unchanged."""
+        async with self._session_factory() as session:
+            task = await session.get(TaskORM, task_id)
+            if task is None:
+                return
+            current = TaskState(task.state)
+            if TaskState.FAILED in TASK_TRANSITIONS.get(current, set()):
+                task.state = TaskState.FAILED.value
+            project_id = task.project_id
+            await session.commit()
+        await self._event_bus.publish(
+            build_event(
+                type=EventType.TASK_FAILED,
+                project_id=project_id,
+                actor=SYSTEM_ACTOR,
+                payload={"task_id": task_id, "reason_code": reason_code},
                 reason=reason,
             )
         )

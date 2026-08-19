@@ -102,12 +102,19 @@ async def get_diff(session_factory, workspace_manager, task_id: str) -> tuple[st
 
 async def get_harness_summary(session_factory, task_id: str) -> dict | None:
     """A bounded, aggregate view over `HarnessToolCallORM` rows for one
-    mission (Sprint 16 Phase 4, "safe observability") -- counts and tool
-    names only, never `arguments_summary`/`output_excerpt` content, so a
-    Reviewer/CEO-facing surface can show "what the Employee did" without
-    becoming a second copy of the raw audit log. Returns `None` for a
-    mission the Harness never touched (e.g. a one-shot Engineer mission,
-    or a mission still in progress with zero tool calls so far)."""
+    mission (Sprint 16 Phase 4, "safe observability"; extended Sprint 17
+    §4.12/§5, DECISIONS.md #239) -- counts and tool names only, never
+    `arguments_summary`/`output_excerpt` content, so a Reviewer/CEO-facing
+    surface can show "what the Employee did" without becoming a second
+    copy of the raw audit log. Returns `None` for a mission the Harness
+    never touched (e.g. a one-shot Engineer mission, or a mission still in
+    progress with zero tool calls so far).
+
+    The reserved `"_loop:"` tool_name prefix (`status="recorded"`) marks
+    orchestrator-owned diagnostic rows, not real tool dispatches -- they
+    are excluded from `tool_call_count`/`tools_used`/`denied_count`/
+    `error_count`/`total_duration_seconds` and instead drive the four
+    correction-lifecycle fields below."""
     async with session_factory() as session:
         result = await session.execute(
             select(HarnessToolCallORM).where(HarnessToolCallORM.task_id == task_id)
@@ -115,12 +122,20 @@ async def get_harness_summary(session_factory, task_id: str) -> dict | None:
         rows = result.scalars().all()
     if not rows:
         return None
+    tool_rows = [row for row in rows if not row.tool_name.startswith("_loop:")]
+    loop_kinds = {row.tool_name[len("_loop:") :] for row in rows if row.tool_name.startswith("_loop:")}
     return {
-        "tool_call_count": len(rows),
-        "tools_used": sorted({row.tool_name for row in rows}),
-        "denied_count": sum(1 for row in rows if row.status == "denied"),
-        "error_count": sum(1 for row in rows if row.status == "error"),
-        "total_duration_seconds": sum(row.duration_seconds for row in rows),
+        "tool_call_count": len(tool_rows),
+        "tools_used": sorted({row.tool_name for row in tool_rows}),
+        "denied_count": sum(1 for row in tool_rows if row.status == "denied"),
+        "error_count": sum(1 for row in tool_rows if row.status == "error"),
+        "total_duration_seconds": sum(row.duration_seconds for row in tool_rows),
+        "correction_attempts": sum(1 for row in rows if row.tool_name == "_loop:correction_interception"),
+        "rollback_count": sum(
+            1 for row in tool_rows if row.tool_name == "revert_last_patch" and row.status == "success"
+        ),
+        "surrendered": "employee_surrendered" in loop_kinds,
+        "exhausted": "correction_exhausted" in loop_kinds,
     }
 
 

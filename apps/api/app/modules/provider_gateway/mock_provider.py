@@ -457,9 +457,93 @@ def _is_rework(messages: list[dict]) -> bool:
     return "CEO feedback to address" in str(first)
 
 
+# --- Sprint 17: self-correction mock scenarios (DECISIONS.md #239) --------
+#
+# A CEO/test can steer the deterministic tool-loop script by embedding one
+# of these markers in the mission title/description -- same fixture-marker
+# technique the planning turns above already use (NEEDS_CLARIFICATION_
+# MARKER etc.), detected from `messages[0]`, the initial user message,
+# which is always a plain string (`_run_engineer_tool_loop` builds it as
+# f"Mission: {task.title}\n{task.description}...", never a content-block
+# list). `SELF_CORRECTION_EXHAUSTED`/`SELF_CORRECTION_SURRENDER` are
+# deliberately not scripted here -- §4.15/Phase 3 item 12 covers those
+# paths as orchestrator-level `FakeGateway` tests instead
+# (test_agent_harness_orchestrator.py), since a full pipeline run adds no
+# additional coverage over the loop mechanics those tests already exercise
+# directly.
+SELF_CORRECTION_DEMO_MARKER = "SELF_CORRECTION_DEMO"
+SELF_CORRECTION_ROLLBACK_MARKER = "SELF_CORRECTION_ROLLBACK"
+
+
+def _self_correction_demo_response(turn: int, call_id: str) -> tuple[str, tuple[ToolCallData, ...]]:
+    """A well-behaved Employee that reacts to a failed validation on its
+    own -- no server interception needed: read, patch, validate (the
+    test's steerable sandbox fails this one), patch again to fix it,
+    validate again (passes), then a normal termination."""
+    if turn == 0:
+        return "", (ToolCallData(call_id, "read_file", {"path": "README.md"}),)
+    if turn == 1:
+        return "", (
+            ToolCallData(
+                call_id,
+                "apply_patch",
+                {"files": [{"path": "index.html", "content": "<html><body>missing head</body></html>\n"}]},
+            ),
+        )
+    if turn == 2:
+        return "", (ToolCallData(call_id, "run_validation", {"profile": "python-syntax"}),)
+    if turn == 3:
+        return "", (
+            ToolCallData(call_id, "apply_patch", {"files": [{"path": "index.html", "content": _MOCK_INDEX_HTML}]}),
+        )
+    if turn == 4:
+        return "", (ToolCallData(call_id, "run_validation", {"profile": "python-syntax"}),)
+    summary = (
+        "Self-correction demo: the first attempt failed validation, so the "
+        "Employee fixed index.html and re-ran validation before finishing."
+    )
+    return f"**Change Summary:** {summary}", ()
+
+
+def _self_correction_rollback_response(turn: int, call_id: str) -> tuple[str, tuple[ToolCallData, ...]]:
+    """The Employee undoes a failed patch with `revert_last_patch` rather
+    than editing over it, then lands a different fix."""
+    if turn == 0:
+        return "", (ToolCallData(call_id, "read_file", {"path": "README.md"}),)
+    if turn == 1:
+        return "", (
+            ToolCallData(call_id, "apply_patch", {"files": [{"path": "index.html", "content": "<html>broken markup\n"}]}),
+        )
+    if turn == 2:
+        return "", (ToolCallData(call_id, "run_validation", {"profile": "python-syntax"}),)
+    if turn == 3:
+        return "", (ToolCallData(call_id, "revert_last_patch", {}),)
+    if turn == 4:
+        return "", (
+            ToolCallData(
+                call_id,
+                "apply_patch",
+                {"files": [{"path": "index.html", "content": _MOCK_INDEX_HTML}, {"path": "style.css", "content": _MOCK_STYLE_CSS}]},
+            ),
+        )
+    if turn == 5:
+        return "", (ToolCallData(call_id, "run_validation", {"profile": "python-syntax"}),)
+    summary = (
+        "Self-correction rollback demo: the first patch failed validation, so "
+        "the Employee reverted it with revert_last_patch and landed a "
+        "different fix instead of editing over the broken version."
+    )
+    return f"**Change Summary:** {summary}", ()
+
+
 def _tool_loop_response(messages: list[dict]) -> tuple[str, tuple[ToolCallData, ...]]:
     turn = (len(messages) - 1) // 2
     call_id = f"mock-call-{turn}"
+    first_content = str(messages[0].get("content", "")) if messages else ""
+    if SELF_CORRECTION_DEMO_MARKER in first_content:
+        return _self_correction_demo_response(turn, call_id)
+    if SELF_CORRECTION_ROLLBACK_MARKER in first_content:
+        return _self_correction_rollback_response(turn, call_id)
     if turn == 0:
         return "", (ToolCallData(call_id, "list_repository", {"path": ""}),)
     if turn == 1:

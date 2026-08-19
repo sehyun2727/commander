@@ -128,6 +128,30 @@ class WorkspaceManager(ABC):
         ...
 
     @abstractmethod
+    async def head_sha(self, project_id: str, branch_name: str) -> str:
+        """The branch's current HEAD commit sha. Sprint 17 §4.7
+        (DECISIONS.md #239): called once per Agent Harness tool-loop
+        attempt, right after `create_branch`, to seed
+        `ToolRunContext.branch_base_sha` — the floor `revert_last_patch`
+        may never reset past. Deliberately a single cheap `rev-parse`
+        rather than reusing `diff_stats()` (which computes unrelated
+        diff/numstat figures this caller doesn't need)."""
+        ...
+
+    @abstractmethod
+    async def revert_last_commit(
+        self, project_id: str, branch_name: str, target_sha: str
+    ) -> None:
+        """Hard-reset branch_name to target_sha. Sprint 17 §4.6/§4.7
+        (DECISIONS.md #239): backs the `revert_last_patch` tool. Raises
+        `WorkspaceConflictError` if target_sha is not an ancestor of
+        branch_name's current HEAD -- defense in depth on top of the
+        caller's own bound checking, since a hard reset is destructive
+        and must never cross the branch's base commit or move to an
+        unrelated ref."""
+        ...
+
+    @abstractmethod
     async def list_tree(
         self, project_id: str, ref: str = "main"
     ) -> list[FileEntry]:

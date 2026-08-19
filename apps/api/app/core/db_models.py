@@ -406,7 +406,11 @@ class HarnessToolCallORM(Base):
     agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"), index=True)
     call_id: Mapped[str] = mapped_column(String)
     tool_name: Mapped[str] = mapped_column(String)
-    status: Mapped[str] = mapped_column(String)  # "success" | "denied" | "error"
+    # "success" | "denied" | "error" -- a real handler outcome, or
+    # "recorded" (Sprint 17 §4.12, DECISIONS.md #239) -- an
+    # orchestrator-written loop-level diagnostic row (`tool_name` prefixed
+    # `"_loop:"`), never a real handler outcome.
+    status: Mapped[str] = mapped_column(String)
     arguments_summary: Mapped[dict] = mapped_column(JSON)
     output_excerpt: Mapped[str] = mapped_column(Text)
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)

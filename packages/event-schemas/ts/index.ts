@@ -23,6 +23,7 @@ export enum EventType {
   CODING_STARTED = "agent.coding_started",
   AGENT_RESOLVED = "agent.resolved",
   AGENT_HIRED = "agent.hired",
+  SELF_CORRECTION_TRIGGERED = "agent.self_correction_triggered",
   WORKSPACE_INITIALIZED = "workspace.initialized",
   CODE_CHANGED = "code.changed",
   BRANCH_MERGED = "branch.merged",
@@ -165,6 +166,7 @@ export interface TaskCompletedPayload {
 
 export interface TaskFailedPayload {
   task_id: string;
+  reason_code?: string | null;
 }
 
 export interface TaskRetriedPayload {
@@ -237,6 +239,12 @@ export interface AgentHiredPayload {
   role_key: string;
   model_ref: string | null;
   skill_template_key: string;
+}
+
+export interface AgentSelfCorrectionTriggeredPayload {
+  task_id: string;
+  agent_id: string;
+  attempts_permitted: number;
 }
 
 export interface WorkspaceInitializedPayload {
@@ -430,6 +438,7 @@ export interface EventPayloadMap {
   "agent.coding_started": CodingStartedPayload;
   "agent.resolved": AgentResolvedPayload;
   "agent.hired": AgentHiredPayload;
+  "agent.self_correction_triggered": AgentSelfCorrectionTriggeredPayload;
   "workspace.initialized": WorkspaceInitializedPayload;
   "code.changed": CodeChangedPayload;
   "branch.merged": BranchMergedPayload;

@@ -77,6 +77,14 @@ RUN_VALIDATION = ToolDefinition(
     requires_capability="repository_tools",
 )
 
+REVERT_LAST_PATCH = ToolDefinition(
+    key="revert_last_patch",
+    title="Revert Last Patch",
+    description="Undo the most recent apply_patch commit on this attempt's branch, back to its previous state.",
+    mutates=True,
+    requires_capability="repository_tools",
+)
+
 TOOLS: tuple[ToolDefinition, ...] = (
     LIST_REPOSITORY,
     READ_FILE,
@@ -84,6 +92,7 @@ TOOLS: tuple[ToolDefinition, ...] = (
     INSPECT_GIT,
     APPLY_PATCH,
     RUN_VALIDATION,
+    REVERT_LAST_PATCH,
 )
 TOOLS_BY_KEY: dict[str, ToolDefinition] = {tool.key: tool for tool in TOOLS}
 WRITE_TOOL_KEYS: frozenset[str] = frozenset(tool.key for tool in TOOLS if tool.mutates)

@@ -26,12 +26,18 @@ import time
 
 from pydantic import ValidationError
 
-from ...core.errors import PatchConflictError, ToolCallMalformedError, ToolDeniedError, ToolPathViolationError
+from ...core.errors import (
+    PatchConflictError,
+    ToolCallMalformedError,
+    ToolDeniedError,
+    ToolPathViolationError,
+    WorkspaceConflictError,
+)
 from ...core.interfaces.sandbox import SandboxRunner
 from ...core.interfaces.workspace_manager import WorkspaceManager
 from ..sandbox import get_execution_enabled
 from . import audit
-from .context import ToolRunContext
+from .context import LoopState, ToolRunContext
 from .guards import guard_content, guard_path
 from .output import bound_output
 from .permissions import authorize_tool_call
@@ -42,6 +48,7 @@ from .schemas import (
     InspectGitArgs,
     ListRepositoryArgs,
     ReadFileArgs,
+    RevertLastPatchArgs,
     RunValidationArgs,
     SearchRepositoryArgs,
 )
@@ -98,7 +105,12 @@ async def inspect_git(context: ToolRunContext, workspace_manager: WorkspaceManag
     return text
 
 
-async def apply_patch(context: ToolRunContext, workspace_manager: WorkspaceManager, args: ApplyPatchArgs) -> str:
+async def apply_patch(
+    context: ToolRunContext,
+    workspace_manager: WorkspaceManager,
+    args: ApplyPatchArgs,
+    loop_state: LoopState | None = None,
+) -> str:
     files: dict[str, str] = {}
     for entry in args.files:
         resolved_path = guard_path("apply_patch", context.repo_root, entry.path)
@@ -117,7 +129,7 @@ async def apply_patch(context: ToolRunContext, workspace_manager: WorkspaceManag
         raise ToolPathViolationError("apply_patch", skipped_paths)
     if result.written:
         try:
-            await workspace_manager.commit(
+            commit_result = await workspace_manager.commit(
                 context.project_id, context.branch_name, f"apply_patch: {len(result.written)} file(s)"
             )
         except ValueError:
@@ -126,8 +138,12 @@ async def apply_patch(context: ToolRunContext, workspace_manager: WorkspaceManag
             # was already committed on this branch (e.g. a retry attempt
             # that re-submits the same file) -- `commit()` then has
             # nothing staged. That's a no-op patch, not a real failure:
-            # the Employee's requested content is already in place.
+            # the Employee's requested content is already in place. Sprint
+            # 17 §4.8: a no-op never grows `apply_patch_commit_history`.
             pass
+        else:
+            if loop_state is not None:
+                loop_state.apply_patch_commit_history.append(commit_result.commit_sha)
     return f"wrote {len(result.written)} file(s): {', '.join(result.written)}"
 
 
@@ -137,6 +153,7 @@ async def run_validation(
     sandbox_runner: SandboxRunner,
     session_factory,
     args: RunValidationArgs,
+    loop_state: LoopState | None = None,
 ) -> str:
     if not await get_execution_enabled(session_factory, context.project_id):
         return "execution is disabled for this company; validation did not run"
@@ -149,11 +166,44 @@ async def run_validation(
         for entry in entries
     }
     result = await sandbox_runner.run_check(profile.name, files, list(profile.command))
+    # Sprint 17 §7.2: the structural `CheckResult.status` -- never text
+    # parsed from `result.output` -- is the only signal that ever updates
+    # correction state.
+    if loop_state is not None:
+        loop_state.last_validation_status = result.status
     output, truncated = bound_output(result.output)
     summary = f"[{result.status}] {profile.name} ({result.duration_seconds:.1f}s)\n{output}"
     if truncated:
         summary += "\n[output truncated]"
     return summary
+
+
+async def revert_last_patch(
+    context: ToolRunContext,
+    workspace_manager: WorkspaceManager,
+    args: RevertLastPatchArgs,
+    loop_state: LoopState | None,
+) -> str:
+    """Undo the most recent `apply_patch` commit this same tool loop
+    produced (Sprint 17 §4.6-§4.7, DECISIONS.md #239). The target sha is
+    always server-computed from `loop_state`/`context.branch_base_sha` --
+    never provider-supplied (the schema has no fields). Post-success
+    bookkeeping (popping the history entry, clearing
+    `last_validation_status`) is deliberately left to the orchestrator
+    (§7.2 item 8), which owns that state."""
+    if loop_state is None or not loop_state.apply_patch_commit_history:
+        raise ToolDeniedError("revert_last_patch", "no patch to revert")
+    history = loop_state.apply_patch_commit_history
+    target_sha = history[-2] if len(history) >= 2 else context.branch_base_sha
+    try:
+        await workspace_manager.revert_last_commit(context.project_id, context.branch_name, target_sha)
+    except WorkspaceConflictError as exc:
+        # `revert_last_commit`'s own ancestry check (§4.7 item 5) refused
+        # before any reset ran -- translate to the tool-denial vocabulary
+        # the rest of the harness uses rather than leaking a workspace-
+        # manager-shaped exception through the tool boundary.
+        raise ToolDeniedError("revert_last_patch", str(exc)) from exc
+    return f"reverted 1 patch; branch now at {target_sha[:12]}"
 
 
 async def dispatch_tool_call(
@@ -165,13 +215,20 @@ async def dispatch_tool_call(
     tool_name: str,
     call_id: str,
     raw_arguments: dict,
+    loop_state: LoopState | None = None,
 ) -> str:
     """Validate, authorize, run, and audit exactly one tool call. Raises
     `ToolCallMalformedError`/`ToolDeniedError`/`ToolPathViolationError`/
     `PatchConflictError` on failure -- the caller (Phase 3's harness
     orchestrator) decides how each maps to a bounded retry or a blocked
     Mission. Every outcome, including failures, is recorded via
-    `audit.record_tool_call` before the exception (if any) propagates."""
+    `audit.record_tool_call` before the exception (if any) propagates.
+
+    `loop_state` (Sprint 17 §5, DECISIONS.md #239) is only non-None during
+    a tool-loop dispatch -- `apply_patch`/`run_validation`/
+    `revert_last_patch` read and mutate it directly; every other consumer
+    of this function passes `None` and those handlers behave exactly as
+    they did in Sprint 16."""
     started = time.monotonic()
     status = "error"
     output_text = ""
@@ -207,9 +264,13 @@ async def dispatch_tool_call(
         elif tool_name == "inspect_git":
             output_text = await inspect_git(context, workspace_manager, parsed)
         elif tool_name == "apply_patch":
-            output_text = await apply_patch(context, workspace_manager, parsed)
+            output_text = await apply_patch(context, workspace_manager, parsed, loop_state)
         elif tool_name == "run_validation":
-            output_text = await run_validation(context, workspace_manager, sandbox_runner, session_factory, parsed)
+            output_text = await run_validation(
+                context, workspace_manager, sandbox_runner, session_factory, parsed, loop_state
+            )
+        elif tool_name == "revert_last_patch":
+            output_text = await revert_last_patch(context, workspace_manager, parsed, loop_state)
         else:  # pragma: no cover -- unreachable, schema lookup above already denies unknown tools
             raise ToolDeniedError(tool_name, "unknown tool")
 

@@ -212,6 +212,25 @@ class LocalGitWorkspaceManager(WorkspaceManager):
         sha = await git(repo_dir, "rev-parse", "HEAD")
         return sha.stdout.strip()
 
+    async def head_sha(self, project_id: str, branch_name: str) -> str:
+        repo_dir = self._repo_dir(project_id)
+        result = await git(repo_dir, "rev-parse", branch_name)
+        return result.stdout.strip()
+
+    async def revert_last_commit(
+        self, project_id: str, branch_name: str, target_sha: str
+    ) -> None:
+        repo_dir = self._repo_dir(project_id)
+        await git(repo_dir, "checkout", "-q", branch_name)
+        ancestry = await git(
+            repo_dir, "merge-base", "--is-ancestor", target_sha, branch_name, check=False
+        )
+        if not ancestry.ok:
+            raise WorkspaceConflictError(
+                f"refusing to reset '{branch_name}' to {target_sha}: not an ancestor of its current HEAD"
+            )
+        await git(repo_dir, "reset", "--hard", target_sha)
+
     async def list_tree(self, project_id: str, ref: str = "main") -> list[FileEntry]:
         repo_dir = self._repo_dir(project_id)
         result = await git(repo_dir, "ls-tree", "-r", "--name-only", ref)

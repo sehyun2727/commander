@@ -175,3 +175,32 @@ class ToolLoopExhaustedError(CommanderError):
     def __init__(self, reason: str) -> None:
         self.reason = reason
         super().__init__(f"Tool loop could not complete: {reason}")
+
+
+class SelfCorrectionExhaustedError(CommanderError):
+    """Sprint 17 Self-Correction (DECISIONS.md #239): a tool loop's most
+    recent `run_validation` kept returning `status="failed"` through
+    `MAX_CORRECTION_ATTEMPTS` forced retries and the Employee never
+    surrendered either. Rule #13: never retry forever. `workflow_engine`
+    fails the Mission with `reason_code="self_correction_exhausted"` --
+    distinct from `ToolLoopExhaustedError`, which covers provider
+    misbehavior (denied/malformed streaks), not a persistently failing
+    validation."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(f"Self-correction exhausted: {reason}")
+
+
+class EmployeeSurrenderedError(CommanderError):
+    """Sprint 17 Self-Correction (DECISIONS.md #239): the Employee
+    explicitly emitted `**Unable to Complete:**` rather than continue
+    fixing a failing validation (or continue at all). Not a bug or a
+    budget/streak exhaustion -- a legitimate, visible stop the Mission
+    must still fail with a distinct, honest reason_code
+    ("employee_surrendered") rather than being silently treated as a
+    normal completion (Rule #18)."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(f"Employee surrendered: {reason}")

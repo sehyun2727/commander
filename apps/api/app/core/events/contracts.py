@@ -57,6 +57,12 @@ class TaskCompletedPayload(Payload):
 
 class TaskFailedPayload(Payload):
     task_id: str
+    # Sprint 17 §4.10 (DECISIONS.md #239): optional, additive -- lets the
+    # Timeline/dashboard distinguish self-correction exhaustion and
+    # employee surrender from every other pipeline failure without a
+    # schema change. Every pre-Sprint-17 TASK_FAILED payload validates
+    # unchanged (defaults to None).
+    reason_code: str | None = None
 
 
 class TaskRetriedPayload(Payload):
@@ -131,6 +137,17 @@ class AgentHiredPayload(Payload):
     role_key: str
     model_ref: str | None
     skill_template_key: str
+
+
+class AgentSelfCorrectionTriggeredPayload(Payload):
+    """Sprint 17 §4.11 (DECISIONS.md #239): one coarse Timeline event per
+    tool loop, emitted only on the *first* forced fix-and-retry
+    interception -- per-attempt/per-rollback detail lives in the durable
+    `HarnessToolCallORM` audit table (§4.12), not as additional events."""
+
+    task_id: str
+    agent_id: str
+    attempts_permitted: int
 
 
 # --- Workspace (Sprint 5) --------------------------------------------------------
@@ -345,6 +362,7 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.CODING_STARTED: CodingStartedPayload,
     EventType.AGENT_RESOLVED: AgentResolvedPayload,
     EventType.AGENT_HIRED: AgentHiredPayload,
+    EventType.SELF_CORRECTION_TRIGGERED: AgentSelfCorrectionTriggeredPayload,
     EventType.WORKSPACE_INITIALIZED: WorkspaceInitializedPayload,
     EventType.CODE_CHANGED: CodeChangedPayload,
     EventType.BRANCH_MERGED: BranchMergedPayload,

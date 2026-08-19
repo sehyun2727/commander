@@ -78,7 +78,9 @@ async def _seed_workspace(harness, project_id: str) -> str:
     return branch_name
 
 
-def _context(harness, project, branch_name, *, role=ENGINEER, skill_template=GENERALIST, stage_kind="produce") -> ToolRunContext:
+def _context(
+    harness, project, branch_name, *, role=ENGINEER, skill_template=GENERALIST, stage_kind="produce", branch_base_sha=None
+) -> ToolRunContext:
     return ToolRunContext(
         project_id=project.id,
         task_id="task-1",
@@ -91,6 +93,7 @@ def _context(harness, project, branch_name, *, role=ENGINEER, skill_template=GEN
         harness_enabled=True,
         workspace_ready=True,
         budget=HarnessBudget(stage="engineer"),
+        branch_base_sha=branch_base_sha or "0" * 40,
     )
 
 
