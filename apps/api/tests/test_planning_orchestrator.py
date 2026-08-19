@@ -34,6 +34,7 @@ from app.modules.provider_gateway.mock_provider import (
     BLOCKING_FEASIBILITY_MARKER,
     CTO_FOLLOWUP_MARKER,
     NEEDS_CLARIFICATION_MARKER,
+    RECALL_DEMO_MARKER,
     MockProvider,
 )
 
@@ -466,3 +467,47 @@ async def test_cto_turn_with_recall_request_fails_validation(harness, monkeypatc
 
     events = await harness.event_bus.recent(project.id, limit=50)
     assert not [e for e in events if e.type == "memory.recalled"]
+
+
+# --- Sprint 18 Phase 3: RECALL_DEMO_MARKER end-to-end (real MockProvider) ---
+
+
+@pytest.mark.asyncio
+async def test_recall_demo_marker_runs_recall_end_to_end_via_real_mock_provider(harness, monkeypatch):
+    """sprint-18.md §10 Phase 3 item 5: unlike the Phase 2 tests above (which
+    monkeypatch MockProvider.complete entirely for turn-by-turn JSON
+    control), this drives the *actual* deterministic mock_provider fixture
+    text via RECALL_DEMO_MARKER -- the wrapper below only observes calls,
+    it never replaces the real response."""
+    project = await _make_project(harness)
+    await _hire_cto(harness, project.id)
+    await _plant_memory_record(
+        harness, project.id, category="failed_attempts", tags=["auth"], title="Auth mission failed before"
+    )
+
+    calls: list[dict] = []
+    original_complete = MockProvider.complete
+
+    async def _observing_complete(self, model_ref, system, messages, **opts):
+        calls.append({"kind": opts.get("planning_turn_kind"), "messages": messages})
+        return await original_complete(self, model_ref, system, messages, **opts)
+
+    monkeypatch.setattr(MockProvider, "complete", _observing_complete)
+
+    spec = await _orchestrator(harness).start(project.id, f"{RECALL_DEMO_MARKER}: add auth support")
+
+    assert spec.status == SpecificationStatus.READY_FOR_REVIEW.value
+
+    cto_call = next(c for c in calls if c["kind"] == "cto_review")
+    assert len(cto_call["messages"]) == 2
+    assert "Memory recall results" in cto_call["messages"][0]["content"]
+    assert "Auth mission failed before" in cto_call["messages"][0]["content"]
+
+    draft_call = next(c for c in calls if c["kind"] == "pm_draft_or_followup")
+    assert len(draft_call["messages"]) == 1  # consumed exactly once
+
+    events = await harness.event_bus.recent(project.id, limit=50)
+    recalled = [e for e in events if e.type == "memory.recalled"]
+    assert len(recalled) == 1
+    assert recalled[0].payload["match_count"] == 1
+    assert recalled[0].payload["requested_categories"] == ["failed_attempts"]

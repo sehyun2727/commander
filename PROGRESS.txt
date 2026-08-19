@@ -1,9 +1,9 @@
 ================================================
  COMMANDER — SPRINT PROGRESS
  Sprint: 18 — Project Memory (deterministic, PM-triggered recall)
- Overall: Phase 2 complete (507 passed / 6 skipped), committing/pushing.
- Now working on: Phase 2 commit/push, then Phase 3 (backfill + Sprint 17
- signal verification + mock recall-demo scenario).
+ Overall: Phase 3 complete (512 passed / 6 skipped), committing/pushing.
+ Now working on: Phase 3 commit/push, then Phase 4 (regression, security
+ audit, documentation sync, close-out).
  Last update: 2026-08-19
 ================================================
 
@@ -177,14 +177,63 @@ PHASE 2 — recall service + PM contract extension + planning integration
         regressions -- Phase 2 commit + push next
 
 PHASE 3 — backfill + Sprint 17 signal projection + mock recall scenario
-[ ] 3.1 app/modules/memory/backfill.py: backfill_memory()
-[ ] 3.2 scripts/backfill_memory.py: one-shot operator CLI
-[ ] 3.3 confirm failed_attempts extractor projects TASK_FAILED.reason_code
-        faithfully when present (Sprint 17 signal)
-[ ] 3.4 mock_provider.py: deterministic recall-demo scenario marker
-[ ] 3.5 integration test: full mock planning run with a recall_request turn
-[ ] 3.6 scripts/generate_ts_schemas.py rerun -- additive-only diff expected
-[ ] 3.7 Phase 3 commit + push
+[x] 3.1 app/modules/memory/backfill.py: backfill_memory(session_factory,
+        event_bus, *, project_id=None) -- selects EventORM rows whose type
+        is in registry.PROJECTED_EVENT_TYPES (optionally scoped to one
+        project), replays each through the same record_memory() path the
+        live subscriber uses. Idempotent by construction (record_memory's
+        own UNIQUE(source_event_id) IntegrityError handling), returns the
+        count of events considered (not rows inserted)
+[x] 3.2 scripts/backfill_memory.py: argparse CLI wrapper (--project-id,
+        default = all companies), mirrors scripts/seed.py's sys.path/cwd
+        setup so settings.database_url resolves the same dev DB path;
+        `--help` verified
+[x] 3.3 confirmed failed_attempts extractor already projects
+        TASK_FAILED.reason_code faithfully -- traced Sprint 17's
+        _fail_task_with_reason_code() (workflow_engine/engine.py) emitting
+        payload={"task_id":..., "reason_code": "self_correction_exhausted"
+        | "employee_surrendered"}, reason=<surrender/exhaustion text>,
+        matches extract_from_task_failed() exactly; already covered by
+        Phase 1's test_task_failed_with_self_correction_reason_code,
+        test_task_failed_with_employee_surrender_preserves_bounded_preview,
+        test_task_failed_redacts_environment_like_surrender_text -- no gap,
+        no new test needed
+[x] 3.4 mock_provider.py: RECALL_DEMO_MARKER = "RECALL_DEMO" (same
+        fixture-marker convention as NEEDS_CLARIFICATION_MARKER etc.,
+        gated by `not already_resumed`) added to _pm_analysis_text() --
+        embeds a recall_request (categories=[failed_attempts],
+        tags=[auth], keywords=[login]) in the PM's first analysis turn
+        JSON when the CEO's request_text contains the marker
+[x] 3.5 tests/test_planning_orchestrator.py::
+        test_recall_demo_marker_runs_recall_end_to_end_via_real_mock_provider
+        -- unlike the Phase 2 tests (which fully replace
+        MockProvider.complete), this wraps the *real* complete() to only
+        observe calls, driving the actual RECALL_DEMO_MARKER fixture path;
+        asserts cto_review receives 2 messages incl. "Memory recall
+        results" + the planted record's title, pm_draft_or_followup
+        receives 1 (consumed once), and memory.recalled fires with
+        match_count=1. Also added tests/test_memory_backfill.py (4 tests:
+        projects every pre-existing projected event + skips unprojected
+        types, idempotent on re-run, project_id=None covers all
+        companies, project_id scopes to one company) -- all pass against
+        the harness's own event_bus, which never has the memory
+        subscriber installed (exactly the "Company predates the
+        subscriber" scenario backfill targets)
+[x] 3.6 scripts/generate_ts_schemas.py rerun -- diff was NOT purely
+        additive: packages/event-schemas/ts/index.ts's MemoryRecalledPayload
+        had gone stale since Phase 0 (TS said `specification_id: string`
+        required + `requested_categories?: string[] | null`; Python's
+        actual contracts.py MemoryRecalledPayload, matching what
+        orchestrator.py publishes, is `spec_id: str | None = None` +
+        `requested_categories: list[str]` non-null-always-resolved per
+        sprint-18.md §4.12). Regeneration corrected the drift to match the
+        Python source of truth exactly; no dashboard code referenced
+        either field, confirmed via grep -- zero blast radius
+[x] 3.7 dashboard tsc --noEmit clean, dashboard `next build` clean (19
+        routes, unaffected by the TS payload correction), full backend
+        suite: 512 passed / 6 skipped (507 Phase-2 baseline + 4 new
+        test_memory_backfill.py + 1 new recall-demo-marker test), zero
+        regressions -- Phase 3 commit + push next
 
 PHASE 4 — Regression, security audit, documentation, close-out
 [ ] 4.1 full backend suite green (baseline 472 + new)

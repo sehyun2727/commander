@@ -418,8 +418,8 @@ export interface MemoryRecordedPayload {
 }
 
 export interface MemoryRecalledPayload {
-  specification_id: string;
-  requested_categories?: string[] | null;
+  spec_id?: string | null;
+  requested_categories: string[];
   match_count: number;
   memory_ids: string[];
 }

@@ -249,6 +249,13 @@ NEEDS_CLARIFICATION_MARKER = "NEEDS_CLARIFICATION"
 BLOCKING_FEASIBILITY_MARKER = "BLOCKING_FEASIBILITY_ISSUE"
 CTO_FOLLOWUP_MARKER = "CTO_FOLLOWUP_NEEDED"
 
+# Sprint 18 §7/§10 Phase 3 item 5 -- same fixture-marker technique, scoped to
+# the PM's first `pm_analysis` turn: makes the PM's JSON carry a
+# `recall_request` so a test/demo can exercise the real deterministic-recall
+# path (memory.recall -> MEMORY_RECALLED -> injected message) end to end
+# without hand-authoring turn JSON via a provider monkeypatch.
+RECALL_DEMO_MARKER = "RECALL_DEMO"
+
 
 def _mock_specification_fields(request_text: str, note: str = "") -> dict[str, Any]:
     """One deterministic, fully-populated Specification draft. Reused by
@@ -290,6 +297,8 @@ def _pm_analysis_text(opts: dict[str, Any]) -> str:
         ),
         "analysis_summary": f"PM analysis: the CEO's request is \"{request_text.strip()[:200]}\".",
     }
+    if RECALL_DEMO_MARKER in request_text and not already_resumed:
+        payload["recall_request"] = {"categories": ["failed_attempts"], "tags": ["auth"], "keywords": ["login"], "limit": 5}
     return json.dumps(payload)
 
 
