@@ -37,6 +37,26 @@ def _mock_client(monkeypatch: pytest.MonkeyPatch, status: int, json_body: dict |
     monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
 
 
+def _capturing_client(monkeypatch: pytest.MonkeyPatch, status: int, json_body: dict | None = None) -> list[httpx.Request]:
+    """Like _mock_client, but also returns the list of captured requests so
+    a test can assert on the actual outgoing headers/payload."""
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(status, json=json_body or {})
+
+    transport = httpx.MockTransport(handler)
+    real_init = httpx.AsyncClient.__init__
+
+    def patched_init(self, *args, **kwargs):
+        kwargs["transport"] = transport
+        real_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
+    return captured
+
+
 @pytest.mark.asyncio
 async def test_complete_raises_ceo_legible_error_on_401(monkeypatch: pytest.MonkeyPatch):
     _mock_client(monkeypatch, 401)
@@ -250,3 +270,58 @@ async def test_stream_yields_text_deltas_and_updates_usage(monkeypatch: pytest.M
         chunks.append(chunk)
     assert "".join(chunks) == "Hello"
     assert usage == {"input_tokens": 5, "output_tokens": 2}
+
+
+@pytest.mark.asyncio
+async def test_complete_sends_bearer_auth_and_attribution_headers(monkeypatch: pytest.MonkeyPatch):
+    captured = _capturing_client(
+        monkeypatch, 200, {"choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}], "usage": {}}
+    )
+    provider = OpenRouterProvider(_FakeSecrets("sk-or-abc123"))
+    await provider.complete("some/model", system="s", messages=[{"role": "user", "content": "hi"}])
+    assert len(captured) == 1
+    headers = captured[0].headers
+    assert headers["authorization"] == "Bearer sk-or-abc123"
+    assert headers["http-referer"] == "https://github.com/anthropics/commander"
+    assert headers["x-title"] == "Commander"
+
+
+@pytest.mark.asyncio
+async def test_complete_sends_openai_shaped_request_payload(monkeypatch: pytest.MonkeyPatch):
+    captured = _capturing_client(
+        monkeypatch, 200, {"choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}], "usage": {}}
+    )
+    provider = OpenRouterProvider(_FakeSecrets("some-key"))
+    await provider.complete(
+        "some/model",
+        system="be helpful",
+        messages=[{"role": "user", "content": "hi"}],
+        tools=[{"name": "read_file", "description": "reads", "input_schema": {"type": "object"}}],
+    )
+    body = json.loads(captured[0].content)
+    assert body["model"] == "some/model"
+    assert body["messages"][0] == {"role": "system", "content": "be helpful"}
+    assert body["messages"][1] == {"role": "user", "content": "hi"}
+    assert body["tools"] == [
+        {"type": "function", "function": {"name": "read_file", "description": "reads", "parameters": {"type": "object"}}}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_complete_finish_reason_length_maps_to_max_tokens(monkeypatch: pytest.MonkeyPatch):
+    _mock_client(
+        monkeypatch, 200, {"choices": [{"message": {"content": "cut off"}, "finish_reason": "length"}], "usage": {}}
+    )
+    provider = OpenRouterProvider(_FakeSecrets("some-key"))
+    result = await provider.complete("some/model", system="s", messages=[{"role": "user", "content": "hi"}])
+    assert result.stop_reason == "max_tokens"
+
+
+@pytest.mark.asyncio
+async def test_complete_raises_on_malformed_response_instead_of_swallowing(monkeypatch: pytest.MonkeyPatch):
+    # No "choices" key at all -- a genuinely malformed OpenRouter response
+    # must surface as an exception, never silently degrade to text="".
+    _mock_client(monkeypatch, 200, {"error": "something odd"})
+    provider = OpenRouterProvider(_FakeSecrets("some-key"))
+    with pytest.raises((KeyError, IndexError)):
+        await provider.complete("some/model", system="s", messages=[{"role": "user", "content": "hi"}])

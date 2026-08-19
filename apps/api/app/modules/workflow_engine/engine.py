@@ -41,6 +41,7 @@ from ...core.interfaces.workspace_manager import WorkspaceManager
 from ...core.lifecycle.agent_states import AgentState
 from ...core.lifecycle.state_machine import transition
 from ...core.lifecycle.task_states import TASK_TRANSITIONS, TaskState
+from ...core.logging import agent_id_var, project_id_var, task_id_var
 from ...core.secrets import SecretsProvider
 from ...core.config import settings
 from ...templates import TEMPLATE, StageSpec, first_stage_index
@@ -153,9 +154,11 @@ class CommanderWorkflowEngine(WorkflowEngine):
 
     def _spawn(self, task_id: str, resume_from: int, ceo_comment: str | None = None) -> None:
         async def _runner() -> None:
+            token = task_id_var.set(task_id)
             try:
                 await self._run_pipeline(task_id, resume_from=resume_from, ceo_comment=ceo_comment)
             finally:
+                task_id_var.reset(token)
                 self._running.pop(task_id, None)
 
         self._running[task_id] = asyncio.create_task(_runner())
@@ -410,41 +413,47 @@ class CommanderWorkflowEngine(WorkflowEngine):
         AGENT_TRANSITIONS requires from wherever this got interrupted
         (Sprint 9)."""
         project_id = task.project_id
+        agent_token = agent_id_var.set(agent.id)
+        project_token = project_id_var.set(project_id)
         try:
-            await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
-            await _pause()
-            await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing the mission brief")
-            await _pause()
-            await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing output")
+            try:
+                await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
+                await _pause()
+                await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing the mission brief")
+                await _pause()
+                await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing output")
 
-            extra = f"\n\nCEO feedback to address: {ceo_comment}" if ceo_comment else ""
-            text, usage = await self._stream_say(
-                project_id,
-                agent,
-                task.id,
-                gateway,
-                model_ref,
-                system=prompt_builder.build(
-                    AgentProfile.model_validate(agent.profile), agent.role_key, task.deliverable_type
-                ),
-                messages=[{"role": "user", "content": f"Mission: {task.title}\n{task.description}{extra}"}],
-                task_title=task.title,
-                task_description=task.description,
-                context=context + extra,
-            )
-            await _pause()
+                extra = f"\n\nCEO feedback to address: {ceo_comment}" if ceo_comment else ""
+                text, usage = await self._stream_say(
+                    project_id,
+                    agent,
+                    task.id,
+                    gateway,
+                    model_ref,
+                    system=prompt_builder.build(
+                        AgentProfile.model_validate(agent.profile), agent.role_key, task.deliverable_type
+                    ),
+                    messages=[{"role": "user", "content": f"Mission: {task.title}\n{task.description}{extra}"}],
+                    task_title=task.title,
+                    task_description=task.description,
+                    context=context + extra,
+                )
+                await _pause()
 
-            await self._agent_runtime.transition(agent.id, AgentState.WAITING_REVIEW, "Output ready for handoff")
-            await _pause()
-            await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Handed off successfully")
-            await self._agent_runtime.transition(agent.id, AgentState.IDLE, "Back to the bench")
-            return text, usage
-        except asyncio.CancelledError:
-            await self._release_agent_to_idle(agent.id, "Mission cancelled")
-            raise
-        except Exception:
-            await self._release_agent_to_idle(agent.id, "Mission failed")
-            raise
+                await self._agent_runtime.transition(agent.id, AgentState.WAITING_REVIEW, "Output ready for handoff")
+                await _pause()
+                await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Handed off successfully")
+                await self._agent_runtime.transition(agent.id, AgentState.IDLE, "Back to the bench")
+                return text, usage
+            except asyncio.CancelledError:
+                await self._release_agent_to_idle(agent.id, "Mission cancelled")
+                raise
+            except Exception:
+                await self._release_agent_to_idle(agent.id, "Mission failed")
+                raise
+        finally:
+            agent_id_var.reset(agent_token)
+            project_id_var.reset(project_token)
 
     async def _run_engineer_tool_loop(
         self,
@@ -470,119 +479,125 @@ class CommanderWorkflowEngine(WorkflowEngine):
         resolves against a committed branch ref (Rule #234)."""
         project_id = task.project_id
         branch_name = task.branch_name or self._branch_name_for(task.id)
+        agent_token = agent_id_var.set(agent.id)
+        project_token = project_id_var.set(project_id)
         try:
-            await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
-            await _pause()
-            await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing the mission brief")
-            await _pause()
+            try:
+                await self._agent_runtime.transition(agent.id, AgentState.ASSIGNED, f"Picked up mission '{task.title}'")
+                await _pause()
+                await self._agent_runtime.transition(agent.id, AgentState.PLANNING, "Reviewing the mission brief")
+                await _pause()
 
-            was_initialized = await self._workspace_manager.ensure_initialized(project_id)
-            if was_initialized:
-                await self._event_bus.publish(
-                    build_event(
-                        type=EventType.WORKSPACE_INITIALIZED,
-                        project_id=project_id,
-                        actor=SYSTEM_ACTOR,
-                        payload={},
-                        reason="First code mission for this company; workspace repo created",
+                was_initialized = await self._workspace_manager.ensure_initialized(project_id)
+                if was_initialized:
+                    await self._event_bus.publish(
+                        build_event(
+                            type=EventType.WORKSPACE_INITIALIZED,
+                            project_id=project_id,
+                            actor=SYSTEM_ACTOR,
+                            payload={},
+                            reason="First code mission for this company; workspace repo created",
+                        )
                     )
+                await self._workspace_manager.create_branch(project_id, branch_name)
+                # Sprint 17 §4.7/§8 (DECISIONS.md #239): captured once, right
+                # after the branch exists and before any `apply_patch` commit --
+                # `revert_last_patch`'s rollback floor for this attempt.
+                branch_base_sha = await self._workspace_manager.head_sha(project_id, branch_name)
+
+                await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing output")
+
+                profile = AgentProfile.model_validate(agent.profile)
+                skill_template = SKILL_TEMPLATES_BY_KEY.get(profile.skill_template_key, GENERALIST)
+                harness_enabled = settings.commander_harness_enabled
+                permitted_tools = resolve_permitted_tools(
+                    role=role_spec,
+                    skill_template=skill_template,
+                    stage_kind="produce",
+                    harness_enabled=harness_enabled,
+                    workspace_ready=True,
                 )
-            await self._workspace_manager.create_branch(project_id, branch_name)
-            # Sprint 17 §4.7/§8 (DECISIONS.md #239): captured once, right
-            # after the branch exists and before any `apply_patch` commit --
-            # `revert_last_patch`'s rollback floor for this attempt.
-            branch_base_sha = await self._workspace_manager.head_sha(project_id, branch_name)
+                tool_context = ToolRunContext(
+                    project_id=project_id,
+                    task_id=task.id,
+                    agent_id=agent.id,
+                    repo_root=self._workspace_manager.repo_root(project_id),
+                    branch_name=branch_name,
+                    role=role_spec,
+                    skill_template=skill_template,
+                    stage_kind="produce",
+                    harness_enabled=harness_enabled,
+                    workspace_ready=True,
+                    budget=HarnessBudget(stage=role_spec.key),
+                    branch_base_sha=branch_base_sha,
+                )
+                loop_state = LoopState()
 
-            await self._agent_runtime.transition(agent.id, AgentState.WORKING, "Producing output")
-
-            profile = AgentProfile.model_validate(agent.profile)
-            skill_template = SKILL_TEMPLATES_BY_KEY.get(profile.skill_template_key, GENERALIST)
-            harness_enabled = settings.commander_harness_enabled
-            permitted_tools = resolve_permitted_tools(
-                role=role_spec,
-                skill_template=skill_template,
-                stage_kind="produce",
-                harness_enabled=harness_enabled,
-                workspace_ready=True,
-            )
-            tool_context = ToolRunContext(
-                project_id=project_id,
-                task_id=task.id,
-                agent_id=agent.id,
-                repo_root=self._workspace_manager.repo_root(project_id),
-                branch_name=branch_name,
-                role=role_spec,
-                skill_template=skill_template,
-                stage_kind="produce",
-                harness_enabled=harness_enabled,
-                workspace_ready=True,
-                budget=HarnessBudget(stage=role_spec.key),
-                branch_base_sha=branch_base_sha,
-            )
-            loop_state = LoopState()
-
-            extra = f"\n\nCEO feedback to address: {ceo_comment}" if ceo_comment else ""
-            plan_block = f"\n\nPlan from the PM:\n{context}" if context else ""
-            initial_user_message = f"Mission: {task.title}\n{task.description}{plan_block}{extra}"
-            system = prompt_builder.build(
-                profile,
-                agent.role_key,
-                task.deliverable_type,
-                contract_override=TEMPLATE.tool_loop_contracts.get(role_spec.key),
-            )
-
-            async def _on_self_correction_triggered() -> None:
-                await self._event_bus.publish(
-                    build_event(
-                        type=EventType.SELF_CORRECTION_TRIGGERED,
-                        project_id=project_id,
-                        actor=Actor(role="employee", id=agent.id, name=agent.name),
-                        payload={
-                            "task_id": task.id,
-                            "agent_id": agent.id,
-                            "attempts_permitted": MAX_CORRECTION_ATTEMPTS,
-                        },
-                        reason="Engineer entered self-correction after a failed validation",
-                    )
+                extra = f"\n\nCEO feedback to address: {ceo_comment}" if ceo_comment else ""
+                plan_block = f"\n\nPlan from the PM:\n{context}" if context else ""
+                initial_user_message = f"Mission: {task.title}\n{task.description}{plan_block}{extra}"
+                system = prompt_builder.build(
+                    profile,
+                    agent.role_key,
+                    task.deliverable_type,
+                    contract_override=TEMPLATE.tool_loop_contracts.get(role_spec.key),
                 )
 
-            result = await run_tool_loop(
-                context=tool_context,
-                gateway=gateway,
-                workspace_manager=self._workspace_manager,
-                sandbox_runner=self._sandbox_runner,
-                session_factory=self._session_factory,
-                model_ref=model_ref,
-                system=system,
-                initial_user_message=initial_user_message,
-                permitted_tools=permitted_tools,
-                loop_state=loop_state,
-                agent_override=_agent_model_override(agent),
-                on_self_correction_triggered=_on_self_correction_triggered,
-            )
-            if result.stop_reason == "employee_surrendered":
-                # Sprint 17 §4.5/§4.10 (DECISIONS.md #239): a legitimate,
-                # visible stop -- not a crash, not budget exhaustion. Raised
-                # here so `_run_pipeline`'s uniform raise -> catch -> fail-
-                # with-reason-code dispatch handles it exactly like every
-                # other structured tool-loop failure.
-                bounded_text, _ = bound_output(result.final_text or "")
-                raise EmployeeSurrenderedError(bounded_text)
+                async def _on_self_correction_triggered() -> None:
+                    await self._event_bus.publish(
+                        build_event(
+                            type=EventType.SELF_CORRECTION_TRIGGERED,
+                            project_id=project_id,
+                            actor=Actor(role="employee", id=agent.id, name=agent.name),
+                            payload={
+                                "task_id": task.id,
+                                "agent_id": agent.id,
+                                "attempts_permitted": MAX_CORRECTION_ATTEMPTS,
+                            },
+                            reason="Engineer entered self-correction after a failed validation",
+                        )
+                    )
 
-            await self._say(project_id, agent, task.id, result.final_text)
+                result = await run_tool_loop(
+                    context=tool_context,
+                    gateway=gateway,
+                    workspace_manager=self._workspace_manager,
+                    sandbox_runner=self._sandbox_runner,
+                    session_factory=self._session_factory,
+                    model_ref=model_ref,
+                    system=system,
+                    initial_user_message=initial_user_message,
+                    permitted_tools=permitted_tools,
+                    loop_state=loop_state,
+                    agent_override=_agent_model_override(agent),
+                    on_self_correction_triggered=_on_self_correction_triggered,
+                )
+                if result.stop_reason == "employee_surrendered":
+                    # Sprint 17 §4.5/§4.10 (DECISIONS.md #239): a legitimate,
+                    # visible stop -- not a crash, not budget exhaustion. Raised
+                    # here so `_run_pipeline`'s uniform raise -> catch -> fail-
+                    # with-reason-code dispatch handles it exactly like every
+                    # other structured tool-loop failure.
+                    bounded_text, _ = bound_output(result.final_text or "")
+                    raise EmployeeSurrenderedError(bounded_text)
 
-            await _pause()
-            await self._agent_runtime.transition(agent.id, AgentState.WAITING_REVIEW, "Output ready for handoff")
-            await _pause()
-            await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Handed off successfully")
-            await self._agent_runtime.transition(agent.id, AgentState.IDLE, "Back to the bench")
-            return result.final_text, result.usage
-        except asyncio.CancelledError:
-            await self._release_agent_to_idle(agent.id, "Mission cancelled")
-            raise
-        except Exception:
-            await self._release_agent_to_idle(agent.id, "Mission failed")
-            raise
+                await self._say(project_id, agent, task.id, result.final_text)
+
+                await _pause()
+                await self._agent_runtime.transition(agent.id, AgentState.WAITING_REVIEW, "Output ready for handoff")
+                await _pause()
+                await self._agent_runtime.transition(agent.id, AgentState.COMPLETED, "Handed off successfully")
+                await self._agent_runtime.transition(agent.id, AgentState.IDLE, "Back to the bench")
+                return result.final_text, result.usage
+            except asyncio.CancelledError:
+                await self._release_agent_to_idle(agent.id, "Mission cancelled")
+                raise
+            except Exception:
+                await self._release_agent_to_idle(agent.id, "Mission failed")
+                raise
+        finally:
+            agent_id_var.reset(agent_token)
+            project_id_var.reset(project_token)
 
     async def _release_agent_to_idle(self, agent_id: str, reason: str) -> None:
         """Force an Employee back onto the bench no matter which state a

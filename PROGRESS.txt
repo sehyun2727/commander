@@ -382,10 +382,39 @@ PHASE 1 — OpenRouter provider + model registry + boot check
         20 new), zero regressions -- Phase 1 commit + push next
 
 PHASE 2 — Correlation ID + structured logging
-[ ] 2.1 core/logging.py (contextvars + JSONFormatter + install_logging())
-[ ] 2.2 main.py: install_logging() + correlation-ID middleware
-[ ] 2.3 workflow_engine.py contextvar wiring (task_id/project_id/agent_id)
-[ ] 2.4 tests; full backend suite green; commit + push
+[x] 2.1 core/logging.py -- request_id_var/task_id_var/agent_id_var/
+        project_id_var contextvars, JSONFormatter (ts/level/logger/msg +
+        ambient contextvars + exc traceback + secret-key redaction of
+        caller `extra={}` fields only, via _STANDARD_RECORD_KEYS scoping
+        -- a deliberate refinement of sprint-19.md §7.3's illustrative
+        code, which would otherwise redact/include stock LogRecord
+        attributes like pathname/lineno), install_logging()
+[x] 2.2 main.py: install_logging() as first line of lifespan(); §7.1's
+        exact correlation_id_middleware (fresh UUID per request, never
+        trusts incoming X-Request-Id, sets response header), registered
+        before CORSMiddleware so it wraps the whole request
+[x] 2.3 workflow_engine.py contextvar wiring: _spawn's _runner() wraps
+        _run_pipeline in task_id_var.set/reset; _run_role and
+        _run_engineer_tool_loop each wrap their existing try/except body
+        in an outer try/finally setting/resetting agent_id_var and
+        project_id_var (existing CancelledError/Exception handling
+        unchanged, just re-indented one level)
+[x] 2.4 tests: tests/test_logging.py (formatter ts/level/logger/msg,
+        request_id/task_id/agent_id/project_id set->included vs
+        not-set->omitted, secret-key redaction exact-match not substring,
+        standard LogRecord attrs never redacted, exception traceback,
+        install_logging() replaces root handlers -- 9 tests);
+        tests/test_correlation_id_middleware.py (valid UUID response
+        header, client-supplied X-Request-Id ignored, distinct id per
+        request, contextvar reset after request -- 4 tests);
+        tests/test_workflow_engine_contextvars.py (document-mission
+        _stream_say spy + code-mission run_tool_loop spy confirm ambient
+        agent_id_var/project_id_var/task_id_var match the real ids at
+        call time; cancelled-pipeline log carries task_id but not
+        agent_id/project_id, proving the outer _run_pipeline log sees
+        only _spawn's still-open task_id scope -- 3 tests); full backend
+        suite green: 553 passed / 6 skipped (532 baseline + 21 new),
+        zero regressions -- Phase 2 commit + push next
 
 PHASE 3 — Load smoke + real-LLM E2E + deployment doc
 [ ] 3.1 scripts/load_smoke.py (4 scenarios)

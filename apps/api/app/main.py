@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -24,6 +25,7 @@ from .core.boot_checks import (
 )
 from .core.config import settings
 from .core.db import async_session_factory, engine, init_db
+from .core.logging import install_logging, request_id_var
 from .core.secrets import DBSecretsProvider
 
 logger = logging.getLogger("commander")
@@ -56,6 +58,7 @@ from .modules.workspace_widgets import router as workspace_widgets_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    install_logging()
     print(f"Commander booting: git={git_sha()}", file=sys.stderr)
 
     try:
@@ -110,6 +113,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Commander API", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next):
+    """Server-issued UUID per request (Sprint 19 §7.1) -- NEVER trusts an
+    incoming X-Request-Id header (a client-supplied ID could be forged to
+    make unrelated requests appear correlated in the logs). Registered
+    before CORSMiddleware so the correlation ID covers the whole request,
+    including CORS's own preflight/rejection handling."""
+    request_id = str(uuid.uuid4())
+    token = request_id_var.set(request_id)
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        return response
+    finally:
+        request_id_var.reset(token)
+
 
 app.add_middleware(
     CORSMiddleware,
